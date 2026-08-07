@@ -2,6 +2,8 @@
 
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Presentation.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -30,6 +32,7 @@ public static class ArtifactTransferEndpoints
         ArtifactTransferRequest body,
         IWorkingDirectoryResolver workingDirectoryResolver,
         RunRegistry runRegistry,
+        IRunRepository runRepository,
         HttpContext httpContext)
     {
         var runId = Guid.NewGuid();
@@ -78,6 +81,17 @@ public static class ArtifactTransferEndpoints
         var cancelRequestCts = new CancellationTokenSource();
         runRegistry.RegisterTransfer(runId, cancelRequestCts);
 
+        var run = new Run
+        {
+            Id = runId,
+            Kind = RunKind.ArtifactTransfer,
+            RepoPath = repoRoot,
+            ArtifactPath = body.Path,
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        };
+        await runRepository.AddAsync(run, CancellationToken.None);
+
         try
         {
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -93,13 +107,22 @@ public static class ArtifactTransferEndpoints
             try
             {
                 await fileStream.CopyToAsync(response.Body, linkedCts.Token);
+
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Completed;
+                run.ArtifactSizeBytes = fileStream.Length;
             }
             catch (OperationCanceledException)
             {
                 // Cancelled (explicitly, or the client disconnected) - the copy just stops; there's
                 // no SSE-style terminal event to write for a plain file response, the connection
-                // ending part-way through is the signal.
+                // ending part-way through is the signal. ArtifactSizeBytes stays unset per
+                // design.md - it's only meaningful for a transfer that actually finished.
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Cancelled;
             }
+
+            await runRepository.UpdateAsync(run, CancellationToken.None);
         }
         finally
         {

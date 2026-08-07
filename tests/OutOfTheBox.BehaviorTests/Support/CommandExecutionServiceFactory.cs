@@ -15,11 +15,24 @@ namespace OutOfTheBox.BehaviorTests.Support;
 public sealed class CommandExecutionServiceFactory(
     int defaultExecutionTimeoutSeconds = 600,
     int maximumExecutionTimeoutSeconds = 3600,
-    string? rootDirectoryOverride = null)
+    string? rootDirectoryOverride = null,
+    string? sqliteFilePathOverride = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>The bearer token configured for this test instance.</summary>
     public const string TestBearerToken = "behavior-test-bearer-token";
+
+    // A fresh file per factory instance, not a shared path - Program.cs runs migrations and
+    // reconciliation against this on startup, and two factories running concurrently (different
+    // test classes/collections) must not contend for the same SQLite file. A restart-persistence
+    // scenario instead passes sqliteFilePathOverride so a second factory instance points at the
+    // same file the first one wrote to, simulating the service restarting against its existing
+    // database rather than a fresh one.
+    private readonly string _sqliteFilePath = sqliteFilePathOverride ?? Path.Combine(Path.GetTempPath(), $"OutOfTheBox-BehaviorTests-{Guid.NewGuid():N}.db");
+    private readonly bool _ownsSqliteFile = sqliteFilePathOverride is null;
+
+    /// <summary>The SQLite file path this instance is configured against - for a restart scenario's second factory.</summary>
+    public string SqliteFilePath => _sqliteFilePath;
 
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,8 +53,32 @@ public sealed class CommandExecutionServiceFactory(
                 ["OutOfTheBox:DefaultExecutionTimeoutSeconds"] = defaultExecutionTimeoutSeconds.ToString(),
                 ["OutOfTheBox:MaximumExecutionTimeoutSeconds"] = maximumExecutionTimeoutSeconds.ToString(),
                 ["OutOfTheBox:OutputCapBytes"] = "5242880",
+                ["OutOfTheBox:SqliteFilePath"] = _sqliteFilePath,
             });
         });
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (disposing && _ownsSqliteFile)
+        {
+            // WAL mode leaves -wal/-shm sidecar files alongside the main one; delete all three,
+            // ignoring failures (a lingering handle from a just-stopped Kestrel instance) since
+            // this is best-effort temp-file cleanup, not a correctness requirement.
+            foreach (var path in new[] { _sqliteFilePath, _sqliteFilePath + "-wal", _sqliteFilePath + "-shm" })
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
     }
 
     /// <summary>

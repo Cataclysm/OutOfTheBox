@@ -22,4 +22,14 @@ public enum RunOutcome
 
     /// <summary>The run was still in flight when the service restarted, so its true outcome is unknown.</summary>
     Interrupted,
+
+    /// <summary>
+    /// The requested resource didn't exist (an artifact-transfer file, or a repository-delete
+    /// target) — distinct from <see cref="ValidationFailed"/>, which covers a malformed or
+    /// confinement-escaping request rather than a well-formed one naming something absent.
+    /// </summary>
+    NotFound,
+
+    /// <summary>A repository-clone target name already named an existing repository.</summary>
+    AlreadyExists,
 }

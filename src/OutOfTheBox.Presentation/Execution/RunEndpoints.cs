@@ -3,6 +3,7 @@
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Presentation.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -26,12 +27,12 @@ public static class RunEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("dotnet", body, workingDirectoryResolver, processRunner, runRegistry, options, httpContext))
+        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("dotnet", RunKind.DotnetCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, options, httpContext))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
-        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("git", body, workingDirectoryResolver, processRunner, runRegistry, options, httpContext))
+        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("git", RunKind.GitCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, options, httpContext))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
         endpoints.MapPost("/run/{runId:guid}/cancel", HandleCancelRunAsync)
@@ -42,10 +43,12 @@ public static class RunEndpoints
 
     private static async Task HandleStartRunAsync(
         string executable,
+        RunKind kind,
         StartRunRequest body,
         IWorkingDirectoryResolver workingDirectoryResolver,
         IProcessRunner processRunner,
         RunRegistry runRegistry,
+        IRunRepository runRepository,
         IOptions<ServiceOptions> options,
         HttpContext httpContext)
     {
@@ -91,6 +94,17 @@ public static class RunEndpoints
             return;
         }
 
+        var run = new Run
+        {
+            Id = runId,
+            Kind = kind,
+            RepoPath = repoRoot,
+            Arguments = body.Arguments,
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        };
+        await runRepository.AddAsync(run, CancellationToken.None);
+
         try
         {
             var timeout = ExecutionTimeoutPolicy.Resolve(
@@ -112,20 +126,41 @@ public static class RunEndpoints
                     linkedCts.Token);
 
                 await writer.WriteDoneAsync(result.ExitCode, sink.Truncated, httpContext.RequestAborted);
+
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Completed;
+                run.ExitCode = result.ExitCode;
+                run.Stdout = sink.Stdout;
+                run.Stderr = sink.Stderr;
+                run.Truncated = sink.Truncated;
             }
             catch (OperationCanceledException)
             {
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Stdout = sink.Stdout;
+                run.Stderr = sink.Stderr;
+                run.Truncated = sink.Truncated;
+
                 if (cancelRequestCts.IsCancellationRequested)
                 {
+                    run.Outcome = RunOutcome.Cancelled;
                     await writer.WriteErrorAsync("cancelled", CancellationToken.None);
                 }
                 else if (timeoutCts.IsCancellationRequested)
                 {
+                    run.Outcome = RunOutcome.TimedOut;
                     await writer.WriteErrorAsync("timeout", CancellationToken.None);
                 }
-
-                // Otherwise the client disconnected (RequestAborted) - nothing left to write to.
+                else
+                {
+                    // The client disconnected (RequestAborted) - nothing left to write to, but the
+                    // process was still killed (same linkedCts) and the run still reached a
+                    // terminal state worth recording accurately rather than leaving it Running.
+                    run.Outcome = RunOutcome.Cancelled;
+                }
             }
+
+            await runRepository.UpdateAsync(run, CancellationToken.None);
         }
         finally
         {
