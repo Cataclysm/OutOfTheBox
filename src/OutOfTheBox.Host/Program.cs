@@ -20,10 +20,29 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
+using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseWindowsService();
+
+// Require HTTPS on every configured Kestrel endpoint (Section 16, per design.md's Transport
+// decision): the bearer token, command arguments/output, and the dashboard's cookie session all
+// cross this port, so plain HTTP would leak them to anyone on-path. Fails fast at startup rather
+// than silently accepting an endpoint someone configured as "http://" by mistake - there is no
+// legitimate reason for this service to ever accept an unencrypted connection.
+foreach (var endpoint in builder.Configuration.GetSection("Kestrel:Endpoints").GetChildren())
+{
+    var url = endpoint["Url"];
+    if (url is not null && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"Kestrel endpoint '{endpoint.Key}' is configured as '{url}' - this service must not accept plain HTTP connections.");
+    }
+}
+
+builder.WebHost.ConfigureKestrel(options =>
+    options.ConfigureHttpsDefaults(https => https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13));
 
 builder.Services
     .AddOptions<ServiceOptions>()
@@ -93,8 +112,6 @@ builder.Services.AddHostedService<HostResourceSamplerService>();
 // Server circuit-scoped service itself, so a chart-interop instance must live no longer than the
 // circuit that created it.
 builder.Services.AddScoped<IChartInterop, ChartInterop>();
-
-// Kestrel/HTTPS hardening deferred to Section 16 (Transport & Network).
 
 var app = builder.Build();
 
