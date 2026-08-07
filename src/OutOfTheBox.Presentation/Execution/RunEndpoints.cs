@@ -126,7 +126,8 @@ public static class RunEndpoints
                 var result = await processRunner.RunAsync(
                     new ProcessRunRequest(body.Arguments, repoRoot, executable),
                     sink,
-                    linkedCts.Token);
+                    linkedCts.Token,
+                    onStarted: pid => runRegistry.SetProcessId(runId, pid));
 
                 await writer.WriteDoneAsync(result.ExitCode, sink.Truncated, httpContext.RequestAborted);
 

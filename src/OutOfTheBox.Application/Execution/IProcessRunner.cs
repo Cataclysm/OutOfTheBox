@@ -11,6 +11,11 @@ namespace OutOfTheBox.Application.Execution;
 /// </summary>
 public interface IProcessRunner
 {
-    /// <summary>Runs the process described by <paramref name="request"/> to completion or cancellation.</summary>
-    Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken);
+    /// <summary>
+    /// Runs the process described by <paramref name="request"/> to completion or cancellation.
+    /// <paramref name="onStarted"/>, if supplied, is invoked once with the spawned process's id as
+    /// soon as it starts (per specs/host-resource-monitoring - the caller records it, typically
+    /// into <see cref="Concurrency.RunRegistry"/>, as the root to walk a process tree from).
+    /// </summary>
+    Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null);
 }

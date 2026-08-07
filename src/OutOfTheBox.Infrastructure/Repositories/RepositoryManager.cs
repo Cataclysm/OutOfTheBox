@@ -211,7 +211,8 @@ public sealed class RepositoryManager(
                 var result = await processRunner.RunAsync(
                     new ProcessRunRequest(["clone", url, targetPath], options.Value.RootDirectory, "git"),
                     sink,
-                    linkedCts.Token);
+                    linkedCts.Token,
+                    onStarted: pid => runRegistry.SetProcessId(run.Id, pid));
 
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Completed;

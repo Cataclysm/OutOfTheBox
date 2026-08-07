@@ -5,9 +5,11 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
+using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.Presentation.Dashboard;
@@ -73,6 +75,17 @@ builder.Services.AddSingleton<RepositoryStatsCache>();
 builder.Services.AddSingleton<IRepositoryStatsProvider, GitRepositoryStatsProvider>();
 builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
 builder.Services.AddHostedService<RepositoryStatsSampler>();
+
+// Host/process resource monitoring (Section 14). IClock/ResourceHistoryBuffer/IResourceEventBus
+// are process-wide singletons for the same reasons as RunRegistry above; IResourceSampler and
+// IProcessMonitor are singletons too - both are stateless/cheap-per-call aside from the sampler's
+// own internal delta-tracking state, which must persist across ticks.
+builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<ResourceHistoryBuffer>();
+builder.Services.AddSingleton<IResourceEventBus, InMemoryResourceEventBus>();
+builder.Services.AddSingleton<IResourceSampler, HostResourceSampler>();
+builder.Services.AddSingleton<IProcessMonitor, ProcessMonitor>();
+builder.Services.AddHostedService<HostResourceSamplerService>();
 
 // Kestrel/HTTPS hardening deferred to Section 16 (Transport & Network).
 

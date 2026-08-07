@@ -1,12 +1,31 @@
 @page "/"
 @attribute [Authorize]
+@using System.Globalization
+@using OutOfTheBox.Application.Monitoring
 @inject IRunRepository RunRepository
 @inject IRunEventBus RunEventBus
+@inject IResourceEventBus ResourceEventBus
+@inject IProcessMonitor ProcessMonitor
 @implements IDisposable
 
 <PageTitle>OutOfTheBox - Status</PageTitle>
 
 <h1>Status</h1>
+
+<div class="resource-tiles">
+    <div class="resource-tile">
+        <span class="resource-tile-label">Host CPU</span>
+        <span class="resource-tile-value">@FormatPercent(_host.TotalCpuPercent)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Host RAM</span>
+        <span class="resource-tile-value">@FormatBytes(_host.TotalRamBytes - _host.AvailableRamBytes) / @FormatBytes(_host.TotalRamBytes)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Service RAM</span>
+        <span class="resource-tile-value">@FormatBytes(_host.ServiceRamBytes)</span>
+    </div>
+</div>
 
 @if (_runs is null)
 {
@@ -21,12 +40,29 @@ else
     <ul class="run-list">
         @foreach (var run in _runs)
         {
-            <li class="run-row">
-                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
-                <span class="run-repo">@run.RepoPath</span>
-                <span class="run-id">@run.Id</span>
-                <span class="run-detail">@DetailFor(run)</span>
-                <span class="run-elapsed">@Elapsed(run)</span>
+            <li class="status-run">
+                <div class="run-row">
+                    <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
+                    <span class="run-repo">@run.RepoPath</span>
+                    <span class="run-id">@run.Id</span>
+                    <span class="run-detail">@DetailFor(run)</span>
+                    <span class="run-elapsed">@Elapsed(run)</span>
+                </div>
+
+                @if (_processesByRun.TryGetValue(run.Id, out var processes) && processes.Count > 0)
+                {
+                    <ul class="process-list">
+                        @foreach (var process in processes)
+                        {
+                            <li class="process-row">
+                                <span>@process.ProcessName (@process.ProcessId)</span>
+                                <span>@FormatPercent(process.CpuPercent)</span>
+                                <span>@FormatBytes(process.RamBytes)</span>
+                                <button type="button" @onclick="@(() => KillAsync(process))">Kill</button>
+                            </li>
+                        }
+                    </ul>
+                }
             </li>
         }
     </ul>
@@ -34,14 +70,19 @@ else
 
 @code {
     private IReadOnlyList<Run>? _runs;
-    private IDisposable? _subscription;
+    private IDisposable? _runSubscription;
+    private IDisposable? _resourceSubscription;
     private Timer? _elapsedTimer;
+
+    private HostResourceSample _host = new(0, [], 0, 0, 0);
+    private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
     {
         await RefreshAsync();
-        _subscription = RunEventBus.Subscribe(OnRunEvent);
+        _runSubscription = RunEventBus.Subscribe(OnRunEvent);
+        _resourceSubscription = ResourceEventBus.Subscribe(OnResourceSnapshot);
 
         // Elapsed time needs to keep advancing even between run-started/run-terminal events, since
         // a long-running command produces neither for minutes at a time.
@@ -65,8 +106,26 @@ else
         });
     }
 
+    private void OnResourceSnapshot(ResourceSnapshot snapshot)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _host = snapshot.Host;
+
+            // Grouped under each run's own row, never a flat global table, and never populated
+            // for a transfer or delete - both fall out naturally, since neither ever appears in
+            // snapshot.Runs (RunRegistry only records a process id for dotnet/git/clone runs).
+            _processesByRun = snapshot.Runs.ToDictionary(r => r.RunId, r => r.Processes);
+
+            StateHasChanged();
+        });
+    }
+
     private async Task RefreshAsync() =>
         _runs = await RunRepository.ListAsync(new RunQuery { Outcomes = [RunOutcome.Running] }, CancellationToken.None);
+
+    private async Task KillAsync(ProcessResourceSample process) =>
+        await ProcessMonitor.KillAsync(process.ProcessId, process.StartTime, CancellationToken.None);
 
     private static string DetailFor(Run run) => run.Kind switch
     {
@@ -82,10 +141,26 @@ else
         return elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"mm\:ss");
     }
 
+    // Explicitly invariant-culture-formatted - left to the current culture, this would render
+    // "0,0%" instead of "0.0%" on a host configured for a comma-decimal locale, which is exactly
+    // the kind of thing that's easy to never notice on a US/UK-locale development machine and only
+    // surface once deployed to a host with different regional settings. Found by actually
+    // rendering this component (bUnit) and observing the literal output, not by review.
+    private static string FormatPercent(double value) => $"{value.ToString("F1", CultureInfo.InvariantCulture)}%";
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{(bytes / (1024.0 * 1024 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} GB",
+        >= 1024L * 1024 => $"{(bytes / (1024.0 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} MB",
+        >= 1024L => $"{(bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture)} KB",
+        _ => $"{bytes} B",
+    };
+
     /// <inheritdoc />
     public void Dispose()
     {
-        _subscription?.Dispose();
+        _runSubscription?.Dispose();
+        _resourceSubscription?.Dispose();
         _elapsedTimer?.Dispose();
     }
 }

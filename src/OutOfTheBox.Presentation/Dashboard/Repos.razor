@@ -1,5 +1,6 @@
 @page "/repos"
 @attribute [Authorize]
+@using System.Globalization
 @using OutOfTheBox.Application.Concurrency
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
@@ -207,11 +208,12 @@ else
         await RefreshAsync();
     }
 
+    // Invariant-culture-formatted - see Status.razor's FormatBytes for why this matters.
     private static string FormatSize(long bytes) => bytes switch
     {
-        >= 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
-        >= 1024L * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-        >= 1024L => $"{bytes / 1024.0:F1} KB",
+        >= 1024L * 1024 * 1024 => $"{(bytes / (1024.0 * 1024 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} GB",
+        >= 1024L * 1024 => $"{(bytes / (1024.0 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} MB",
+        >= 1024L => $"{(bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture)} KB",
         _ => $"{bytes} B",
     };
 

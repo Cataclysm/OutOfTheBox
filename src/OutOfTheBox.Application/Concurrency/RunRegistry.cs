@@ -103,5 +103,34 @@ public sealed class RunRegistry
         }
     }
 
-    private sealed record RunHandle(Guid RunId, CancellationTokenSource CancellationTokenSource);
+    /// <summary>
+    /// Records the root process id spawned for <paramref name="runId"/>, once
+    /// <see cref="System.Diagnostics.Process.Start()"/> actually returns one - per
+    /// specs/host-resource-monitoring, this is what process-tree discovery roots itself at. A
+    /// no-op if the run is no longer tracked (already released). Never called for a transfer or
+    /// delete, which spawn no process - <see cref="GetTrackedProcessRoots"/> skips any run with no
+    /// recorded id, so those two kinds fall out of process-tree sampling automatically.
+    /// </summary>
+    public void SetProcessId(Guid runId, int processId)
+    {
+        if (_activeRunsByRunId.TryGetValue(runId, out var handle))
+        {
+            handle.ProcessId = processId;
+        }
+    }
+
+    /// <summary>
+    /// Every currently-tracked run that has a recorded root process id - the set the resource
+    /// sampler walks a WMI process tree from on each tick, and the set kill-scope verification
+    /// (<c>IProcessMonitor.KillAsync</c>) checks a target PID against.
+    /// </summary>
+    public IReadOnlyList<(Guid RunId, int ProcessId)> GetTrackedProcessRoots() =>
+        [.. _activeRunsByRunId.Values
+            .Where(h => h.ProcessId is not null)
+            .Select(h => (h.RunId, h.ProcessId!.Value))];
+
+    private sealed record RunHandle(Guid RunId, CancellationTokenSource CancellationTokenSource)
+    {
+        public int? ProcessId { get; set; }
+    }
 }

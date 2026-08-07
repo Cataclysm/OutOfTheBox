@@ -208,7 +208,7 @@ public sealed class RepositoryManagerTests : IDisposable
     /// <summary>Fails the test loudly if a rejection path accidentally starts a real process - none of the scenarios here should reach this.</summary>
     private sealed class UnreachableProcessRunner : IProcessRunner
     {
-        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken) =>
+        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
             throw new InvalidOperationException("A rejection-path test unexpectedly reached process execution.");
     }
 

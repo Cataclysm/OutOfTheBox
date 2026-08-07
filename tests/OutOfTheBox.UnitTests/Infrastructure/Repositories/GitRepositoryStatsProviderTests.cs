@@ -48,7 +48,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
 
     private sealed class UnreachableProcessRunner : IProcessRunner
     {
-        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken) =>
+        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
             throw new InvalidOperationException("A non-git directory must not spawn git.exe.");
     }
 }

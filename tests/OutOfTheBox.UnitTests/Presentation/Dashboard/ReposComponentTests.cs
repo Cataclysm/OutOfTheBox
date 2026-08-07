@@ -167,7 +167,7 @@ public sealed class ReposComponentTests : BunitContext, IDisposable
 
     private sealed class UnreachableProcessRunner : IProcessRunner
     {
-        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken) =>
+        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
             throw new InvalidOperationException("This test never starts a real clone.");
     }
 

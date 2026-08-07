@@ -17,7 +17,7 @@ namespace OutOfTheBox.Infrastructure.Execution;
 public sealed class CliProcessRunner : IProcessRunner
 {
     /// <inheritdoc />
-    public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken)
+    public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null)
     {
         var channel = Channel.CreateUnbounded<(bool IsError, string Line)>();
 
@@ -39,6 +39,7 @@ public sealed class CliProcessRunner : IProcessRunner
         };
 
         process.Start();
+        onStarted?.Invoke(process.Id);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 

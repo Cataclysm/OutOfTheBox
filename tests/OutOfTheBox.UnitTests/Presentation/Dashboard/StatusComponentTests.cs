@@ -1,9 +1,11 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Events;
+using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Events;
+using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
@@ -23,11 +25,15 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus();
+    private readonly IResourceEventBus _resourceEventBus = new InMemoryResourceEventBus();
+    private readonly SpyProcessMonitor _processMonitor = new();
 
     public StatusComponentTests()
     {
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton(_runEventBus);
+        Services.AddSingleton(_resourceEventBus);
+        Services.AddSingleton<IProcessMonitor>(_processMonitor);
     }
 
     [Fact]
@@ -133,10 +139,91 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         Assert.Equal(before, cut.Markup);
     }
 
+    [Fact]
+    public void Host_tiles_update_live_when_a_resource_snapshot_is_published()
+    {
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains("resource-tile-value\">0.0%", cut.Markup));
+
+        var host = new HostResourceSample(TotalCpuPercent: 37.5, PerCoreCpuPercent: [37.5], TotalRamBytes: 1000, AvailableRamBytes: 400, ServiceRamBytes: 55);
+        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, host, []));
+
+        cut.WaitForAssertion(() => Assert.Contains("resource-tile-value\">37.5%", cut.Markup), TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task Process_sublist_appears_under_its_owning_run_when_a_resource_snapshot_is_published()
+    {
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var runId = Guid.NewGuid();
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepoPath = @"C:\repos\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        }, CancellationToken.None);
+
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        Assert.DoesNotContain("process-row", cut.Markup);
+
+        var process = new ProcessResourceSample(1234, "dotnet", DateTime.UtcNow, 12.5, 4096);
+        var runAggregate = new RunResourceAggregate(runId, 12.5, 4096, [process]);
+        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0), [runAggregate]));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("process-row", cut.Markup);
+            Assert.Contains("dotnet (1234)", cut.Markup);
+        }, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task Clicking_kill_calls_IProcessMonitor_with_the_processs_id_and_start_time()
+    {
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var runId = Guid.NewGuid();
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepoPath = @"C:\repos\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        }, CancellationToken.None);
+
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+
+        var startTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var process = new ProcessResourceSample(4321, "testhost", startTime, 5, 2048);
+        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0), [new RunResourceAggregate(runId, 5, 2048, [process])]));
+        cut.WaitForAssertion(() => Assert.Contains("process-row", cut.Markup), TimeSpan.FromSeconds(2));
+
+        cut.Find(".process-row button").Click();
+
+        Assert.Equal((4321, startTime), _processMonitor.LastKillCall);
+    }
+
     /// <inheritdoc />
     public new void Dispose()
     {
         _dbContextFactory.Dispose();
         base.Dispose();
+    }
+
+    private sealed class SpyProcessMonitor : IProcessMonitor
+    {
+        public (int ProcessId, DateTime StartTime)? LastKillCall { get; private set; }
+
+        public Task<bool> KillAsync(int processId, DateTime expectedStartTime, CancellationToken cancellationToken)
+        {
+            LastKillCall = (processId, expectedStartTime);
+            return Task.FromResult(true);
+        }
     }
 }

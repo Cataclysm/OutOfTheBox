@@ -54,4 +54,12 @@ public sealed class ServiceOptions
     /// worst-case staleness for a repo nothing has run against recently.
     /// </summary>
     public int RepositoryStatsSamplerIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// How often the background host/process resource sampler ticks, in seconds. Deliberately
+    /// fast (default 3s) relative to the repository-stats sampler, per design.md's "a few seconds"
+    /// requirement for resource monitoring - this drives both the live Status-view graphs and the
+    /// persisted <c>RunResourceSamples</c> series.
+    /// </summary>
+    public int ResourceSamplerIntervalSeconds { get; set; } = 3;
 }
