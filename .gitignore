@@ -18,6 +18,9 @@ TestResults/
 *.sln.DotSettings.user
 .vscode/
 
+# Reqnroll-generated code-behind for .feature files (regenerated on every build)
+*.feature.cs
+
 # NuGet
 *.nupkg
 *.snupkg

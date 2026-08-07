@@ -14,4 +14,9 @@
   <Folder Name="/Presentation/">
     <Project Path="src/Presentation/BuildAndTestService.Presentation/BuildAndTestService.Presentation.csproj" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/ArchitectureTests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj" />
+    <Project Path="tests/BehaviorTests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj" />
+    <Project Path="tests/UnitTests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj" />
+  </Folder>
 </Solution>

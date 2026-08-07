@@ -1,0 +1,11 @@
+<Project>
+
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+
+  <PropertyGroup>
+    <!-- xUnit requires public test classes/methods for discovery, but test code isn't "public API"
+         in the sense the repo-root doc-comment rule is meant to enforce - suppress it here only. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -16,3 +16,10 @@ builder.Services
 var app = builder.Build();
 
 app.Run();
+
+/// <summary>
+/// Marker partial class merged with the compiler-generated top-level-statements entry point,
+/// so <c>WebApplicationFactory&lt;Program&gt;</c> in another assembly (the behavior test project)
+/// can reference it.
+/// </summary>
+public partial class Program;
