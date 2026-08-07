@@ -1,16 +1,16 @@
 ## 1. Project Setup
 
-- [ ] 1.1 Create the `.slnx` solution at the repo root
-- [ ] 1.2 Create solution folders: `Domain`, `Application`, `Infrastructure`, `Presentation`, `Host`, `Tests`
-- [ ] 1.3 Scaffold `src/Domain/BuildAndTestService.Domain` (plain `net10.0` class library, no NuGet dependencies beyond the BCL), added to the `Domain` solution folder
-- [ ] 1.4 Scaffold `src/Application/BuildAndTestService.Application` (plain `net10.0` class library, references `Domain` only), added to the `Application` solution folder
-- [ ] 1.5 Scaffold `src/Infrastructure/BuildAndTestService.Infrastructure` (`net10.0-windows` class library, references `Application` + `Domain` only), added to the `Infrastructure` solution folder
-- [ ] 1.6 Scaffold `src/Presentation/BuildAndTestService.Presentation` (plain `net10.0` Razor Class Library — `Sdk="Microsoft.NET.Sdk.Razor"` — carrying `.razor` components, `wwwroot`, minimal API endpoint-mapping extension methods, and auth middleware; references `Application` + `Domain` only, **no reference to `Infrastructure`**), added to the `Presentation` solution folder
-- [ ] 1.7 Scaffold `src/Host/BuildAndTestService.Host` (`net10.0-windows` ASP.NET Core executable — the only project referencing all four others), added to the `Host` solution folder
-- [ ] 1.8 In `Host`'s `Program.cs`: build the `WebApplication`, call `Presentation`'s registration/endpoint-mapping extension methods, register `Infrastructure`'s concrete types against `Application`'s interfaces in DI, configure Kestrel
-- [ ] 1.9 Add `Microsoft.Extensions.Hosting.WindowsServices` to `Host` and configure `UseWindowsService()`
-- [ ] 1.10 Add configuration schema (appsettings.json + env var overrides) for: root directory, bearer token, listen port, default execution timeout (10 minutes), maximum execution timeout, output size cap, SQLite file path
-- [ ] 1.11 Enable `<Nullable>enable</Nullable>` and `<GenerateDocumentationFile>true</GenerateDocumentationFile>` (with `CS1591` as an error) on every project via a shared `Directory.Build.props`
+- [x] 1.1 Create the `.slnx` solution at the repo root
+- [x] 1.2 Create solution folders: `Domain`, `Application`, `Infrastructure`, `Presentation`, `Host`, `Tests`
+- [x] 1.3 Scaffold `src/Domain/BuildAndTestService.Domain` (plain `net10.0` class library, no NuGet dependencies beyond the BCL), added to the `Domain` solution folder
+- [x] 1.4 Scaffold `src/Application/BuildAndTestService.Application` (plain `net10.0` class library, references `Domain` only), added to the `Application` solution folder
+- [x] 1.5 Scaffold `src/Infrastructure/BuildAndTestService.Infrastructure` (`net10.0-windows` class library, references `Application` + `Domain` only), added to the `Infrastructure` solution folder
+- [x] 1.6 Scaffold `src/Presentation/BuildAndTestService.Presentation` (plain `net10.0` Razor Class Library — `Sdk="Microsoft.NET.Sdk.Razor"` — carrying `.razor` components, `wwwroot`, minimal API endpoint-mapping extension methods, and auth middleware; references `Application` + `Domain` only, **no reference to `Infrastructure`**), added to the `Presentation` solution folder
+- [x] 1.7 Scaffold `src/Host/BuildAndTestService.Host` (`net10.0-windows` ASP.NET Core executable — the only project referencing all four others), added to the `Host` solution folder
+- [x] 1.8 In `Host`'s `Program.cs`: build the `WebApplication` and bind `ServiceOptions`; a marked placeholder notes where `Presentation`'s endpoint-mapping and `Infrastructure`'s DI registrations land as those pieces are built in later sections; Kestrel/HTTPS hardening deferred to §12 Transport & Network
+- [x] 1.9 Add `Microsoft.Extensions.Hosting.WindowsServices` to `Host` and configure `UseWindowsService()`
+- [x] 1.10 Add configuration schema (appsettings.json + env var overrides via the default ASP.NET Core config provider chain) for: root directory, bearer token, listen port, default execution timeout (10 minutes), maximum execution timeout, output size cap, SQLite file path — bound to a `ServiceOptions` type
+- [x] 1.11 Enable `<Nullable>enable</Nullable>` and `<GenerateDocumentationFile>true</GenerateDocumentationFile>` (with `CS1591` as an error) on every project via a shared `Directory.Build.props`
 
 ## 2. Test Suite Foundation
 

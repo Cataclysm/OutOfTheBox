@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="src/Application/BuildAndTestService.Application/BuildAndTestService.Application.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="src/Domain/BuildAndTestService.Domain/BuildAndTestService.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Host/">
+    <Project Path="src/Host/BuildAndTestService.Host/BuildAndTestService.Host.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="src/Infrastructure/BuildAndTestService.Infrastructure/BuildAndTestService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="src/Presentation/BuildAndTestService.Presentation/BuildAndTestService.Presentation.csproj" />
+  </Folder>
+</Solution>
