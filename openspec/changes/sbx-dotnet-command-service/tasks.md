@@ -44,19 +44,21 @@
 
 ## 5. Command Execution
 
-- [ ] 5.1 Define request/event contract: argument list (array of strings) + working-directory string + optional per-request timeout in; run id returned via `X-Run-Id` header; SSE events out (`stdout`, `stderr` data events; terminal `done` event with exit code + truncation flag; terminal `error` event with a reason of `validation`, `timeout`, or `cancelled`)
-- [ ] 5.2 Implement process launch via `System.Diagnostics.Process` with `UseShellExecute = false` and `ArgumentList` (no string concatenation/shell parsing)
-- [ ] 5.3 Wire `OutputDataReceived`/`ErrorDataReceived` handlers to emit an SSE event per line as it's produced (no end-of-process buffering)
-- [ ] 5.4 Set response `Content-Type: text/event-stream`, disable response buffering, flush after each event write
-- [ ] 5.5 Cap total bytes emitted per execution; on cap, stop forwarding lines and flag truncation on the terminal event (let the process keep running/be reaped by timeout)
-- [ ] 5.6 Implement execution timeout: use the caller-supplied value if present, else the configured default (10 minutes), clamped in both cases to the configured maximum; kill process tree (`entireProcessTree: true`) on timeout, emit a terminal `error` event with reason `timeout`, close the stream
-- [ ] 5.7 Ensure "request never executed" (validation/auth failure, or repo already locked) emits `error` with reason `validation` before any `stdout`/`stderr` events, never a `done` event
-- [ ] 5.8 BDD: successful `dotnet build`/`dotnet test` round trip against the passing-test fixture — caller receives run id, incremental `stdout`/`stderr` events, then the terminal `done` event with correct exit code (`dotnet-command-execution.feature`)
-- [ ] 5.9 BDD: `dotnet test` against the failing-test fixture returns the non-zero exit code, not treated as a transport error
-- [ ] 5.10 Unit test: an argument value containing shell metacharacters (e.g. `; rm -rf /`) is passed as one literal `ArgumentList` entry, not concatenated into a shell string
-- [ ] 5.11 Unit/BDD: client using a non-streaming HTTP call (response fully buffered) still receives all events correctly once the response completes — streaming is a delivery optimization, not a correctness requirement
-- [ ] 5.12 Unit test: caller-supplied timeout shorter than the default is honored; caller-supplied timeout longer than the configured maximum is clamped to that maximum, not honored as-is
-- [ ] 5.13 BDD: a command with no caller-supplied timeout is killed at the configured default; a command with a short caller-supplied timeout against the hanging-test fixture is killed sooner than the default would allow
+- [x] 5.1 Contract implemented: `StartRunRequest` (Presentation) — `Arguments`/`WorkingDirectory`/`TimeoutSeconds` in; `X-Run-Id` response header; `SseWriter` (Presentation) emits `stdout`/`stderr` data events, a terminal `done` event (`{exitCode, truncated}`), and a terminal `error` event (`{reason}`, values `validation`/`timeout`/`cancelled`)
+- [x] 5.2 `DotnetProcessRunner.BuildStartInfo` (Infrastructure): `UseShellExecute = false`, arguments added individually to `ArgumentList` — never string-concatenated
+- [x] 5.3 `OutputDataReceived`/`ErrorDataReceived` write into an unbounded `Channel`; a single consumer task drains it into `IProcessOutputSink` in order, avoiding concurrent writes to the HTTP response from the two callback threads
+- [x] 5.4 `RunEndpoints.HandleStartRunAsync` sets `Content-Type: text/event-stream`, disables response buffering via `IHttpResponseBodyFeature`, and `SseWriter` flushes after every event
+- [x] 5.5 `SseProcessOutputSink` tracks cumulative UTF-8 byte count against `ServiceOptions.OutputCapBytes`; once exceeded, further lines are dropped (`Truncated = true`) but the process keeps running
+- [x] 5.6 `Domain.Runs.ExecutionTimeoutPolicy.Resolve` computes the effective timeout (caller value or default, clamped to configured maximum); the endpoint links a timeout `CancellationTokenSource` with `HttpContext.RequestAborted`, and `DotnetProcessRunner` kills the process tree (`entireProcessTree: true`) on cancellation
+- [x] 5.7 Validation failures (empty/missing arguments, missing working directory, path-confinement rejection) write `error`/`validation` before any process is started — the "repo already locked" case is added when Section 6's registry wraps this endpoint
+- [x] 5.8 BDD `DotnetCommandExecution.feature`: successful `dotnet test` round trip against `PassingFixture` — run id present, output events precede `done`, exit code 0
+- [x] 5.9 BDD: `dotnet test` against `FailingFixture` returns a non-zero exit code via `done`, not a transport-level error
+- [x] 5.10 Unit tests on `DotnetProcessRunner.BuildStartInfo` (no live process needed): `UseShellExecute` is false, and an argument containing shell metacharacters (`; rm -rf / & echo INJECTED > pwned.txt`) round-trips as exactly one literal `ArgumentList` entry
+- [x] 5.11 BDD: a non-streaming client (`HttpCompletionOption.ResponseContentRead`, fully buffered) parses the identical set of events as the streaming client
+- [x] 5.12 Unit tests on `ExecutionTimeoutPolicy`: caller value shorter than default honored; caller value longer than maximum clamped; omitted caller value uses default; a misconfigured default above maximum is also clamped
+- [x] 5.13 BDD: both "no caller timeout, short configured default" and "short caller-supplied timeout" scenarios against `HangingFixture` end in `error`/`timeout` — confirmed no orphaned `testhost.exe`/`dotnet.exe` processes survive the kill
+
+All 10 BehaviorTests scenarios pass in ~14s (real `dotnet.exe` spawns); 27/27 UnitTests; 5/5 ArchitectureTests.
 
 ## 6. Concurrency & Locking
 

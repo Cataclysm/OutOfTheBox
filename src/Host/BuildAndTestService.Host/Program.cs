@@ -1,4 +1,7 @@
 using BuildAndTestService.Application.Configuration;
+using BuildAndTestService.Application.Execution;
+using BuildAndTestService.Infrastructure.Execution;
+using BuildAndTestService.Presentation.Execution;
 using Microsoft.Extensions.Hosting.WindowsServices;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,11 +12,18 @@ builder.Services
     .AddOptions<ServiceOptions>()
     .Bind(builder.Configuration.GetSection(ServiceOptions.SectionName));
 
-// Infrastructure DI registrations, Presentation endpoint/component mapping, and Kestrel/HTTPS
-// hardening are added here as those pieces land in later implementation steps. Until then this
-// is an intentionally minimal, buildable composition root.
+// Infrastructure implementations registered against Application's ports - this file (plus
+// DependencyInjection-style extension methods, if it grows large enough to warrant them) is the
+// one place allowed to reference both Infrastructure and Presentation; neither references the
+// other directly.
+builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
+builder.Services.AddSingleton<IProcessRunner, DotnetProcessRunner>();
+
+// Kestrel/HTTPS hardening deferred to Section 12 (Transport & Network).
 
 var app = builder.Build();
+
+app.MapCommandExecutionEndpoints();
 
 app.Run();
 
