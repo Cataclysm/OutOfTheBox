@@ -5,9 +5,11 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
+using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Execution;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -62,6 +64,15 @@ builder.Services.AddDbContext<OutOfTheBoxDbContext>((serviceProvider, options) =
 });
 builder.Services.AddScoped<IRunRepository, EfRunRepository>();
 builder.Services.AddScoped<IRunResourceSampleRepository, EfRunResourceSampleRepository>();
+
+// Repository management (Section 13) - list/clone/delete are dashboard-only (no REST surface),
+// called directly from Blazor component code-behind. IRepositoryManager is scoped (it depends on
+// the scoped IRunRepository); the cache and stats provider are process-wide singletons, the same
+// reasoning as RunRegistry/IRunEventBus above.
+builder.Services.AddSingleton<RepositoryStatsCache>();
+builder.Services.AddSingleton<IRepositoryStatsProvider, GitRepositoryStatsProvider>();
+builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
+builder.Services.AddHostedService<RepositoryStatsSampler>();
 
 // Kestrel/HTTPS hardening deferred to Section 16 (Transport & Network).
 

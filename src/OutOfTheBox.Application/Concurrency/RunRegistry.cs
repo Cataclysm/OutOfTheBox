@@ -47,6 +47,13 @@ public sealed class RunRegistry
         return true;
     }
 
+    /// <summary>
+    /// Read-only check of whether <paramref name="repoRoot"/> currently holds the per-repo lock -
+    /// no side effect, unlike <see cref="TryAcquire"/>. Used for the Repos view's live active/idle
+    /// indicator (per specs/repository-management's "active" definition: holds the command lock).
+    /// </summary>
+    public bool IsHeld(string repoRoot) => _activeRunsByRepoRoot.ContainsKey(repoRoot);
+
     /// <summary>Releases the lock for <paramref name="repoRoot"/>, so a subsequent request for it can be accepted.</summary>
     public void Release(string repoRoot)
     {

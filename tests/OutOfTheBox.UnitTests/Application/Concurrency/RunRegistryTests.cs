@@ -179,4 +179,23 @@ public sealed class RunRegistryTests
 
         Assert.False(registry.TryCancel(runId));
     }
+
+    [Fact]
+    public void IsHeld_reflects_lock_state_without_side_effects()
+    {
+        var registry = new RunRegistry();
+        using var cts = new CancellationTokenSource();
+
+        Assert.False(registry.IsHeld(@"C:\repos\repo-a"));
+
+        registry.TryAcquire(@"C:\repos\repo-a", Guid.NewGuid(), cts, out _);
+        Assert.True(registry.IsHeld(@"C:\repos\repo-a"));
+
+        // A read-only check must not itself acquire/consume the lock - a second real TryAcquire
+        // against the same repo must still see it held.
+        Assert.True(registry.IsHeld(@"C:\repos\repo-a"));
+
+        registry.Release(@"C:\repos\repo-a");
+        Assert.False(registry.IsHeld(@"C:\repos\repo-a"));
+    }
 }

@@ -1,0 +1,252 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
+using OutOfTheBox.Application.Concurrency;
+using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Events;
+using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
+using OutOfTheBox.Domain.Runs;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace OutOfTheBox.Infrastructure.Repositories;
+
+/// <inheritdoc cref="IRepositoryManager" />
+/// <remarks>
+/// Registered scoped (it depends on the scoped <see cref="IRunRepository"/>), called directly from
+/// Blazor component code-behind - never through an HTTP endpoint, per specs/repository-management's
+/// "reachable only from the authenticated dashboard" requirement. <see cref="CloneAsync"/>'s
+/// background continuation resolves its own <see cref="IRunRepository"/> from a fresh
+/// <see cref="IServiceScopeFactory"/>-created scope rather than closing over the caller's injected
+/// instance - the calling Blazor circuit's scope (and its <c>DbContext</c>) may not outlive the
+/// clone, which keeps running after <see cref="CloneAsync"/> itself has already returned.
+/// </remarks>
+public sealed class RepositoryManager(
+    IWorkingDirectoryResolver workingDirectoryResolver,
+    RunRegistry runRegistry,
+    IRunRepository runRepository,
+    IRunEventBus runEventBus,
+    IProcessRunner processRunner,
+    IRepositoryStatsProvider statsProvider,
+    RepositoryStatsCache statsCache,
+    IServiceScopeFactory serviceScopeFactory,
+    IOptions<ServiceOptions> options) : IRepositoryManager
+{
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RepositorySummary>> ListAsync(CancellationToken cancellationToken)
+    {
+        var root = options.Value.RootDirectory;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+        {
+            return Task.FromResult<IReadOnlyList<RepositorySummary>>([]);
+        }
+
+        var summaries = new List<RepositorySummary>();
+
+        foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
+        {
+            var name = Path.GetFileName(directory);
+            var stats = statsCache.TryGet(name);
+            var isActive = runRegistry.IsHeld(Path.GetFullPath(directory));
+
+            summaries.Add(stats is null
+                ? new RepositorySummary { Name = name, StatsComputed = false, IsActive = isActive }
+                : new RepositorySummary
+                {
+                    Name = name,
+                    StatsComputed = true,
+                    TotalSizeBytes = stats.TotalSizeBytes,
+                    IsGitRepository = stats.IsGitRepository,
+                    Branch = stats.Branch,
+                    IsDirty = stats.IsDirty,
+                    AheadCount = stats.AheadCount,
+                    BehindCount = stats.BehindCount,
+                    IsActive = isActive,
+                });
+        }
+
+        return Task.FromResult<IReadOnlyList<RepositorySummary>>(summaries);
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryActionResult> CloneAsync(string url, string name, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+
+        if (Directory.Exists(targetPath))
+        {
+            var now = DateTimeOffset.UtcNow;
+            await runRepository.AddAsync(new Run
+            {
+                Id = Guid.NewGuid(),
+                Kind = RunKind.RepositoryClone,
+                RepoPath = targetPath,
+                SourceUrl = url,
+                StartedAt = now,
+                CompletedAt = now,
+                Outcome = RunOutcome.AlreadyExists,
+            }, cancellationToken);
+
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.AlreadyExists);
+        }
+
+        var runId = Guid.NewGuid();
+        var cancelRequestCts = new CancellationTokenSource();
+
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            cancelRequestCts.Dispose();
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        var run = new Run
+        {
+            Id = runId,
+            Kind = RunKind.RepositoryClone,
+            RepoPath = targetPath,
+            SourceUrl = url,
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        };
+        await runRepository.AddAsync(run, cancellationToken);
+        runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryClone, RunEventType.Started, targetPath));
+
+        // Fire-and-forget: the operator's click shouldn't block for the clone's full duration - it
+        // returns as soon as the run is accepted and keeps going in the background, visible via
+        // Status/History like any other run, per specs/service-dashboard's "the clone starts,
+        // appears as an in-flight run" requirement.
+        _ = RunCloneToCompletionAsync(run, targetPath, url, cancelRequestCts);
+
+        return new RepositoryActionResult.Accepted(runId);
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+
+        if (!Directory.Exists(targetPath))
+        {
+            var now = DateTimeOffset.UtcNow;
+            await runRepository.AddAsync(new Run
+            {
+                Id = Guid.NewGuid(),
+                Kind = RunKind.RepositoryDelete,
+                RepoPath = targetPath,
+                StartedAt = now,
+                CompletedAt = now,
+                Outcome = RunOutcome.NotFound,
+            }, cancellationToken);
+
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+        }
+
+        var runId = Guid.NewGuid();
+        var cancelRequestCts = new CancellationTokenSource();
+
+        // Acquire, not just check-then-act: closes the TOCTOU race a plain existence/lock check
+        // would leave open between "confirmed idle" and "delete actually ran," per design.md.
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            cancelRequestCts.Dispose();
+            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        var run = new Run
+        {
+            Id = runId,
+            Kind = RunKind.RepositoryDelete,
+            RepoPath = targetPath,
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        };
+        await runRepository.AddAsync(run, cancellationToken);
+        runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryDelete, RunEventType.Started, targetPath));
+
+        try
+        {
+            Directory.Delete(targetPath, recursive: true);
+            run.Outcome = RunOutcome.Completed;
+        }
+        finally
+        {
+            run.CompletedAt = DateTimeOffset.UtcNow;
+            await runRepository.UpdateAsync(run, CancellationToken.None);
+            runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryDelete, RunEventType.Terminal, targetPath));
+
+            statsCache.Remove(name);
+            runRegistry.Release(targetPath);
+            cancelRequestCts.Dispose();
+        }
+
+        return new RepositoryActionResult.Accepted(runId);
+    }
+
+    private async Task RunCloneToCompletionAsync(Run run, string targetPath, string url, CancellationTokenSource cancelRequestCts)
+    {
+        var sink = new RepositoryCloneOutputSink(runEventBus, run.Id, targetPath, options.Value.OutputCapBytes);
+
+        try
+        {
+            var timeout = TimeSpan.FromSeconds(options.Value.DefaultExecutionTimeoutSeconds);
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancelRequestCts.Token);
+
+            try
+            {
+                var result = await processRunner.RunAsync(
+                    new ProcessRunRequest(["clone", url, targetPath], options.Value.RootDirectory, "git"),
+                    sink,
+                    linkedCts.Token);
+
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Completed;
+                run.ExitCode = result.ExitCode;
+                run.Stdout = sink.Stdout;
+                run.Stderr = sink.Stderr;
+                run.Truncated = sink.Truncated;
+            }
+            catch (OperationCanceledException)
+            {
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Stdout = sink.Stdout;
+                run.Stderr = sink.Stderr;
+                run.Truncated = sink.Truncated;
+                run.Outcome = cancelRequestCts.IsCancellationRequested ? RunOutcome.Cancelled : RunOutcome.TimedOut;
+            }
+
+            // A fresh scope/DbContext, not the caller's - the Blazor circuit that started this
+            // clone may already be gone by the time it finishes.
+            await using var scope = serviceScopeFactory.CreateAsyncScope();
+            var scopedRunRepository = scope.ServiceProvider.GetRequiredService<IRunRepository>();
+            await scopedRunRepository.UpdateAsync(run, CancellationToken.None);
+
+            runEventBus.Publish(new RunEvent(run.Id, RunKind.RepositoryClone, RunEventType.Terminal, targetPath));
+
+            if (run.Outcome == RunOutcome.Completed)
+            {
+                var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
+                statsCache.Set(Path.GetFileName(targetPath), stats);
+            }
+        }
+        finally
+        {
+            runRegistry.Release(targetPath);
+            cancelRequestCts.Dispose();
+        }
+    }
+}

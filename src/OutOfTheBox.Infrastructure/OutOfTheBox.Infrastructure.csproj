@@ -7,6 +7,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- BackgroundService, for RepositoryStatsSampler (and, later, the host-resource sampler). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <!-- Direct reference so the pinned (patched) version in Directory.Packages.props actually
          wins over the older, vulnerable one EF Core Sqlite would otherwise pull in transitively. -->

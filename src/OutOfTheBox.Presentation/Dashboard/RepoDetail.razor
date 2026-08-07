@@ -1,0 +1,107 @@
+@page "/repos/{Name}"
+@attribute [Authorize]
+@using OutOfTheBox.Application.Execution
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryManager RepositoryManager
+@inject IRunRepository RunRepository
+@inject IWorkingDirectoryResolver WorkingDirectoryResolver
+
+<PageTitle>OutOfTheBox - @Name</PageTitle>
+
+<h1>@Name</h1>
+
+@if (_summary is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <dl>
+        <dt>Status</dt>
+        <dd>@(_summary.IsActive ? "Active" : "Idle")</dd>
+        <dt>Size</dt>
+        <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "computing…")</dd>
+        <dt>Git status</dt>
+        <dd>@GitStatusText(_summary)</dd>
+    </dl>
+}
+
+<h2>Run history</h2>
+
+@if (_runs is null)
+{
+    <p>Loading...</p>
+}
+else if (_runs.Count == 0)
+{
+    <p class="empty-state">No runs recorded against this repository yet.</p>
+}
+else
+{
+    <ul class="run-list">
+        @foreach (var run in _runs)
+        {
+            <li class="run-row">
+                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
+                <span class="run-outcome">@run.Outcome</span>
+                <span class="run-started">@run.StartedAt.ToLocalTime()</span>
+                @if (run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
+                {
+                    <a href="@($"history/{run.Id}")">View</a>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    /// <summary>The repository name from the route (<c>/repos/{Name}</c>).</summary>
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+
+    private RepositorySummary? _summary;
+    private IReadOnlyList<Run>? _runs;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        var summaries = await RepositoryManager.ListAsync(CancellationToken.None);
+        _summary = summaries.FirstOrDefault(r => string.Equals(r.Name, Name, StringComparison.OrdinalIgnoreCase));
+
+        // Reuses the same RunQuery/IRunRepository.ListAsync mechanism the History view's list uses
+        // (per task 13.14), pre-filtered to this repo's resolved path - the route only carries the
+        // repo's name, so it's resolved the same way any repo-relative path is before querying.
+        var resolution = WorkingDirectoryResolver.Resolve(Name);
+        _runs = resolution.IsAllowed
+            ? await RunRepository.ListAsync(new RunQuery { Repo = resolution.ResolvedPath }, CancellationToken.None)
+            : [];
+    }
+
+    private static string GitStatusText(RepositorySummary repo)
+    {
+        if (!repo.StatsComputed)
+        {
+            return "computing…";
+        }
+
+        if (!repo.IsGitRepository)
+        {
+            return "not a git repo";
+        }
+
+        var status = $"{repo.Branch ?? "(no branch)"} ({(repo.IsDirty ? "dirty" : "clean")})";
+
+        if (repo.AheadCount is > 0)
+        {
+            status += $", ahead {repo.AheadCount}";
+        }
+
+        if (repo.BehindCount is > 0)
+        {
+            status += $", behind {repo.BehindCount}";
+        }
+
+        return status;
+    }
+}

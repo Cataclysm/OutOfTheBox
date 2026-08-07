@@ -93,7 +93,7 @@ public static class ArtifactTransferEndpoints
             Outcome = RunOutcome.Running,
         };
         await runRepository.AddAsync(run, CancellationToken.None);
-        runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Started));
+        runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Started, repoRoot));
 
         try
         {
@@ -126,7 +126,7 @@ public static class ArtifactTransferEndpoints
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
-            runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Terminal));
+            runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Terminal, repoRoot));
         }
         finally
         {

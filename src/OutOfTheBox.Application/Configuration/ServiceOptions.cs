@@ -45,4 +45,13 @@ public sealed class ServiceOptions
     /// Absolute path to the SQLite database file used for run history and resource-sample persistence.
     /// </summary>
     public string SqliteFilePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How often the background repository-stats sampler recomputes size/git status for every
+    /// repository, in seconds. Deliberately slow (default 60s) relative to the resource sampler -
+    /// per design.md, both size and git status are also recomputed immediately whenever a run
+    /// against that specific repo reaches a terminal state, so this interval only bounds the
+    /// worst-case staleness for a repo nothing has run against recently.
+    /// </summary>
+    public int RepositoryStatsSamplerIntervalSeconds { get; set; } = 60;
 }

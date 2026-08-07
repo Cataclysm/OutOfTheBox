@@ -1,8 +1,247 @@
 @page "/repos"
 @attribute [Authorize]
+@using OutOfTheBox.Application.Concurrency
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryManager RepositoryManager
+@inject IRunRepository RunRepository
+@inject RunRegistry RunRegistry
+@inject IRunEventBus RunEventBus
+@implements IDisposable
 
 <PageTitle>OutOfTheBox - Repos</PageTitle>
 
 <h1>Repos</h1>
 
-<p class="empty-state">Repository management lands in a later update.</p>
+<div class="history-filters">
+    <label>
+        Search
+        <input type="text" @bind="_searchText" @bind:event="oninput" placeholder="repository name" />
+    </label>
+    <label>
+        <input type="checkbox" @bind="_activeOnly" /> Active only
+    </label>
+    <label>
+        Git status
+        <select @bind="_gitStatusFilter">
+            <option value="">(any)</option>
+            <option value="clean">Clean</option>
+            <option value="dirty">Dirty</option>
+            <option value="no-git">Not a git repo</option>
+        </select>
+    </label>
+    <button type="button" @onclick="ClearFilters">Clear filters</button>
+    <button type="button" @onclick="@(() => _showCloneForm = !_showCloneForm)">@(_showCloneForm ? "Cancel clone" : "Clone repository")</button>
+</div>
+
+@if (_showCloneForm)
+{
+    <div class="history-filters">
+        <label>
+            Source URL
+            <input type="text" @bind="_cloneUrl" placeholder="https://example.com/repo.git" />
+        </label>
+        <label>
+            Name
+            <input type="text" @bind="_cloneName" placeholder="new-repo-name" />
+        </label>
+        <button type="button" @onclick="SubmitCloneAsync">Start clone</button>
+        @if (_cloneError is not null)
+        {
+            <span class="login-error">@_cloneError</span>
+        }
+    </div>
+}
+
+@if (_summaries is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    var filtered = FilteredSummaries();
+    if (filtered.Count == 0)
+    {
+        <p class="empty-state">No repositories match the current filters.</p>
+    }
+    else
+    {
+        <ul class="run-list">
+            @foreach (var repo in filtered)
+            {
+                <li class="run-row">
+                    <span class="kind-badge">@(repo.IsActive ? "Active" : "Idle")</span>
+                    <a href="@($"repos/{repo.Name}")">@repo.Name</a>
+                    <span>@(repo.StatsComputed ? FormatSize(repo.TotalSizeBytes) : "computing…")</span>
+                    <span>@GitStatusText(repo)</span>
+                    @if (_inFlightClonesByRepoName.TryGetValue(repo.Name, out var cloneRunId))
+                    {
+                        <button type="button" @onclick="@(() => CancelCloneAsync(cloneRunId))">Cancel clone</button>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="@(() => DeleteAsync(repo.Name))">
+                            @(_deleteConfirmName == repo.Name ? "Confirm delete?" : "Delete")
+                        </button>
+                    }
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<RepositorySummary>? _summaries;
+    private Dictionary<string, Guid> _inFlightClonesByRepoName = [];
+    private IDisposable? _subscription;
+    private bool _showCloneForm;
+    private string _cloneUrl = string.Empty;
+    private string _cloneName = string.Empty;
+    private string? _cloneError;
+    private string _searchText = string.Empty;
+    private bool _activeOnly;
+    private string _gitStatusFilter = string.Empty;
+    private string? _deleteConfirmName;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _subscription = RunEventBus.Subscribe(OnRunEvent);
+    }
+
+    private void OnRunEvent(RunEvent runEvent)
+    {
+        if (runEvent.Type == RunEventType.OutputLine)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshAsync()
+    {
+        _summaries = await RepositoryManager.ListAsync(CancellationToken.None);
+
+        var inFlightClones = await RunRepository.ListAsync(
+            new RunQuery { Kinds = [RunKind.RepositoryClone], Outcomes = [RunOutcome.Running] },
+            CancellationToken.None);
+        _inFlightClonesByRepoName = inFlightClones.ToDictionary(r => Path.GetFileName(r.RepoPath), r => r.Id);
+    }
+
+    private IReadOnlyList<RepositorySummary> FilteredSummaries()
+    {
+        IEnumerable<RepositorySummary> query = _summaries!;
+
+        if (_activeOnly)
+        {
+            query = query.Where(r => r.IsActive);
+        }
+
+        query = _gitStatusFilter switch
+        {
+            "clean" => query.Where(r => r.IsGitRepository && !r.IsDirty),
+            "dirty" => query.Where(r => r.IsGitRepository && r.IsDirty),
+            "no-git" => query.Where(r => !r.IsGitRepository),
+            _ => query,
+        };
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            query = query.Where(r => r.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return [.. query];
+    }
+
+    private void ClearFilters()
+    {
+        _searchText = string.Empty;
+        _activeOnly = false;
+        _gitStatusFilter = string.Empty;
+    }
+
+    private async Task SubmitCloneAsync()
+    {
+        _cloneError = null;
+        var result = await RepositoryManager.CloneAsync(_cloneUrl, _cloneName, CancellationToken.None);
+
+        if (result is RepositoryActionResult.Rejected rejected)
+        {
+            _cloneError = rejected.Reason switch
+            {
+                RepositoryActionRejectionReason.InvalidName => "Invalid name - it must resolve inside the configured root.",
+                RepositoryActionRejectionReason.AlreadyExists => "A repository with that name already exists.",
+                RepositoryActionRejectionReason.Busy => $"Busy - conflicting run {rejected.ConflictingRunId}.",
+                _ => "Rejected.",
+            };
+            return;
+        }
+
+        _showCloneForm = false;
+        _cloneUrl = string.Empty;
+        _cloneName = string.Empty;
+        await RefreshAsync();
+    }
+
+    private void CancelCloneAsync(Guid runId) => RunRegistry.TryCancel(runId);
+
+    private async Task DeleteAsync(string name)
+    {
+        // First click arms confirmation, second click actually deletes - no accidental
+        // single-click deletion, per specs/repository-management's "Deleting requires
+        // confirmation" requirement.
+        if (_deleteConfirmName != name)
+        {
+            _deleteConfirmName = name;
+            return;
+        }
+
+        _deleteConfirmName = null;
+        await RepositoryManager.DeleteAsync(name, CancellationToken.None);
+        await RefreshAsync();
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
+        >= 1024L * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        >= 1024L => $"{bytes / 1024.0:F1} KB",
+        _ => $"{bytes} B",
+    };
+
+    private static string GitStatusText(RepositorySummary repo)
+    {
+        if (!repo.StatsComputed)
+        {
+            return "computing…";
+        }
+
+        if (!repo.IsGitRepository)
+        {
+            return "not a git repo";
+        }
+
+        var status = $"{repo.Branch ?? "(no branch)"} ({(repo.IsDirty ? "dirty" : "clean")})";
+
+        if (repo.AheadCount is > 0)
+        {
+            status += $", ahead {repo.AheadCount}";
+        }
+
+        if (repo.BehindCount is > 0)
+        {
+            status += $", behind {repo.BehindCount}";
+        }
+
+        return status;
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _subscription?.Dispose();
+}

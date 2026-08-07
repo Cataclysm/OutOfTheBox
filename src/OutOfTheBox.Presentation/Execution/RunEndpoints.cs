@@ -106,7 +106,7 @@ public static class RunEndpoints
             Outcome = RunOutcome.Running,
         };
         await runRepository.AddAsync(run, CancellationToken.None);
-        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Started));
+        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Started, repoRoot));
 
         try
         {
@@ -119,7 +119,7 @@ public static class RunEndpoints
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 timeoutCts.Token, cancelRequestCts.Token, httpContext.RequestAborted);
 
-            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes, runEventBus, runId, kind);
+            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes, runEventBus, runId, kind, repoRoot);
 
             try
             {
@@ -164,7 +164,7 @@ public static class RunEndpoints
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
-            runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal));
+            runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal, repoRoot));
         }
         finally
         {
@@ -173,6 +173,33 @@ public static class RunEndpoints
         }
     }
 
-    private static IResult HandleCancelRunAsync(Guid runId, RunRegistry runRegistry) =>
-        runRegistry.TryCancel(runId) ? Results.Accepted() : Results.NotFound();
+    /// <summary>
+    /// Per specs/repository-management's "The REST cancel endpoint does not affect
+    /// repository-management runs" requirement: a repository-clone or -delete run id must respond
+    /// as if unknown, never actually reachable through this bearer-token endpoint at all -
+    /// cancelling one of those is only ever an in-process <see cref="RunRegistry.TryCancel"/> call
+    /// from Blazor component code-behind. <see cref="RunRegistry"/> itself is kind-agnostic by
+    /// design (it doesn't know or care what kind of run holds a given id), so this checks the
+    /// persisted <see cref="Run.Kind"/> and refuses only once that's positively confirmed.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does NOT treat "no row found" as grounds to refuse - <c>POST /run</c>/
+    /// <c>POST /run/git</c> send the <c>X-Run-Id</c> header (via <c>response.StartAsync()</c>)
+    /// before their own <see cref="IRunRepository.AddAsync"/> call completes, so a cancel request
+    /// that races a just-started <c>dotnet</c>/<c>git</c> run can genuinely arrive before its row
+    /// exists yet; treating a missing row as "must be repository-management, reject" would
+    /// incorrectly 404 that legitimate race instead of falling through to the registry check below,
+    /// which has always been the correct source of truth for "is this id currently cancellable."
+    /// Caught only by running the existing cancellation BDD suite, not by review.
+    /// </remarks>
+    private static async Task<IResult> HandleCancelRunAsync(Guid runId, RunRegistry runRegistry, IRunRepository runRepository)
+    {
+        var run = await runRepository.FindByIdAsync(runId, CancellationToken.None);
+        if (run is not null && run.Kind is RunKind.RepositoryClone or RunKind.RepositoryDelete)
+        {
+            return Results.NotFound();
+        }
+
+        return runRegistry.TryCancel(runId) ? Results.Accepted() : Results.NotFound();
+    }
 }

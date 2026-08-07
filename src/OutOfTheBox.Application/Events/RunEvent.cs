@@ -10,9 +10,11 @@ namespace OutOfTheBox.Application.Events;
 /// the authoritative up-to-date data (for both in-flight and completed runs) always lives in the
 /// <c>Runs</c> table via <see cref="Persistence.IRunRepository"/>, which a subscriber re-queries on
 /// receiving one of these rather than trusting a payload that could already be stale by the time it
-/// renders.
+/// renders. <see cref="RepoPath"/> is the one exception - the repository-stats background sampler
+/// (specs/repository-management) needs to know *which* repo to recompute on a terminal event
+/// without a database round-trip just to find out.
 /// </summary>
-public sealed record RunEvent(Guid RunId, RunKind Kind, RunEventType Type)
+public sealed record RunEvent(Guid RunId, RunKind Kind, RunEventType Type, string RepoPath)
 {
     /// <summary>Which stream the line came from (<c>"stdout"</c> or <c>"stderr"</c>). Set only when <see cref="Type"/> is <see cref="RunEventType.OutputLine"/>.</summary>
     public string? OutputStream { get; init; }
