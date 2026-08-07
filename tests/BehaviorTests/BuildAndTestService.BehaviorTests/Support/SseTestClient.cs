@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 

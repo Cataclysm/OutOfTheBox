@@ -20,6 +20,7 @@ A Claude Code instance running in an sbx sandbox has no local Windows/.NET toolc
 - Operator can kill an individual spawned process (and its descendants) directly from that list — for unsticking a hung `dotnet test`/`testhost.exe` without necessarily needing the run's id.
 - Dashboard renders in dark mode only (no light-mode toggle) and organizes status, resource/process monitoring, and history into separate views rather than one dense page.
 - A Claude Code skill (`SKILL.md`) is authored in this repo documenting how to call the service from the sbx side: auth header, starting/cancelling a run, the timeout-override field, and how to consume the SSE event stream from a Bash-based agent — so the sbx-side Claude Code instance doesn't have to reverse-engineer the API contract from the specs directly.
+- Repo-level documentation (`README.md`, `BUILD.md`, `INSTALL.md`, `CHANGELOG.md`), a standard copyright header on every source file, and a `CLAUDE.md` documenting the project for future work sessions.
 
 ## Capabilities
 

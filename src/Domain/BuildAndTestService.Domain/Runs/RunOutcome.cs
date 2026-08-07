@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 namespace BuildAndTestService.Domain.Runs;
 
 /// <summary>The terminal (or in-flight) state of a run.</summary>

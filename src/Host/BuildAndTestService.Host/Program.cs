@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 using BuildAndTestService.Application.Concurrency;
 using BuildAndTestService.Application.Configuration;
 using BuildAndTestService.Application.Execution;
@@ -24,7 +26,7 @@ builder.Services.AddSingleton<IProcessRunner, DotnetProcessRunner>();
 // would be meaningless (each request would get its own empty registry).
 builder.Services.AddSingleton<RunRegistry>();
 
-// Kestrel/HTTPS hardening deferred to Section 12 (Transport & Network).
+// Kestrel/HTTPS hardening deferred to Section 13 (Transport & Network).
 
 var app = builder.Build();
 

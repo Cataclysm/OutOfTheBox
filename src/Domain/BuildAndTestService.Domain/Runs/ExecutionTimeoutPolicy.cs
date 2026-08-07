@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 namespace BuildAndTestService.Domain.Runs;
 
 /// <summary>

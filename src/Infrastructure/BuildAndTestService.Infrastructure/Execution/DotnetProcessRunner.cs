@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 using System.Diagnostics;
 using System.Threading.Channels;
 using BuildAndTestService.Application.Execution;

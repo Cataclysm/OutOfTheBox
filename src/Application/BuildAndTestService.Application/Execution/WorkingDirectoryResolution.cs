@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
 namespace BuildAndTestService.Application.Execution;
 
 /// <summary>The outcome of resolving a caller-supplied relative working directory against the configured root.</summary>
