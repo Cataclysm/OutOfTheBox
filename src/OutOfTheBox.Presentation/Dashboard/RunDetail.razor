@@ -1,0 +1,70 @@
+@page "/history/{RunId:guid}"
+@attribute [Authorize]
+@inject IRunRepository RunRepository
+
+<PageTitle>OutOfTheBox - Run detail</PageTitle>
+
+@if (_run is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <h1>@_run.Kind run</h1>
+    <dl>
+        <dt>Repo</dt>
+        <dd>@_run.RepoPath</dd>
+        <dt>Outcome</dt>
+        <dd>@_run.Outcome</dd>
+        <dt>Started</dt>
+        <dd>@_run.StartedAt.ToLocalTime()</dd>
+        <dt>Completed</dt>
+        <dd>@(_run.CompletedAt is { } completedAt ? completedAt.ToLocalTime().ToString() : "-")</dd>
+
+        @if (_run.Kind is RunKind.DotnetCommand or RunKind.GitCommand)
+        {
+            <dt>Command</dt>
+            <dd>@(_run.Arguments is null ? string.Empty : string.Join(' ', _run.Arguments))</dd>
+            <dt>Exit code</dt>
+            <dd>@(_run.ExitCode is { } exitCode ? exitCode.ToString() : "-")</dd>
+        }
+        else if (_run.Kind is RunKind.RepositoryClone)
+        {
+            <dt>Source URL</dt>
+            <dd>@_run.SourceUrl</dd>
+            <dt>Exit code</dt>
+            <dd>@(_run.ExitCode is { } cloneExitCode ? cloneExitCode.ToString() : "-")</dd>
+        }
+        else if (_run.Kind is RunKind.ArtifactTransfer)
+        {
+            <dt>Requested file path</dt>
+            <dd>@_run.ArtifactPath</dd>
+            <dt>File size</dt>
+            <dd>@(_run.ArtifactSizeBytes is { } sizeBytes ? $"{sizeBytes:N0} bytes" : "-")</dd>
+        }
+    </dl>
+
+    @if (_run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
+    {
+        @if (_run.Truncated)
+        {
+            <p class="truncated-indicator">Output was truncated at the configured cap.</p>
+        }
+        <h2>Stdout</h2>
+        <pre class="run-output">@_run.Stdout</pre>
+        <h2>Stderr</h2>
+        <pre class="run-output">@_run.Stderr</pre>
+    }
+}
+
+@code {
+    /// <summary>The run id from the route (<c>/history/{RunId:guid}</c>).</summary>
+    [Parameter]
+    public Guid RunId { get; set; }
+
+    private Run? _run;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() =>
+        _run = await RunRepository.FindByIdAsync(RunId, CancellationToken.None);
+}

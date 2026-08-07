@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Concurrency;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
@@ -33,6 +34,7 @@ public static class ArtifactTransferEndpoints
         IWorkingDirectoryResolver workingDirectoryResolver,
         RunRegistry runRegistry,
         IRunRepository runRepository,
+        IRunEventBus runEventBus,
         HttpContext httpContext)
     {
         var runId = Guid.NewGuid();
@@ -91,6 +93,7 @@ public static class ArtifactTransferEndpoints
             Outcome = RunOutcome.Running,
         };
         await runRepository.AddAsync(run, CancellationToken.None);
+        runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Started));
 
         try
         {
@@ -123,6 +126,7 @@ public static class ArtifactTransferEndpoints
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
+            runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Terminal));
         }
         finally
         {

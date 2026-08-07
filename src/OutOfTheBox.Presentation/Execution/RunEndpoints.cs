@@ -2,6 +2,7 @@
 
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
@@ -27,12 +28,12 @@ public static class RunEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("dotnet", RunKind.DotnetCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, options, httpContext))
+        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("dotnet", RunKind.DotnetCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
-        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("git", RunKind.GitCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, options, httpContext))
+        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("git", RunKind.GitCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
         endpoints.MapPost("/run/{runId:guid}/cancel", HandleCancelRunAsync)
@@ -49,6 +50,7 @@ public static class RunEndpoints
         IProcessRunner processRunner,
         RunRegistry runRegistry,
         IRunRepository runRepository,
+        IRunEventBus runEventBus,
         IOptions<ServiceOptions> options,
         HttpContext httpContext)
     {
@@ -104,6 +106,7 @@ public static class RunEndpoints
             Outcome = RunOutcome.Running,
         };
         await runRepository.AddAsync(run, CancellationToken.None);
+        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Started));
 
         try
         {
@@ -116,7 +119,7 @@ public static class RunEndpoints
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 timeoutCts.Token, cancelRequestCts.Token, httpContext.RequestAborted);
 
-            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes);
+            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes, runEventBus, runId, kind);
 
             try
             {
@@ -161,6 +164,7 @@ public static class RunEndpoints
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
+            runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal));
         }
         finally
         {

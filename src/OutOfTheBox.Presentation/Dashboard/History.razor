@@ -1,0 +1,142 @@
+@page "/history"
+@attribute [Authorize]
+@inject IRunRepository RunRepository
+
+<PageTitle>OutOfTheBox - History</PageTitle>
+
+<h1>History</h1>
+
+<div class="history-filters">
+    <fieldset>
+        <legend>Kind</legend>
+        @foreach (var kind in AllKinds)
+        {
+            <label>
+                <input type="checkbox" checked="@_selectedKinds.Contains(kind)" @onchange="@(e => ToggleKind(kind, (bool)e.Value!))" />
+                @kind
+            </label>
+        }
+    </fieldset>
+
+    <label>
+        Outcome
+        <select @bind="_selectedOutcome" @bind:after="RefreshAsync">
+            <option value="">(any)</option>
+            @foreach (var outcome in AllOutcomes)
+            {
+                <option value="@outcome">@outcome</option>
+            }
+        </select>
+    </label>
+
+    <label>
+        Repository
+        <input type="text" @bind="_repoFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="repo path" />
+    </label>
+
+    <label>
+        Search
+        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="search repo, arguments, artifact path, source url" />
+    </label>
+
+    <button type="button" @onclick="ClearFiltersAsync">Clear filters</button>
+</div>
+
+@if (_runs is null)
+{
+    <p>Loading...</p>
+}
+else if (_runs.Count == 0)
+{
+    <p class="empty-state">No runs match the current filters.</p>
+}
+else
+{
+    <ul class="run-list">
+        @foreach (var run in _runs)
+        {
+            <li class="run-row">
+                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
+                <span class="run-outcome">@run.Outcome</span>
+                <span class="run-repo">@run.RepoPath</span>
+                <span class="run-started">@run.StartedAt.ToLocalTime()</span>
+                <a href="@($"history/{run.Id}")">View</a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private static readonly RunKind[] AllKinds = Enum.GetValues<RunKind>();
+    private static readonly RunOutcome[] AllOutcomes = Enum.GetValues<RunOutcome>();
+
+    private readonly HashSet<RunKind> _selectedKinds = [];
+    private string _selectedOutcome = string.Empty;
+    private string _repoFilter = string.Empty;
+    private string _searchText = string.Empty;
+    private IReadOnlyList<Run>? _runs;
+    private CancellationTokenSource? _debounceCts;
+
+    /// <inheritdoc />
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private Task ToggleKind(RunKind kind, bool isSelected)
+    {
+        if (isSelected)
+        {
+            _selectedKinds.Add(kind);
+        }
+        else
+        {
+            _selectedKinds.Remove(kind);
+        }
+
+        return RefreshAsync();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? string.Empty;
+
+        // Debounced: cancel any pending refresh from a prior keystroke and start a fresh delay -
+        // only the last keystroke in a burst actually triggers a query, per design.md's
+        // "History filter/search UI" decision.
+        _debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        await RefreshAsync();
+        StateHasChanged();
+    }
+
+    private Task ClearFiltersAsync()
+    {
+        _selectedKinds.Clear();
+        _selectedOutcome = string.Empty;
+        _repoFilter = string.Empty;
+        _searchText = string.Empty;
+        return RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        var query = new RunQuery
+        {
+            Kinds = _selectedKinds.Count > 0 ? _selectedKinds : null,
+            Outcomes = Enum.TryParse<RunOutcome>(_selectedOutcome, out var outcome) ? [outcome] : null,
+            Repo = string.IsNullOrWhiteSpace(_repoFilter) ? null : _repoFilter,
+            SearchText = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
+        };
+
+        _runs = await RunRepository.ListAsync(query, CancellationToken.None);
+    }
+}

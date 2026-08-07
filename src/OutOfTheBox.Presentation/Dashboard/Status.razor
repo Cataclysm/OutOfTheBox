@@ -1,0 +1,91 @@
+@page "/"
+@attribute [Authorize]
+@inject IRunRepository RunRepository
+@inject IRunEventBus RunEventBus
+@implements IDisposable
+
+<PageTitle>OutOfTheBox - Status</PageTitle>
+
+<h1>Status</h1>
+
+@if (_runs is null)
+{
+    <p>Loading...</p>
+}
+else if (_runs.Count == 0)
+{
+    <p class="empty-state">Idle - no runs in flight.</p>
+}
+else
+{
+    <ul class="run-list">
+        @foreach (var run in _runs)
+        {
+            <li class="run-row">
+                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
+                <span class="run-repo">@run.RepoPath</span>
+                <span class="run-id">@run.Id</span>
+                <span class="run-detail">@DetailFor(run)</span>
+                <span class="run-elapsed">@Elapsed(run)</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<Run>? _runs;
+    private IDisposable? _subscription;
+    private Timer? _elapsedTimer;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _subscription = RunEventBus.Subscribe(OnRunEvent);
+
+        // Elapsed time needs to keep advancing even between run-started/run-terminal events, since
+        // a long-running command produces neither for minutes at a time.
+        _elapsedTimer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void OnRunEvent(RunEvent runEvent)
+    {
+        if (runEvent.Type is RunEventType.OutputLine)
+        {
+            // The Status list shows summary fields only (repo, kind, elapsed time, ...), not a
+            // live output preview - re-rendering the whole list per stdout/stderr line would be
+            // both wasteful and not what task 12.7 scopes this view to.
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshAsync() =>
+        _runs = await RunRepository.ListAsync(new RunQuery { Outcomes = [RunOutcome.Running] }, CancellationToken.None);
+
+    private static string DetailFor(Run run) => run.Kind switch
+    {
+        RunKind.DotnetCommand or RunKind.GitCommand => run.Arguments is null ? string.Empty : string.Join(' ', run.Arguments),
+        RunKind.ArtifactTransfer => run.ArtifactPath ?? string.Empty,
+        RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
+        _ => string.Empty,
+    };
+
+    private static string Elapsed(Run run)
+    {
+        var elapsed = DateTimeOffset.UtcNow - run.StartedAt;
+        return elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"mm\:ss");
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        _elapsedTimer?.Dispose();
+    }
+}

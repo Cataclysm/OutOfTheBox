@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Text;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Domain.Runs;
 
 namespace OutOfTheBox.Presentation.Execution;
 
@@ -12,8 +14,11 @@ namespace OutOfTheBox.Presentation.Execution;
 /// Also accumulates the (possibly truncated) text into <see cref="Stdout"/>/<see cref="Stderr"/>,
 /// so the caller can persist exactly what was streamed once the run reaches a terminal state, per
 /// specs/run-history's "Persisted output respects the same size limit as streamed output" requirement.
+/// Publishes an <see cref="RunEventType.OutputLine"/> event per forwarded (non-truncated) line, per
+/// design.md's dashboard event-bus decision - truncated lines are dropped from the stream entirely,
+/// so they're not published either.
 /// </summary>
-public sealed class SseProcessOutputSink(SseWriter writer, long capBytes) : IProcessOutputSink
+public sealed class SseProcessOutputSink(SseWriter writer, long capBytes, IRunEventBus runEventBus, Guid runId, RunKind kind) : IProcessOutputSink
 {
     private readonly StringBuilder _stdout = new();
     private readonly StringBuilder _stderr = new();
@@ -30,14 +35,14 @@ public sealed class SseProcessOutputSink(SseWriter writer, long capBytes) : IPro
 
     /// <inheritdoc />
     public Task OnStandardOutputAsync(string line, CancellationToken cancellationToken) =>
-        WriteIfUnderCapAsync(writer.WriteStandardOutputAsync, _stdout, line, cancellationToken);
+        WriteIfUnderCapAsync(writer.WriteStandardOutputAsync, _stdout, "stdout", line, cancellationToken);
 
     /// <inheritdoc />
     public Task OnStandardErrorAsync(string line, CancellationToken cancellationToken) =>
-        WriteIfUnderCapAsync(writer.WriteStandardErrorAsync, _stderr, line, cancellationToken);
+        WriteIfUnderCapAsync(writer.WriteStandardErrorAsync, _stderr, "stderr", line, cancellationToken);
 
     private async Task WriteIfUnderCapAsync(
-        Func<string, CancellationToken, Task> write, StringBuilder accumulator, string line, CancellationToken cancellationToken)
+        Func<string, CancellationToken, Task> write, StringBuilder accumulator, string stream, string line, CancellationToken cancellationToken)
     {
         if (Truncated)
         {
@@ -54,5 +59,6 @@ public sealed class SseProcessOutputSink(SseWriter writer, long capBytes) : IPro
         _bytesWritten += lineBytes;
         accumulator.AppendLine(line);
         await write(line, cancellationToken);
+        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.OutputLine) { OutputStream = stream, OutputLine = line });
     }
 }

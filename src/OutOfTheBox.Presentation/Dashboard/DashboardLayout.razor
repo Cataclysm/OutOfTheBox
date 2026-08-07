@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+
+<div class="dashboard-shell">
+    <header class="dashboard-header">
+        <span class="dashboard-brand">OutOfTheBox v@(VersionInfo.Current)</span>
+        <nav class="dashboard-nav">
+            <NavLink href="" Match="NavLinkMatch.All">Status</NavLink>
+            <NavLink href="history">History</NavLink>
+            <NavLink href="repos">Repos</NavLink>
+        </nav>
+        <form method="post" action="account/logout" class="dashboard-logout">
+            <button type="submit">Log out</button>
+        </form>
+    </header>
+
+    <main class="dashboard-content">
+        @Body
+    </main>
+</div>

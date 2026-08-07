@@ -1,0 +1,28 @@
+@page "/login"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>OutOfTheBox - Log in</PageTitle>
+
+<div class="login-card">
+    <h1>OutOfTheBox v@(VersionInfo.Current)</h1>
+
+    @if (Error)
+    {
+        <p class="login-error">Invalid token.</p>
+    }
+
+    <form method="post" action="account/login">
+        <label for="token">Token</label>
+        <input type="password" id="token" name="token" autocomplete="current-password" autofocus />
+        <button type="submit">Log in</button>
+    </form>
+</div>
+
+@code {
+    /// <summary>Set when the previous login attempt failed - reflected via a query string, since this page renders before any circuit-scoped state exists.</summary>
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? ErrorFlag { get; set; }
+
+    private bool Error => ErrorFlag is not null;
+}

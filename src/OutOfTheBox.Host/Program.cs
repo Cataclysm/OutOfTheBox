@@ -2,11 +2,15 @@
 
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
+using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Execution;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
@@ -29,6 +33,22 @@ builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repo lock
 // would be meaningless (each request would get its own empty registry).
 builder.Services.AddSingleton<RunRegistry>();
+
+// Also process-wide/in-memory, for the same reason - one bus shared by every publisher and every
+// dashboard subscriber, not one per request/circuit.
+builder.Services.AddSingleton<IRunEventBus, InMemoryRunEventBus>();
+
+// Blazor Server dashboard: interactive server-side rendering over a SignalR circuit, gated by a
+// cookie issued from the login page (see LoginEndpoints) - a separate credential exchange from the
+// API's per-request bearer header, since a long-lived circuit can't carry an Authorization header
+// per interaction, but checked against the exact same ServiceOptions.BearerToken (per design.md's
+// "Dashboard auth" decision - one shared credential, not two).
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddCascadingAuthenticationState();
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options => options.LoginPath = "/login");
+builder.Services.AddAuthorization();
 
 // Resolved lazily from IOptions<ServiceOptions> (bound above) rather than read eagerly off
 // builder.Configuration here - WebApplicationFactory-driven tests merge their in-memory config
@@ -60,8 +80,22 @@ using (var startupScope = app.Services.CreateScope())
     await runRepository.ReconcileInterruptedAsync(CancellationToken.None);
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseAntiforgery();
+
 app.MapCommandExecutionEndpoints();
 app.MapArtifactTransferEndpoints();
+app.MapLoginEndpoints();
+app.MapVersionEndpoint();
+
+// RequireAuthorization() applies only to this Razor Components route group - the four
+// bearer-token-protected API endpoints above (and /login, /logout, /version) have no
+// authorization metadata attached at all, so they're completely unaffected; the dashboard's own
+// Login page opts back out via its [AllowAnonymous] attribute.
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode()
+    .RequireAuthorization();
 
 app.Run();
 
