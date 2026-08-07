@@ -7,7 +7,7 @@ namespace BuildAndTestService.Presentation.Execution;
 /// Writes Server-Sent Events for the command-execution endpoint's response stream: <c>stdout</c>/
 /// <c>stderr</c> data events per output line, a terminal <c>done</c> event with the exit code and
 /// truncation flag, or a terminal <c>error</c> event with a reason of <c>validation</c>,
-/// <c>timeout</c>, or <c>cancelled</c>.
+/// <c>timeout</c>, or <c>cancelled</c> (a busy repo also carries the blocking run's id).
 /// </summary>
 public sealed class SseWriter(HttpResponse response)
 {
@@ -26,10 +26,16 @@ public sealed class SseWriter(HttpResponse response)
         return WriteEventAsync("done", payload, cancellationToken);
     }
 
-    /// <summary>Writes the terminal <c>error</c> event for a run that never produced an exit code.</summary>
-    public Task WriteErrorAsync(string reason, CancellationToken cancellationToken)
+    /// <summary>
+    /// Writes the terminal <c>error</c> event for a run that never produced an exit code.
+    /// <paramref name="conflictingRunId"/> is included only for a busy-repo rejection, identifying
+    /// the run already holding that repo's lock.
+    /// </summary>
+    public Task WriteErrorAsync(string reason, CancellationToken cancellationToken, Guid? conflictingRunId = null)
     {
-        var payload = JsonSerializer.Serialize(new { reason });
+        var payload = conflictingRunId is { } runId
+            ? JsonSerializer.Serialize(new { reason, runId })
+            : JsonSerializer.Serialize(new { reason });
         return WriteEventAsync("error", payload, cancellationToken);
     }
 

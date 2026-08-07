@@ -1,3 +1,4 @@
+using BuildAndTestService.Application.Concurrency;
 using BuildAndTestService.Application.Configuration;
 using BuildAndTestService.Application.Execution;
 using BuildAndTestService.Domain.Runs;
@@ -26,6 +27,7 @@ public static class RunEndpoints
         StartRunRequest body,
         IWorkingDirectoryResolver workingDirectoryResolver,
         IProcessRunner processRunner,
+        RunRegistry runRegistry,
         IOptions<ServiceOptions> options,
         HttpContext httpContext)
     {
@@ -36,6 +38,11 @@ public static class RunEndpoints
         response.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache";
         httpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        // Explicitly start the response now so the caller receives the run id as soon as
+        // possible, rather than whenever the first SSE event happens to be written (which, for a
+        // slow-starting or hung command, could otherwise be a long, unexplained delay).
+        await response.StartAsync(httpContext.RequestAborted);
 
         var writer = new SseWriter(response);
 
@@ -52,28 +59,42 @@ public static class RunEndpoints
             return;
         }
 
-        var timeout = ExecutionTimeoutPolicy.Resolve(
-            body.TimeoutSeconds is int seconds ? TimeSpan.FromSeconds(seconds) : null,
-            TimeSpan.FromSeconds(options.Value.DefaultExecutionTimeoutSeconds),
-            TimeSpan.FromSeconds(options.Value.MaximumExecutionTimeoutSeconds));
-
-        using var timeoutCts = new CancellationTokenSource(timeout);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, httpContext.RequestAborted);
-
-        var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes);
+        var repoRoot = resolution.ResolvedPath!;
+        if (!runRegistry.TryAcquire(repoRoot, runId, out var conflictingRunId))
+        {
+            await writer.WriteErrorAsync("validation", httpContext.RequestAborted, conflictingRunId);
+            return;
+        }
 
         try
         {
-            var result = await processRunner.RunAsync(
-                new ProcessRunRequest(body.Arguments, resolution.ResolvedPath!),
-                sink,
-                linkedCts.Token);
+            var timeout = ExecutionTimeoutPolicy.Resolve(
+                body.TimeoutSeconds is int seconds ? TimeSpan.FromSeconds(seconds) : null,
+                TimeSpan.FromSeconds(options.Value.DefaultExecutionTimeoutSeconds),
+                TimeSpan.FromSeconds(options.Value.MaximumExecutionTimeoutSeconds));
 
-            await writer.WriteDoneAsync(result.ExitCode, sink.Truncated, httpContext.RequestAborted);
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, httpContext.RequestAborted);
+
+            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes);
+
+            try
+            {
+                var result = await processRunner.RunAsync(
+                    new ProcessRunRequest(body.Arguments, repoRoot),
+                    sink,
+                    linkedCts.Token);
+
+                await writer.WriteDoneAsync(result.ExitCode, sink.Truncated, httpContext.RequestAborted);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                await writer.WriteErrorAsync("timeout", CancellationToken.None);
+            }
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        finally
         {
-            await writer.WriteErrorAsync("timeout", CancellationToken.None);
+            runRegistry.Release(repoRoot);
         }
     }
 }

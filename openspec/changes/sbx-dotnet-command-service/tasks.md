@@ -62,13 +62,15 @@ All 10 BehaviorTests scenarios pass in ~14s (real `dotnet.exe` spawns); 27/27 Un
 
 ## 6. Concurrency & Locking
 
-- [ ] 6.1 Implement an in-memory run registry: `ConcurrentDictionary<string, RunInfo>` keyed by canonicalized repo root, `RunInfo` holding run id + `Process` handle + `CancellationTokenSource`
-- [ ] 6.2 On request start, atomically `TryAdd` the repo-root key; on failure (already locked) reject with a conflict error carrying the existing run's id, without invoking `dotnet.exe`
-- [ ] 6.3 Remove the registry entry on every terminal state (`done`, `timeout`, `cancelled`), releasing the repo for the next request
-- [ ] 6.4 Unit test: `TryAdd` race between two simultaneous callers for the same key — exactly one wins
-- [ ] 6.5 BDD: two requests targeting different repos (passing and failing fixtures) execute concurrently and each completes independently
-- [ ] 6.6 BDD: a second request targeting a repo already locked is rejected with 409 + the first run's id, while the first command keeps running unaffected
-- [ ] 6.7 BDD: after a repo's in-flight run reaches a terminal state, a new request for that repo is accepted
+- [x] 6.1 Implemented `Application.Concurrency.RunRegistry`: `ConcurrentDictionary<string, Guid>` keyed by the resolved repo root (case-insensitive), mapping to the holding run's id — **simplified from the original `RunInfo` sketch**: the `Process` handle and `CancellationTokenSource` stay local to `RunEndpoints.HandleStartRunAsync`/`DotnetProcessRunner` (they're not needed anywhere else yet); the registry's only job is the lock. Section 7 (Cancellation) will extend it with whatever run-id → cancellation-handle lookup cancelling actually needs
+- [x] 6.2 `RunEndpoints` calls `RunRegistry.TryAcquire` (atomic `ConcurrentDictionary.TryAdd`) right after path resolution and before any process is started; on failure, writes an `error` SSE event with reason `validation` and a `runId` field naming the conflicting run — extended `SseWriter.WriteErrorAsync` to carry that optional field
+- [x] 6.3 `RunRegistry.Release` called in a `finally` block wrapping process execution, so the lock is freed on every terminal path (completed, timed out) without duplicating release logic per branch
+- [x] 6.4 Unit test: 50 concurrent callers racing `TryAcquire` for the same repo — exactly one succeeds (`Barrier`-synchronized to maximize actual contention, not just sequential calls)
+- [x] 6.5 BDD `ConcurrencyAndLocking.feature`: `PassingFixture` and `FailingFixture` runs started concurrently (not sequentially awaited) both complete independently
+- [x] 6.6 BDD: a second request against an in-flight `HangingFixture` run is rejected, `error`/`validation` carrying the in-flight run's exact id (captured via the first request's `X-Run-Id` header, available immediately since `RunEndpoints` now calls `response.StartAsync()` right after setting headers rather than waiting for the first event write)
+- [x] 6.7 BDD: once the in-flight run reaches a terminal state (its own short timeout), a same-repo follow-up request is accepted (no busy-repo rejection) — note it still may itself time out against `HangingFixture`, which is a different, legitimate outcome the test distinguishes from a conflict rejection
+
+All 13 BehaviorTests scenarios pass in ~14s; 32/32 UnitTests; 5/5 ArchitectureTests.
 
 ## 7. Cancellation API
 

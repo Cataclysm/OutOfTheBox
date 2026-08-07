@@ -1,3 +1,4 @@
+using BuildAndTestService.Application.Concurrency;
 using BuildAndTestService.Application.Configuration;
 using BuildAndTestService.Application.Execution;
 using BuildAndTestService.Infrastructure.Execution;
@@ -18,6 +19,10 @@ builder.Services
 // other directly.
 builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
 builder.Services.AddSingleton<IProcessRunner, DotnetProcessRunner>();
+
+// Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repo lock
+// would be meaningless (each request would get its own empty registry).
+builder.Services.AddSingleton<RunRegistry>();
 
 // Kestrel/HTTPS hardening deferred to Section 12 (Transport & Network).
 
