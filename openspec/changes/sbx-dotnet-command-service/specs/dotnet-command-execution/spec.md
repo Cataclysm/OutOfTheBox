@@ -37,15 +37,19 @@ The system SHALL allow commands targeting different repositories (distinct resol
 - **WHEN** an authenticated caller starts a command against `repo-a` and, before it finishes, starts a command against `repo-b`
 - **THEN** both commands execute concurrently and each completes independently of the other
 
-### Requirement: One in-flight command per repo
-The system SHALL allow at most one `dotnet` command to be in flight at a time for a given repository, and SHALL reject a new request targeting a repo that already has an in-flight command rather than queuing it.
+### Requirement: One in-flight command per repo, shared with git-command-execution
+The system SHALL allow at most one `dotnet` command to be in flight at a time for a given repository, SHALL treat a same-repo `git` run (per `git-command-execution`) as contending for that same lock, and SHALL reject a new request targeting a repo that already has an in-flight command of either kind rather than queuing it.
 
-#### Scenario: Second command for a busy repo is rejected
+#### Scenario: Second dotnet command for a busy repo is rejected
 - **WHEN** an authenticated caller starts a command against `repo-a` and, while it is still running, another authenticated caller starts a second command against `repo-a`
 - **THEN** the system rejects the second request with a conflict error identifying the run id of the command already in flight for `repo-a`, and does not invoke a second `dotnet.exe` process for that repo
 
+#### Scenario: A dotnet command is rejected while a git command is in flight for the same repo
+- **WHEN** a `git` run is in flight against `repo-a` and an authenticated caller starts a `dotnet` command against `repo-a`
+- **THEN** the system rejects the request with a conflict error identifying the in-flight `git` run's id, and does not invoke `dotnet.exe`
+
 #### Scenario: Repo becomes available after completion
-- **WHEN** the in-flight command for `repo-a` reaches any terminal state (completed, timed out, or cancelled)
+- **WHEN** the in-flight command for `repo-a` (of either kind) reaches any terminal state (completed, timed out, or cancelled)
 - **THEN** a subsequent request targeting `repo-a` is accepted and executed
 
 ### Requirement: Caller can cancel an in-flight command

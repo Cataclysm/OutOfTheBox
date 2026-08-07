@@ -1,11 +1,18 @@
 ## Purpose
 
-Gives a human operator a pleasant, at-a-glance view of what the service is doing right now and what it has done historically, without needing to query the API by hand — sourced entirely from `run-history`.
+Gives a human operator a pleasant, at-a-glance view of what the service is doing right now and what it has done historically, without needing to query the API by hand — sourced from `run-history` and, for repository inventory, `repository-management`.
 
 ## ADDED Requirements
 
+### Requirement: Dashboard identifies the running software and its version
+The system SHALL display the service's name and running version on every dashboard view (e.g. in a persistent header or footer), sourced from the same build version `/version` reports.
+
+#### Scenario: Version is visible from any view
+- **WHEN** an operator is on any dashboard view
+- **THEN** the service's name and version are visible without navigating elsewhere
+
 ### Requirement: Dashboard shows current in-flight runs of every kind
-The system SHALL provide a human-readable web page listing every currently in-flight run — `dotnet` commands, `git` commands, and artifact transfers alike — with its repo, run id, start time, elapsed time, and kind-appropriate detail (arguments for a command run, requested file path for a transfer).
+The system SHALL provide a human-readable web page listing every currently in-flight run — `dotnet` commands, `git` commands, artifact transfers, and repository clones alike — with its repo, run id, start time, elapsed time, and kind-appropriate detail (arguments for a command run, requested file path for a transfer, source URL for a clone).
 
 #### Scenario: Viewing an active command run
 - **WHEN** a `dotnet` or `git` run is in flight and an operator opens the dashboard
@@ -74,12 +81,53 @@ The system SHALL render the dashboard in a dark color scheme and SHALL NOT requi
 - **WHEN** an operator opens the dashboard in any browser, regardless of the browser's or OS's own light/dark preference
 - **THEN** the dashboard renders in dark mode
 
-### Requirement: Dashboard separates status, resource monitoring, and history into distinct views
-The system SHALL organize current-run status, host/process resource monitoring (per `host-resource-monitoring`), and run history into distinct views (e.g. separate pages or tabs) rather than presenting all of them on a single page at once.
+### Requirement: Dashboard organizes distinct concerns into distinct views and subpages
+The system SHALL organize current-run status, host/process resource monitoring (per `host-resource-monitoring`), run history, and repository inventory (per `repository-management`) into distinct top-level views (e.g. separate pages or tabs) — **Status**, **History**, and **Repos** — rather than presenting all of them on a single page at once, and SHALL further break out per-item detail (a specific run, a specific repository) into its own subpage reached by selecting that item from its list, rather than expanding inline detail into an already-dense list view.
 
 #### Scenario: Navigating the dashboard
-- **WHEN** an operator wants to check host resource usage versus browsing past run history
-- **THEN** these are reachable as distinct views, not competing for space on one combined page
+- **WHEN** an operator wants to check host resource usage versus browsing past run history versus reviewing the repository inventory
+- **THEN** these are reachable as distinct top-level views, not competing for space on one combined page
+
+#### Scenario: Run detail is its own subpage
+- **WHEN** an operator selects a specific past run from the History list
+- **THEN** its full detail opens as its own page, not as inline expansion within the list
+
+#### Scenario: Repository detail is its own subpage
+- **WHEN** an operator selects a specific repository from the Repos list
+- **THEN** its full detail (stats, git status, and its own run history) opens as its own page, not as inline expansion within the list
+
+### Requirement: Repos view lists every repository with live stats
+The system SHALL provide a **Repos** view listing every repository (per `repository-management`) with its name, total size, git status summary, and active/idle indicator, updating live as those stats and active/idle state change, without a manual page reload.
+
+#### Scenario: Viewing the repository list
+- **WHEN** an operator opens the Repos view
+- **THEN** they see every repository with its size, git status, and active/idle indicator
+
+#### Scenario: Active indicator updates live
+- **WHEN** a command starts or finishes against a repository while an operator has the Repos view open
+- **THEN** that repository's active/idle indicator updates without a page reload
+
+### Requirement: Repos view provides filter and search controls
+The system SHALL let the operator filter the Repos view by active/idle state and git status (clean/dirty, no-git), and provide a free-text search box matching repository name, narrowing the visible list as the operator types.
+
+#### Scenario: Filtering to active repositories
+- **WHEN** an operator filters the Repos view to active repositories only
+- **THEN** only repositories currently holding the per-repo command lock remain visible
+
+#### Scenario: Searching repositories by name
+- **WHEN** an operator types text into the Repos search box
+- **THEN** the visible list narrows to repositories whose name matches that text
+
+### Requirement: Repos view provides clone and delete controls
+The system SHALL provide a control to clone a new repository (prompting for a source URL and a name) and, per listed repository, a control to delete it — both invoking `repository-management`'s corresponding actions, with delete requiring an explicit confirmation step before it proceeds given its irreversibility.
+
+#### Scenario: Cloning from the dashboard
+- **WHEN** an operator uses the clone control with a valid URL and an available name
+- **THEN** the clone starts, appears as an in-flight run in the Status view, and the new repository appears in the Repos list once complete
+
+#### Scenario: Deleting requires confirmation
+- **WHEN** an operator selects the delete control for a repository
+- **THEN** the system requires an explicit confirmation before removing anything, rather than deleting immediately on the first click
 
 ### Requirement: Current-status view includes host and process resource monitoring
 The system SHALL surface `host-resource-monitoring` data (host CPU/RAM, service RAM, spawned-process list with kill action) alongside in-flight run status, grouped so that a run's spawned processes are shown associated with that run rather than in an undifferentiated flat list.

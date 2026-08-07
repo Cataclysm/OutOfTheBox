@@ -1,6 +1,6 @@
 ## Purpose
 
-Durably records every run the service executes — `dotnet` commands, `git` commands, and artifact transfers alike — including its repo, kind, kind-specific detail (arguments, or a transferred file's path/size), timing, outcome, and full output where applicable, so that both "what is running right now" and "what happened in the past" can be answered after the fact, even across a service restart.
+Durably records every run the service executes — `dotnet` commands, `git` commands, artifact transfers, and repository-management actions (clone, delete) alike — including its repo, kind, kind-specific detail (arguments, a transferred file's path/size, or a cloned repo's source URL), timing, outcome, and full output where applicable, so that both "what is running right now" and "what happened in the past" can be answered after the fact, even across a service restart.
 
 ## ADDED Requirements
 
@@ -12,14 +12,14 @@ The system SHALL create a durable record for a run at the moment it is accepted 
 - **THEN** a record for that run exists in durable storage with its run id, repo, kind, start time, and an in-flight outcome
 
 ### Requirement: A run's kind is recorded and distinguishable
-The system SHALL record whether a run is a `dotnet` command, a `git` command, or an artifact transfer, and SHALL include this kind in both the summary and full record of every run.
+The system SHALL record which kind a run is — `dotnet` command, `git` command, artifact transfer, repository clone, or repository delete — and SHALL include this kind in both the summary and full record of every run.
 
 #### Scenario: Kind is present on every record
 - **WHEN** a caller retrieves a run's summary or full record
-- **THEN** the record identifies which of the three kinds it is
+- **THEN** the record identifies which kind it is
 
 ### Requirement: A run's terminal outcome and output are persisted
-The system SHALL update a run's durable record when it reaches a terminal state (completed, timed out, cancelled, not found, or validation failed) to include its end time and outcome, and — when applicable to that run's kind — its exit code and captured stdout/stderr (for `dotnet`/`git` runs) or its transferred file size (for an artifact transfer).
+The system SHALL update a run's durable record when it reaches a terminal state (completed, timed out, cancelled, not found, already-exists, or validation failed) to include its end time and outcome, and — when applicable to that run's kind — its exit code and captured stdout/stderr (for `dotnet`/`git`/repository-clone runs), its transferred file size (for an artifact transfer), or nothing further beyond the outcome itself (for a repository delete).
 
 #### Scenario: Completed run is persisted with output
 - **WHEN** a `dotnet` or `git` run finishes with an exit code
@@ -28,6 +28,10 @@ The system SHALL update a run's durable record when it reaches a terminal state 
 #### Scenario: Completed transfer is persisted with file size
 - **WHEN** an artifact transfer finishes successfully
 - **THEN** the durable record for that run is updated with the end time, the outcome, and the transferred file's size in bytes
+
+#### Scenario: Completed repository clone is persisted with its source
+- **WHEN** a repository clone finishes
+- **THEN** the durable record for that run is updated with the end time, the outcome, and includes the source URL it cloned from alongside the cloned repo's name
 
 #### Scenario: Persisted record survives a service restart
 - **WHEN** the service is restarted after a run has reached a terminal state
@@ -42,7 +46,7 @@ The system SHALL provide a way to list past runs (most recent first) and to retr
 
 #### Scenario: List recent runs
 - **WHEN** a caller requests the run list
-- **THEN** the system returns runs ordered from most to least recent, including in-flight runs, with enough summary detail (repo, kind, outcome, timestamps, and arguments or transferred path as applicable) to identify each one without fetching full output
+- **THEN** the system returns runs ordered from most to least recent, including in-flight runs, with enough summary detail (repo, kind, outcome, timestamps, and kind-specific detail such as arguments, a transferred path, or a clone source URL) to identify each one without fetching full output
 
 #### Scenario: Fetch one run's full detail
 - **WHEN** a caller requests a specific run id
@@ -59,12 +63,16 @@ The system SHALL let a caller list runs restricted to any combination of: one or
 - **WHEN** a caller lists runs filtered to outcome `TimedOut`
 - **THEN** the system returns only runs that timed out
 
+#### Scenario: Filter by repository alone
+- **WHEN** a caller lists runs filtered to repository `myrepo`, with no kind or outcome filter
+- **THEN** the system returns every run of every kind and outcome recorded against `myrepo`, excluding runs against any other repository
+
 #### Scenario: Combine filters
 - **WHEN** a caller lists runs filtered to kind `dotnet` and repository `myrepo`
 - **THEN** the system returns only `dotnet` runs against `myrepo`, excluding `dotnet` runs against other repositories and non-`dotnet` runs against `myrepo`
 
 ### Requirement: History supports free-text search
-The system SHALL let a caller search runs by a free-text query matched against a run's repository, arguments (for `dotnet`/`git` runs), and requested file path (for artifact transfers), and SHALL combine a search query with any active filters.
+The system SHALL let a caller search runs by a free-text query matched against a run's repository, arguments (for `dotnet`/`git` runs), requested file path (for artifact transfers), and source URL (for repository clones), and SHALL combine a search query with any active filters.
 
 #### Scenario: Search by repository name
 - **WHEN** a caller searches for `myrepo`
