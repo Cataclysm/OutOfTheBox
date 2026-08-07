@@ -1,0 +1,110 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
+using OutOfTheBox.Application.Concurrency;
+using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Presentation.Authentication;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace OutOfTheBox.Presentation.Execution;
+
+/// <summary>
+/// Maps <c>POST /artifacts</c>, per specs/artifact-transfer: a plain (non-SSE) authenticated file
+/// download, two-level path confinement (repo confined to the configured root, then the requested
+/// file confined to that specific repo directory), no per-repo lock, cancellable through the same
+/// <c>POST /run/{runId}/cancel</c> endpoint <see cref="RunEndpoints"/> maps.
+/// </summary>
+public static class ArtifactTransferEndpoints
+{
+    /// <summary>Maps <c>POST /artifacts</c>, requiring a valid bearer credential.</summary>
+    public static IEndpointRouteBuilder MapArtifactTransferEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapPost("/artifacts", HandleTransferAsync)
+            .AddEndpointFilter<BearerAuthenticationFilter>();
+
+        return endpoints;
+    }
+
+    private static async Task HandleTransferAsync(
+        ArtifactTransferRequest body,
+        IWorkingDirectoryResolver workingDirectoryResolver,
+        RunRegistry runRegistry,
+        HttpContext httpContext)
+    {
+        var runId = Guid.NewGuid();
+        var response = httpContext.Response;
+
+        // Set before any validation, matching POST /run's "caller has the id even if something
+        // later goes wrong" pattern - safe to set this early since headers aren't actually sent
+        // until the response body starts, so the status code decided below still applies.
+        response.Headers["X-Run-Id"] = runId.ToString();
+
+        if (string.IsNullOrWhiteSpace(body.Repo) || string.IsNullOrWhiteSpace(body.Path))
+        {
+            response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var repoResolution = workingDirectoryResolver.Resolve(body.Repo);
+        if (!repoResolution.IsAllowed)
+        {
+            // Per specs/artifact-transfer's "Requested repository itself is outside the configured
+            // root" scenario: rejected the same way an escaping working directory is, without
+            // attempting to resolve any file path.
+            response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var repoRoot = repoResolution.ResolvedPath!;
+
+        var fileResolution = workingDirectoryResolver.ResolveWithinRoot(repoRoot, body.Path);
+        if (!fileResolution.IsAllowed)
+        {
+            response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var filePath = fileResolution.ResolvedPath!;
+
+        // A directory is rejected the same way a missing file is (per the "No directory listing"
+        // requirement) - this endpoint transfers files only, never enumerates a directory's contents.
+        if (!File.Exists(filePath))
+        {
+            response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var cancelRequestCts = new CancellationTokenSource();
+        runRegistry.RegisterTransfer(runId, cancelRequestCts);
+
+        try
+        {
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancelRequestCts.Token, httpContext.RequestAborted);
+
+            await using var fileStream = new FileStream(
+                filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType = "application/octet-stream";
+            response.ContentLength = fileStream.Length;
+
+            try
+            {
+                await fileStream.CopyToAsync(response.Body, linkedCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled (explicitly, or the client disconnected) - the copy just stops; there's
+                // no SSE-style terminal event to write for a plain file response, the connection
+                // ending part-way through is the signal.
+            }
+        }
+        finally
+        {
+            runRegistry.ReleaseTransfer(runId);
+            cancelRequestCts.Dispose();
+        }
+    }
+}

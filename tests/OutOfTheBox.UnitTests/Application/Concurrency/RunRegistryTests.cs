@@ -147,4 +147,36 @@ public sealed class RunRegistryTests
         // caller looking up the run id and this Cancel() call actually happening.
         Assert.False(registry.TryCancel(runId));
     }
+
+    [Fact]
+    public void RegisterTransfer_makes_the_run_cancellable_without_acquiring_any_repo_lock()
+    {
+        // Per specs/artifact-transfer's "Transfers do not contend for the per-repo command lock":
+        // RegisterTransfer must not touch the repo-root-keyed index TryAcquire/Release use - a
+        // transfer's run id being cancellable is independent of any repo being locked.
+        var registry = new RunRegistry();
+        var runId = Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+
+        registry.RegisterTransfer(runId, cts);
+        var stillAcquirable = registry.TryAcquire(@"C:\repos\repo-a", Guid.NewGuid(), new CancellationTokenSource(), out _);
+        var cancelled = registry.TryCancel(runId);
+
+        Assert.True(stillAcquirable, "A registered transfer must not hold any repo's lock.");
+        Assert.True(cancelled);
+        Assert.True(cts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void ReleaseTransfer_removes_the_run_so_it_can_no_longer_be_cancelled()
+    {
+        var registry = new RunRegistry();
+        var runId = Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+        registry.RegisterTransfer(runId, cts);
+
+        registry.ReleaseTransfer(runId);
+
+        Assert.False(registry.TryCancel(runId));
+    }
 }

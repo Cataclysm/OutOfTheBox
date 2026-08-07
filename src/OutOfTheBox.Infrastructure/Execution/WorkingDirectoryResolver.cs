@@ -16,17 +16,21 @@ namespace OutOfTheBox.Infrastructure.Execution;
 public sealed class WorkingDirectoryResolver(IOptions<ServiceOptions> options) : IWorkingDirectoryResolver
 {
     /// <inheritdoc />
-    public WorkingDirectoryResolution Resolve(string relativeWorkingDirectory)
+    public WorkingDirectoryResolution Resolve(string relativeWorkingDirectory) =>
+        ResolveWithinRoot(options.Value.RootDirectory, relativeWorkingDirectory);
+
+    /// <inheritdoc />
+    public WorkingDirectoryResolution ResolveWithinRoot(string root, string relativePath)
     {
-        var rootFullPath = Path.GetFullPath(options.Value.RootDirectory);
+        var rootFullPath = Path.GetFullPath(root);
 
         string combined;
         try
         {
-            // Path.Combine discards the root entirely if relativeWorkingDirectory is itself
-            // rooted/absolute (e.g. "C:\Windows"), so an absolute-path escape attempt still ends
-            // up correctly rejected by the containment check below rather than needing special-casing.
-            combined = Path.GetFullPath(Path.Combine(rootFullPath, relativeWorkingDirectory));
+            // Path.Combine discards the root entirely if relativePath is itself rooted/absolute
+            // (e.g. "C:\Windows"), so an absolute-path escape attempt still ends up correctly
+            // rejected by the containment check below rather than needing special-casing.
+            combined = Path.GetFullPath(Path.Combine(rootFullPath, relativePath));
         }
         catch (ArgumentException)
         {

@@ -26,11 +26,12 @@ builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 // would be meaningless (each request would get its own empty registry).
 builder.Services.AddSingleton<RunRegistry>();
 
-// Kestrel/HTTPS hardening deferred to Section 13 (Transport & Network).
+// Kestrel/HTTPS hardening deferred to Section 16 (Transport & Network).
 
 var app = builder.Build();
 
 app.MapCommandExecutionEndpoints();
+app.MapArtifactTransferEndpoints();
 
 app.Run();
 

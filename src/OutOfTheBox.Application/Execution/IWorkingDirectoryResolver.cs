@@ -11,4 +11,13 @@ public interface IWorkingDirectoryResolver
 {
     /// <summary>Resolves <paramref name="relativeWorkingDirectory"/> against the configured root.</summary>
     WorkingDirectoryResolution Resolve(string relativeWorkingDirectory);
+
+    /// <summary>
+    /// Resolves <paramref name="relativePath"/> against an arbitrary already-resolved
+    /// <paramref name="root"/> - the same canonicalization/symlink-resolution/containment logic
+    /// <see cref="Resolve"/> uses against the configured root, reused for
+    /// specs/artifact-transfer's second, narrower confinement level (a file path confined to one
+    /// specific repo directory, not just the service-wide root).
+    /// </summary>
+    WorkingDirectoryResolution ResolveWithinRoot(string root, string relativePath);
 }

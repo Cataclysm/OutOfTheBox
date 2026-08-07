@@ -57,6 +57,19 @@ public sealed class RunRegistry
     }
 
     /// <summary>
+    /// Registers an in-flight artifact transfer under <paramref name="runId"/> so it can be looked
+    /// up by <see cref="TryCancel"/>, without acquiring any per-repo lock - per
+    /// specs/artifact-transfer's "Transfers do not contend for the per-repo command lock"
+    /// requirement, a transfer is a read of already-produced files, not a command execution, so it
+    /// never touches the repo-root-keyed index <see cref="TryAcquire"/>/<see cref="Release"/> use.
+    /// </summary>
+    public void RegisterTransfer(Guid runId, CancellationTokenSource cancellationTokenSource) =>
+        _activeRunsByRunId[runId] = new RunHandle(runId, cancellationTokenSource);
+
+    /// <summary>Removes an artifact transfer registered via <see cref="RegisterTransfer"/> once it reaches a terminal state.</summary>
+    public void ReleaseTransfer(Guid runId) => _activeRunsByRunId.TryRemove(runId, out _);
+
+    /// <summary>
     /// Requests cancellation of the run identified by <paramref name="runId"/>. Returns
     /// <see langword="false"/> - with no side effects - if the run id is unknown or has already
     /// reached a terminal state, matching specs/dotnet-command-execution's "Cancelling an unknown

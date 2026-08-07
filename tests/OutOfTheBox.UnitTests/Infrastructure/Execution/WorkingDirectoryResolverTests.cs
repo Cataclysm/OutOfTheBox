@@ -20,6 +20,14 @@ public sealed class WorkingDirectoryResolverTests : IDisposable
         _root = Path.Combine(Path.GetTempPath(), "bts-tests", Guid.NewGuid().ToString("N"), "root");
         Directory.CreateDirectory(Path.Combine(_root, "myrepo", "src"));
         Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(_root)!, "root-evil", "myrepo"));
+
+        // For the two-level (root -> repo -> file) confinement composition tests, per
+        // specs/artifact-transfer: a second repo under the same root, so a traversal from within
+        // "myrepo" that still resolves under the root but outside "myrepo" specifically can be
+        // exercised (a single-level, root-only check would wrongly allow it).
+        Directory.CreateDirectory(Path.Combine(_root, "other-repo"));
+        File.WriteAllText(Path.Combine(_root, "other-repo", "secret.txt"), "secret");
+        File.WriteAllText(Path.Combine(_root, "myrepo", "src", "app.dll"), "binary-content");
     }
 
     public void Dispose()
@@ -89,5 +97,91 @@ public sealed class WorkingDirectoryResolverTests : IDisposable
         var result = CreateResolver().Resolve("escape-link");
 
         Assert.False(result.IsAllowed);
+    }
+
+    // The following exercise the two-level composition specs/artifact-transfer relies on: first
+    // resolve the repo against the configured root (Resolve, unchanged), then resolve the file
+    // path against that *specific resolved repo directory* (ResolveWithinRoot again) - no new
+    // Domain/confinement logic, just a second call site for the same primitive.
+
+    [Fact]
+    public void ResolveWithinRoot_composed_twice_accepts_a_genuinely_nested_valid_path()
+    {
+        var resolver = CreateResolver();
+        var repo = resolver.Resolve("myrepo");
+        Assert.True(repo.IsAllowed);
+
+        var file = resolver.ResolveWithinRoot(repo.ResolvedPath!, Path.Combine("src", "app.dll"));
+
+        Assert.True(file.IsAllowed);
+        Assert.Equal(Path.Combine(_root, "myrepo", "src", "app.dll"), file.ResolvedPath);
+    }
+
+    [Fact]
+    public void ResolveWithinRoot_composed_twice_rejects_a_sibling_repo_path()
+    {
+        // "other-repo" is itself a valid path under the root - a single-level, root-only check
+        // would wrongly allow this; confinement to "myrepo" specifically must reject it.
+        var resolver = CreateResolver();
+        var repo = resolver.Resolve("myrepo");
+        Assert.True(repo.IsAllowed);
+
+        var file = resolver.ResolveWithinRoot(repo.ResolvedPath!, Path.Combine("..", "other-repo", "secret.txt"));
+
+        Assert.False(file.IsAllowed);
+    }
+
+    [Fact]
+    public void ResolveWithinRoot_composed_twice_rejects_traversal_within_the_named_repo()
+    {
+        var resolver = CreateResolver();
+        var repo = resolver.Resolve("myrepo");
+        Assert.True(repo.IsAllowed);
+
+        var file = resolver.ResolveWithinRoot(repo.ResolvedPath!, Path.Combine("..", "..", "Windows", "System32"));
+
+        Assert.False(file.IsAllowed);
+    }
+
+    [Fact]
+    public void ResolveWithinRoot_composed_twice_rejects_an_absolute_path()
+    {
+        var resolver = CreateResolver();
+        var repo = resolver.Resolve("myrepo");
+        Assert.True(repo.IsAllowed);
+
+        var file = resolver.ResolveWithinRoot(repo.ResolvedPath!, @"C:\Windows\System32");
+
+        Assert.False(file.IsAllowed);
+    }
+
+    [Fact]
+    public void ResolveWithinRoot_composed_twice_follows_a_symlink_that_escapes_the_named_repo()
+    {
+        // Per specs/artifact-transfer's "Path escapes via a symlink" scenario. Unit-level only,
+        // matching how Resolve's own symlink-escape case (above) is unit-tested rather than
+        // exercised through a full BDD/HTTP scenario - this composition reuses the exact same
+        // ResolveSymlinkTarget/PathConfinementPolicy machinery, just at the second confinement level.
+        var resolver = CreateResolver();
+        var repo = resolver.Resolve("myrepo");
+        Assert.True(repo.IsAllowed);
+
+        var linkPath = Path.Combine(repo.ResolvedPath!, "escape-link");
+        var outsideTarget = Path.Combine(_root, "other-repo");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, outsideTarget);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Creating a symlink requires elevated privileges or Developer Mode on Windows; skip
+            // rather than fail the whole suite in an environment without that privilege.
+            return;
+        }
+
+        var file = resolver.ResolveWithinRoot(repo.ResolvedPath!, "escape-link");
+
+        Assert.False(file.IsAllowed);
     }
 }

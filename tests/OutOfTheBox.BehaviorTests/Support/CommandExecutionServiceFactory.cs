@@ -47,9 +47,10 @@ public sealed class CommandExecutionServiceFactory(
     /// <summary>
     /// Walks up from the test assembly's output directory to the repo root (identified by
     /// <c>OutOfTheBox.slnx</c>), then down into <c>tests/Fixtures</c> - avoids hardcoding
-    /// a machine-specific absolute path.
+    /// a machine-specific absolute path. Public so steps needing the real on-disk fixture path
+    /// (e.g. to compare a transferred file's bytes against the source) can reuse it.
     /// </summary>
-    private static string FindFixturesRoot()
+    public static string FindFixturesRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "OutOfTheBox.slnx")))
