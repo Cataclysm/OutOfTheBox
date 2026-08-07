@@ -1,0 +1,61 @@
+@using OutOfTheBox.Application.Persistence
+@inject IRunResourceSampleRepository SampleRepository
+@inject IChartInterop ChartInterop
+@implements IAsyncDisposable
+
+@if (_series.Count > 0)
+{
+    <div class="resource-graphs">
+        @if (Note is not null)
+        {
+            <p class="run-graph-note">@Note</p>
+        }
+        <div class="resource-graph">
+            <span class="resource-graph-label">CPU %</span>
+            <canvas id="@_cpuCanvasId"></canvas>
+        </div>
+        <div class="resource-graph">
+            <span class="resource-graph-label">RAM</span>
+            <canvas id="@_ramCanvasId"></canvas>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The run whose full persisted resource-usage series (per specs/run-history) this graph renders.</summary>
+    [Parameter, EditorRequired]
+    public Guid RunId { get; set; }
+
+    /// <summary>Optional caption shown above the graphs - used to label a transfer's graph as host-level activity rather than a per-process figure.</summary>
+    [Parameter]
+    public string? Note { get; set; }
+
+    private readonly string _cpuCanvasId = $"history-cpu-{Guid.NewGuid():N}";
+    private readonly string _ramCanvasId = $"history-ram-{Guid.NewGuid():N}";
+    private IReadOnlyList<RunResourceSample> _series = [];
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() =>
+        _series = await SampleRepository.GetSeriesAsync(RunId, CancellationToken.None);
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _series.Count == 0)
+        {
+            return;
+        }
+
+        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"]);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"]);
+        await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, _series.Select(p => (p.Timestamp, p.CpuPercent)));
+        await ChartInterop.SetSeriesAsync(_ramCanvasId, 0, _series.Select(p => (p.Timestamp, (double)p.RamBytes)));
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        await ChartInterop.DestroyAsync(_cpuCanvasId);
+        await ChartInterop.DestroyAsync(_ramCanvasId);
+    }
+}

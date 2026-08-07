@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Globalization
 @using OutOfTheBox.Application.Monitoring
+@using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 @inject IRunEventBus RunEventBus
 @inject IResourceEventBus ResourceEventBus
@@ -27,6 +28,8 @@
     </div>
 </div>
 
+<LiveResourceGraph SeriesKey="@ResourceHistoryBuffer.HostSeriesKey" />
+
 @if (_runs is null)
 {
     <p>Loading...</p>
@@ -47,6 +50,7 @@ else
                     <span class="run-id">@run.Id</span>
                     <span class="run-detail">@DetailFor(run)</span>
                     <span class="run-elapsed">@Elapsed(run)</span>
+                    <button type="button" class="run-graph-toggle" @onclick="@(() => ToggleExpanded(run.Id))">@(_expandedRunIds.Contains(run.Id) ? "Hide graph" : "Show graph")</button>
                 </div>
 
                 @if (_processesByRun.TryGetValue(run.Id, out var processes) && processes.Count > 0)
@@ -63,6 +67,11 @@ else
                         }
                     </ul>
                 }
+
+                @if (_expandedRunIds.Contains(run.Id))
+                {
+                    <LiveResourceGraph SeriesKey="@run.Id.ToString()" Note="@(run.Kind == RunKind.ArtifactTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
+                }
             </li>
         }
     </ul>
@@ -76,6 +85,7 @@ else
 
     private HostResourceSample _host = new(0, [], 0, 0, 0);
     private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
+    private readonly HashSet<Guid> _expandedRunIds = [];
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -126,6 +136,17 @@ else
 
     private async Task KillAsync(ProcessResourceSample process) =>
         await ProcessMonitor.KillAsync(process.ProcessId, process.StartTime, CancellationToken.None);
+
+    // Per design.md's "Chart rendering is lazy" decision: a run's live chart isn't mounted (no JS
+    // interop, no per-run IResourceEventBus-driven subscription via LiveResourceGraph) until the
+    // operator explicitly expands its card.
+    private void ToggleExpanded(Guid runId)
+    {
+        if (!_expandedRunIds.Remove(runId))
+        {
+            _expandedRunIds.Add(runId);
+        }
+    }
 
     private static string DetailFor(Run run) => run.Kind switch
     {

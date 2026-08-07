@@ -205,6 +205,41 @@ a {
     cursor: pointer;
 }
 
+.resource-graphs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 0.5rem 0 1.25rem;
+}
+
+.resource-graph {
+    flex: 1 1 320px;
+    min-width: 280px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+}
+
+.resource-graph-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.resource-graph canvas {
+    max-height: 160px;
+}
+
+.run-graph-note {
+    flex-basis: 100%;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
 .kind-badge {
     text-transform: uppercase;
     font-size: 0.7rem;

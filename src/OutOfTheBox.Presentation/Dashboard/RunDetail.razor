@@ -1,5 +1,6 @@
 @page "/history/{RunId:guid}"
 @attribute [Authorize]
+@using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 
 <PageTitle>OutOfTheBox - Run detail</PageTitle>
@@ -43,6 +44,8 @@ else
             <dd>@(_run.ArtifactSizeBytes is { } sizeBytes ? $"{sizeBytes:N0} bytes" : "-")</dd>
         }
     </dl>
+
+    <RunHistoryGraph RunId="@RunId" Note="@(_run.Kind == RunKind.ArtifactTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
 
     @if (_run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
     {

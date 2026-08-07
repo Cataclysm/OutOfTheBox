@@ -6,12 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OutOfTheBox</title>
     <base href="/" />
-    <link rel="stylesheet" href="OutOfTheBox.Presentation.styles.css" />
-    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="@Assets["_content/OutOfTheBox.Presentation/css/dashboard.css"]" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
     <Routes @rendermode="InteractiveServer" />
-    <script src="_framework/blazor.web.js"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_content/OutOfTheBox.Presentation/js/vendor/chart.umd.min.js"]"></script>
+    <script src="@Assets["_content/OutOfTheBox.Presentation/js/chart-interop.js"]"></script>
 </body>
 </html>

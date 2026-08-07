@@ -8,6 +8,7 @@ using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
+using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus();
     private readonly IResourceEventBus _resourceEventBus = new InMemoryResourceEventBus();
     private readonly SpyProcessMonitor _processMonitor = new();
+    private readonly SpyChartInterop _chartInterop = new();
 
     public StatusComponentTests()
     {
@@ -34,6 +36,8 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         Services.AddSingleton(_runEventBus);
         Services.AddSingleton(_resourceEventBus);
         Services.AddSingleton<IProcessMonitor>(_processMonitor);
+        Services.AddSingleton<IChartInterop>(_chartInterop);
+        Services.AddSingleton(new ResourceHistoryBuffer(new SystemClock()));
     }
 
     [Fact]
@@ -207,6 +211,104 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         cut.Find(".process-row button").Click();
 
         Assert.Equal((4321, startTime), _processMonitor.LastKillCall);
+    }
+
+    [Fact]
+    public void Host_resource_graph_is_created_on_render_and_extends_live_as_snapshots_arrive()
+    {
+        // Covers task 15.6 as a bUnit test rather than a Reqnroll .feature file, for the same
+        // reason 12.12-12.15's live-update gap was closed via bUnit: there's no Blazor-interactive
+        // browser test client in this project's toolchain, so a real Chart.js render can't be
+        // driven by BehaviorTests - what's verifiable is that the right interop calls happen with
+        // the right data, via SpyChartInterop standing in for the JS engine.
+        var cut = Render<Status>();
+
+        // Host graphs are always live (never lazily mounted) - two canvases (CPU, RAM) exist
+        // immediately, with no run cards involved.
+        cut.WaitForAssertion(() => Assert.Equal(2, _chartInterop.CreatedCanvasIds.Count));
+
+        var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
+        var timestamp = DateTimeOffset.UtcNow;
+        // Mirrors HostResourceSamplerService.TickAsync's own ordering: the buffer is updated before
+        // the snapshot is published, which is what LiveResourceGraph's tick handler relies on.
+        historyBuffer.Add(ResourceHistoryBuffer.HostSeriesKey, timestamp, 42, 800);
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(42, [42], 1000, 200, 50), []));
+
+        cut.WaitForAssertion(
+            () => Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 42),
+            TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task A_runs_live_chart_is_not_created_until_its_card_is_expanded_and_is_destroyed_on_collapse()
+    {
+        // Covers task 15.9: no interop calls and no per-run subscription while collapsed. Since
+        // LiveResourceGraph only calls IChartInterop.CreateLineChartAsync (and subscribes to
+        // IResourceEventBus) from OnAfterRenderAsync, and Status.razor only renders the component
+        // at all once the run's id is in _expandedRunIds, "never created" is equivalent proof to
+        // "never subscribed" here - there's no code path that would subscribe without also creating.
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var runId = Guid.NewGuid();
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepoPath = @"C:\repos\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        }, CancellationToken.None);
+
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+
+        var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
+        Assert.Equal(2, createdBeforeExpand); // host graph only - nothing for the collapsed run card
+
+        cut.Find("button.run-graph-toggle").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(createdBeforeExpand + 2, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+
+        var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
+        var timestamp = DateTimeOffset.UtcNow;
+        historyBuffer.Add(runId.ToString(), timestamp, 17, 4096);
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(0, [], 0, 0, 0), [new RunResourceAggregate(runId, 17, 4096, [])]));
+
+        // Task 15.7: the run's own graph continues updating live once expanded.
+        cut.WaitForAssertion(
+            () => Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 17),
+            TimeSpan.FromSeconds(2));
+
+        var destroyedBeforeCollapse = _chartInterop.DestroyedCanvasIds.Count;
+        cut.Find("button.run-graph-toggle").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(destroyedBeforeCollapse + 2, _chartInterop.DestroyedCanvasIds.Count), TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task An_expanded_transfers_live_graph_shows_the_host_activity_note()
+    {
+        // Task 15.7's transfer variant: a transfer's own series (host-tagged, per
+        // HostResourceSamplerService.TickAsync) renders the same way a command run's does, but
+        // labeled as host-level activity rather than a per-process figure.
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var transferId = Guid.NewGuid();
+        await runRepository.AddAsync(new Run
+        {
+            Id = transferId,
+            Kind = RunKind.ArtifactTransfer,
+            RepoPath = @"C:\repos\example",
+            ArtifactPath = "bin/output.dll",
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        }, CancellationToken.None);
+
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+
+        cut.Find("button.run-graph-toggle").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("Host activity during transfer", cut.Markup), TimeSpan.FromSeconds(2));
     }
 
     /// <inheritdoc />

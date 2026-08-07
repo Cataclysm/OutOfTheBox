@@ -12,7 +12,9 @@ using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Infrastructure.Repositories;
+using OutOfTheBox.Host;
 using OutOfTheBox.Presentation.Dashboard;
+using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.Presentation.Execution;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +89,11 @@ builder.Services.AddSingleton<IResourceSampler, HostResourceSampler>();
 builder.Services.AddSingleton<IProcessMonitor, ProcessMonitor>();
 builder.Services.AddHostedService<HostResourceSamplerService>();
 
+// Performance graphs (Section 15). Scoped, not singleton, since it wraps IJSRuntime - a Blazor
+// Server circuit-scoped service itself, so a chart-interop instance must live no longer than the
+// circuit that created it.
+builder.Services.AddScoped<IChartInterop, ChartInterop>();
+
 // Kestrel/HTTPS hardening deferred to Section 16 (Transport & Network).
 
 var app = builder.Build();
@@ -104,6 +111,15 @@ using (var startupScope = app.Services.CreateScope())
     await runRepository.ReconcileInterruptedAsync(CancellationToken.None);
 }
 
+// Serves static content (dashboard.css, the vendored Chart.js/interop script, and the
+// framework-provided blazor.web.js, all referenced via @Assets[...] in App.razor rather than
+// hardcoded paths - required for MapStaticAssets to resolve them at all, not just for
+// fingerprinted caching) before authentication - none of it needs a login, and the dashboard's
+// own login page itself needs its stylesheet before the operator has a session. Without this,
+// every static asset 404s even though the files are physically present in the build/publish
+// output - there is no other middleware in this pipeline that serves them.
+app.MapStaticAssets();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
@@ -117,8 +133,15 @@ app.MapVersionEndpoint();
 // bearer-token-protected API endpoints above (and /login, /logout, /version) have no
 // authorization metadata attached at all, so they're completely unaffected; the dashboard's own
 // Login page opts back out via its [AllowAnonymous] attribute.
+//
+// AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
+// so its @Assets[...] references resolve against the actual hosting app's manifest, per Section
+// 15's Chart.js work) - MapRazorComponents<App>() only scans App's own assembly for @page
+// components by default, and every routable page (Status, Repos, History, Login, ...) still lives
+// in Presentation.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(Status).Assembly)
     .RequireAuthorization();
 
 app.Run();

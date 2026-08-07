@@ -1,0 +1,86 @@
+@using OutOfTheBox.Application.Monitoring
+@inject ResourceHistoryBuffer HistoryBuffer
+@inject IResourceEventBus ResourceEventBus
+@inject IChartInterop ChartInterop
+@implements IAsyncDisposable
+
+<div class="resource-graphs">
+    @if (Note is not null)
+    {
+        <p class="run-graph-note">@Note</p>
+    }
+    <div class="resource-graph">
+        <span class="resource-graph-label">CPU %</span>
+        <canvas id="@_cpuCanvasId"></canvas>
+    </div>
+    <div class="resource-graph">
+        <span class="resource-graph-label">RAM</span>
+        <canvas id="@_ramCanvasId"></canvas>
+    </div>
+</div>
+
+@code {
+    /// <summary>The <see cref="ResourceHistoryBuffer"/> series key to read from - <see cref="ResourceHistoryBuffer.HostSeriesKey"/> for the host, or a run id's string form for a run/transfer.</summary>
+    [Parameter, EditorRequired]
+    public string SeriesKey { get; set; } = string.Empty;
+
+    /// <summary>Optional caption shown above the graphs - used to label a transfer's graph as host-level activity rather than a per-process figure.</summary>
+    [Parameter]
+    public string? Note { get; set; }
+
+    private readonly string _cpuCanvasId = $"live-cpu-{Guid.NewGuid():N}";
+    private readonly string _ramCanvasId = $"live-ram-{Guid.NewGuid():N}";
+    private IDisposable? _subscription;
+    private DateTimeOffset? _lastPushedTimestamp;
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"]);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"]);
+
+        var initial = HistoryBuffer.Get(SeriesKey);
+        await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, initial.Select(p => (p.Timestamp, p.CpuPercent)));
+        await ChartInterop.SetSeriesAsync(_ramCanvasId, 0, initial.Select(p => (p.Timestamp, (double)p.RamBytes)));
+        _lastPushedTimestamp = initial.Count > 0 ? initial[^1].Timestamp : null;
+
+        _subscription = ResourceEventBus.Subscribe(OnTick);
+    }
+
+    private void OnTick(ResourceSnapshot snapshot) => _ = InvokeAsync(async () =>
+    {
+        // The event's own payload only carries process-tree-based run aggregates (never a
+        // transfer, which has no process tree) - reading back through HistoryBuffer instead of the
+        // event payload lets one code path serve the host series, a command run's series, and a
+        // transfer's series uniformly, since HostResourceSamplerService.TickAsync writes all three
+        // into the buffer before publishing regardless of kind.
+        var points = HistoryBuffer.Get(SeriesKey);
+        if (points.Count == 0)
+        {
+            return;
+        }
+
+        var latest = points[^1];
+        if (_lastPushedTimestamp == latest.Timestamp)
+        {
+            return;
+        }
+
+        _lastPushedTimestamp = latest.Timestamp;
+        await ChartInterop.PushPointAsync(_cpuCanvasId, 0, latest.Timestamp, latest.CpuPercent);
+        await ChartInterop.PushPointAsync(_ramCanvasId, 0, latest.Timestamp, latest.RamBytes);
+    });
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        _subscription?.Dispose();
+        await ChartInterop.DestroyAsync(_cpuCanvasId);
+        await ChartInterop.DestroyAsync(_ramCanvasId);
+    }
+}
