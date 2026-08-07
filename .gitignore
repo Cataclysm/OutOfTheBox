@@ -1,4 +1,9 @@
 # .NET build output
+# All projects use the centralized artifacts output layout (Directory.Build.props:
+# UseArtifactsOutput), so build output lands under artifacts/ at the repo root. bin/ and obj/
+# are kept ignored too as a safety net (e.g. a project built outside the .slnx without picking up
+# Directory.Build.props).
+artifacts/
 bin/
 obj/
 out/

@@ -56,3 +56,7 @@ dotnet test tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj
 ## Project layout
 
 `src/` and `tests/` are both flat: each project sits directly under `src/OutOfTheBox.<Name>/` or `tests/OutOfTheBox.<Name>/`, with no extra layer-name or test-type wrapper directory. The `.slnx`'s only solution folder is `Tests` (grouping the three test projects for IDE display); the five architecture projects sit unfoldered at the solution root. `tests/Fixtures/` is the one exception — see above.
+
+## Build output
+
+Every project (including `tests/Fixtures/`, even though it isn't solution-registered) builds into a single `artifacts/` directory at the repo root instead of a `bin/`/`obj/` pair inside each project folder — the .NET SDK's centralized artifacts output layout (`Directory.Build.props`: `UseArtifactsOutput` + an explicit `ArtifactsPath`, needed because `tests/Directory.Build.props` would otherwise anchor test-project output to `tests/artifacts/` instead of the repo root). Output lands at `artifacts/bin/<ProjectName>/debug/` and `artifacts/obj/<ProjectName>/`; `artifacts/` is gitignored. Delete it freely (`rm -rf artifacts`) to force a clean rebuild — nothing under it is ever hand-edited.

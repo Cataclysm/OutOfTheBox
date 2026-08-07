@@ -1,6 +1,14 @@
 <Project>
 
   <PropertyGroup>
+    <!-- Centralized build output: every project's bin/obj lands under artifacts/ at the repo
+         root (artifacts/bin/<project>/, artifacts/obj/<project>/, ...) instead of scattering a
+         bin/ and obj/ folder inside every project directory. ArtifactsPath is pinned explicitly
+         (not left to the default inference) because tests/Directory.Build.props is itself a
+         second Directory.Build.props file - without pinning, the SDK anchors test projects'
+         artifacts to tests/artifacts/ instead of unifying under the repo root. -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
