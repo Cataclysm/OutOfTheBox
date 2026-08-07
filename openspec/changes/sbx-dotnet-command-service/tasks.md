@@ -37,10 +37,10 @@
 
 ## 4. Path Confinement
 
-- [ ] 4.1 Implement path resolution: join caller-supplied relative path to configured root, `Path.GetFullPath` to canonicalize
-- [ ] 4.2 Resolve symlink/junction targets before containment check
-- [ ] 4.3 Reject requests whose resolved path is not under the root (full-path containment check, not string prefix)
-- [ ] 4.4 Unit test: path traversal (`../..`) is rejected; valid subdirectory is accepted; a sibling directory sharing a name prefix (e.g. root `C:\repos` vs `C:\repos-evil`) is rejected
+- [x] 4.1 Implemented in `Infrastructure.Execution.WorkingDirectoryResolver`: joins the caller-supplied relative path to `ServiceOptions.RootDirectory` via `Path.Combine` + `Path.GetFullPath` (an absolute caller-supplied path correctly discards the root per `Path.Combine`'s own semantics, so it's rejected by containment rather than needing a special case)
+- [x] 4.2 `WorkingDirectoryResolver.ResolveSymlinkTarget` calls `Directory.ResolveLinkTarget(path, returnFinalTarget: true)` before the containment check; a real symlink-escape test confirms it (skips gracefully if the sandbox lacks the privilege to create symlinks, per Windows' Developer Mode/elevation requirement)
+- [x] 4.3 Containment decision implemented in `Domain.PathConfinement.PathConfinementPolicy.IsContained` (full-path comparison with a trailing separator, not naive `StartsWith`) — pure, zero-IO, called by the Infrastructure resolver above
+- [x] 4.4 Unit tests: `PathConfinementPolicyTests` (7 cases: root itself, subdirectory, sibling-prefix rejection, unrelated path, parent-of-root, case-insensitivity, trailing-separator handling) + `WorkingDirectoryResolverTests` (5 cases against a real temp directory tree: valid subdirectory, `../..` traversal, absolute-path escape, sibling-prefix escape, symlink escape)
 
 ## 5. Command Execution
 
