@@ -5,21 +5,21 @@
 There is no packaged release yet (see [Planned](#planned-production-install) below). To run the service directly:
 
 ```
-dotnet run --project src/BuildAndTestService.Host
+dotnet run --project src/OutOfTheBox.Host
 ```
 
-Configuration is read from `src/BuildAndTestService.Host/appsettings.json` (and `appsettings.Development.json` in the `Development` environment), with environment-variable overrides available via the standard ASP.NET Core convention, e.g.:
+Configuration is read from `src/OutOfTheBox.Host/appsettings.json` (and `appsettings.Development.json` in the `Development` environment), with environment-variable overrides available via the standard ASP.NET Core convention, e.g.:
 
 ```
-BuildAndTestService__BearerToken=some-token dotnet run --project src/BuildAndTestService.Host
+OutOfTheBox__BearerToken=some-token dotnet run --project src/OutOfTheBox.Host
 ```
 
 At minimum you'll need to set:
 
-- `BuildAndTestService:RootDirectory` — the absolute path repos will be resolved under
-- `BuildAndTestService:BearerToken` — the shared credential callers must present
+- `OutOfTheBox:RootDirectory` — the absolute path repos will be resolved under
+- `OutOfTheBox:BearerToken` — the shared credential callers must present
 
-See `ServiceOptions` (`src/BuildAndTestService.Application/Configuration/ServiceOptions.cs`) for the full configuration surface (timeouts, output cap, SQLite path — some of these aren't wired up to real behavior yet; check `openspec/changes/sbx-dotnet-command-service/tasks.md` for current status).
+See `ServiceOptions` (`src/OutOfTheBox.Application/Configuration/ServiceOptions.cs`) for the full configuration surface (timeouts, output cap, SQLite path — some of these aren't wired up to real behavior yet; check `openspec/changes/sbx-dotnet-command-service/tasks.md` for current status).
 
 ## Planned: production install
 

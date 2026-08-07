@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="src/OutOfTheBox.Application/OutOfTheBox.Application.csproj" />
+  <Project Path="src/OutOfTheBox.Domain/OutOfTheBox.Domain.csproj" />
+  <Project Path="src/OutOfTheBox.Host/OutOfTheBox.Host.csproj" />
+  <Project Path="src/OutOfTheBox.Infrastructure/OutOfTheBox.Infrastructure.csproj" />
+  <Project Path="src/OutOfTheBox.Presentation/OutOfTheBox.Presentation.csproj" />
+  <Folder Name="/Tests/">
+    <Project Path="tests/OutOfTheBox.ArchitectureTests/OutOfTheBox.ArchitectureTests.csproj" />
+    <Project Path="tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj" />
+    <Project Path="tests/OutOfTheBox.UnitTests/OutOfTheBox.UnitTests.csproj" />
+  </Folder>
+</Solution>

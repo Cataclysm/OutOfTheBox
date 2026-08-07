@@ -15,7 +15,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Changed
 
-- Flattened `src/` and `tests/` project directories (removed the layer-name/test-type wrapper folders, e.g. `src/Domain/BuildAndTestService.Domain/` → `src/BuildAndTestService.Domain/`); the `.slnx` no longer has per-layer solution folders, only a single `Tests` folder grouping the three test projects
+- Flattened `src/` and `tests/` project directories (removed the layer-name/test-type wrapper folders, e.g. `src/Domain/OutOfTheBox.Domain/` → `src/OutOfTheBox.Domain/`); the `.slnx` no longer has per-layer solution folders, only a single `Tests` folder grouping the three test projects
 - Adopted Central Package Management (`Directory.Packages.props`) for third-party package versions
 - Added `.editorconfig` for formatting and C# style conventions
 

@@ -10,7 +10,7 @@ No other tooling is required. `.slnx` opens directly in Rider; no Visual Studio 
 ## Build
 
 ```
-dotnet build BuildAndTestService.slnx
+dotnet build OutOfTheBox.slnx
 ```
 
 ## Test
@@ -18,22 +18,22 @@ dotnet build BuildAndTestService.slnx
 The full suite, in one command:
 
 ```
-dotnet test BuildAndTestService.slnx
+dotnet test OutOfTheBox.slnx
 ```
 
 This runs three test projects with very different speed characteristics. During day-to-day development it's usually faster to run them separately:
 
 ```
 # Fast: pure logic, no process spawning, no real I/O beyond a couple of temp-directory tests
-dotnet test tests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj
+dotnet test tests/OutOfTheBox.UnitTests/OutOfTheBox.UnitTests.csproj
 
 # Fast: reflection over the built assemblies, no execution of "real" code
-dotnet test tests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj
+dotnet test tests/OutOfTheBox.ArchitectureTests/OutOfTheBox.ArchitectureTests.csproj
 
 # Slow (several seconds to tens of seconds): genuinely spawns dotnet.exe against the checked-in
 # fixture repos under tests/Fixtures/, including two scenarios that deliberately let a command
 # hang and confirms it gets killed by its timeout.
-dotnet test tests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj
+dotnet test tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj
 ```
 
 ## Test project layout
@@ -55,4 +55,4 @@ dotnet test tests/BuildAndTestService.BehaviorTests/BuildAndTestService.Behavior
 
 ## Project layout
 
-`src/` and `tests/` are both flat: each project sits directly under `src/BuildAndTestService.<Name>/` or `tests/BuildAndTestService.<Name>/`, with no extra layer-name or test-type wrapper directory. The `.slnx`'s only solution folder is `Tests` (grouping the three test projects for IDE display); the five architecture projects sit unfoldered at the solution root. `tests/Fixtures/` is the one exception — see above.
+`src/` and `tests/` are both flat: each project sits directly under `src/OutOfTheBox.<Name>/` or `tests/OutOfTheBox.<Name>/`, with no extra layer-name or test-type wrapper directory. The `.slnx`'s only solution folder is `Tests` (grouping the three test projects for IDE display); the five architecture projects sit unfoldered at the solution root. `tests/Fixtures/` is the one exception — see above.
