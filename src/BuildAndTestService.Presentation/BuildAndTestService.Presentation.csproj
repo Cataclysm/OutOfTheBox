@@ -14,8 +14,8 @@
   <ItemGroup>
     <!-- Microsoft.AspNetCore.Components.Web ships as part of the Microsoft.AspNetCore.App shared
          framework referenced above, so an explicit PackageReference to it is redundant here. -->
-    <ProjectReference Include="..\..\Application\BuildAndTestService.Application\BuildAndTestService.Application.csproj" />
-    <ProjectReference Include="..\..\Domain\BuildAndTestService.Domain\BuildAndTestService.Domain.csproj" />
+    <ProjectReference Include="..\BuildAndTestService.Application\BuildAndTestService.Application.csproj" />
+    <ProjectReference Include="..\BuildAndTestService.Domain\BuildAndTestService.Domain.csproj" />
   </ItemGroup>
 
 </Project>

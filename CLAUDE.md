@@ -15,11 +15,11 @@ dotnet build BuildAndTestService.slnx          # build everything
 dotnet test BuildAndTestService.slnx           # run everything (slow - see below)
 
 # Fast, run these during normal development:
-dotnet test tests/UnitTests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj
-dotnet test tests/ArchitectureTests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj
+dotnet test tests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj
+dotnet test tests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj
 
 # Slow (spawns real dotnet.exe processes, includes two deliberate-timeout scenarios):
-dotnet test tests/BehaviorTests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj
+dotnet test tests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj
 
 # Single test / single scenario:
 dotnet test <project.csproj> --filter "FullyQualifiedName~ClassName.MethodName"
@@ -43,14 +43,17 @@ Domain (no deps) <- Application <- Infrastructure  (independent slice)
 - **`Presentation`** — a Razor Class Library (not an executable): minimal API endpoint definitions, Blazor components, auth filters/middleware. Has **no reference to `Infrastructure`**, not even for DI — that's the point of the split below.
 - **`Host`** — the actual executable (`net10.0-windows`, ASP.NET Core + `UseWindowsService()`). The *only* project referencing both `Infrastructure` and `Presentation`; its `Program.cs` is the sole composition root (DI registration, config binding, framework wiring). If you're tempted to add business or presentation logic to `Host`, it belongs in one of the other four projects instead.
 
-**This boundary is mechanically enforced**, not just documented: `tests/ArchitectureTests/BuildAndTestService.ArchitectureTests/LayeringTests.cs` uses NetArchTest to assert it on every `dotnet test` run. A `Domain → Infrastructure` reference (or `Presentation → Infrastructure`, etc.) fails the build, not just a review comment.
+**This boundary is mechanically enforced**, not just documented: `tests/BuildAndTestService.ArchitectureTests/LayeringTests.cs` uses NetArchTest to assert it on every `dotnet test` run. A `Domain → Infrastructure` reference (or `Presentation → Infrastructure`, etc.) fails the build, not just a review comment.
 
 **Why `Presentation` can't depend on `Infrastructure`, not even for DI wiring**: this was an explicit, deliberate requirement (see `design.md`'s Architecture section) — `Presentation` and `Infrastructure` must be genuinely independent outer-ring slices with zero connection between them. That's why `Host` exists as a separate project from `Presentation` at all, rather than following the common ASP.NET Core pattern where the Web project's `Program.cs` doubles as both presentation and composition root.
 
 ## Conventions
 
-- **Copyright header**: every `.cs` file under `src/` and `tests/{UnitTests,BehaviorTests,ArchitectureTests}` starts with `// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.` followed by a blank line. Do **not** add this to `tests/Fixtures/` (those simulate arbitrary external repos, not this project's own source) or to non-`.cs` files.
+- **Project layout is flat**: each project lives directly at `src/BuildAndTestService.<Name>/` or `tests/BuildAndTestService.<Name>/` — no layer-name or test-type wrapper directory. The `.slnx`'s only solution folder is `Tests` (grouping the three test projects); the five architecture projects sit unfoldered at the solution root. `tests/Fixtures/` is the one exception (see below).
+- **Copyright header**: every `.cs` file under `src/` and `tests/BuildAndTestService.{UnitTests,BehaviorTests,ArchitectureTests}` starts with `// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.` followed by a blank line. Do **not** add this to `tests/Fixtures/` (those simulate arbitrary external repos, not this project's own source) or to non-`.cs` files.
 - **Public API must have XML doc comments** — enforced by the build (`CS1591` is an error via `Directory.Build.props`), not just convention. `tests/Directory.Build.props` relaxes this one rule for test projects only.
+- **Package versions are centrally managed** via `Directory.Packages.props` (CPM) — add new packages there; `.csproj` files reference them with no `Version` attribute.
+- **`.editorconfig`** at the repo root covers formatting and C# style conventions, all at `:suggestion` severity — `CS1591` (doc comments) remains the only build-breaking style rule.
 - **`tests/Fixtures/` is deliberately not in the `.slnx`.** Those are target repos the service spawns real `dotnet` commands against during `BehaviorTests` (`PassingFixture`, `FailingFixture`, `HangingFixture` — a test that never returns, for exercising timeout/cancellation). If they were solution-registered, their failing/hanging tests would break this repo's own `dotnet test` run.
 - **Commit after each coherent implementation step**, not one giant commit at the end — e.g. after finishing one `tasks.md` section, not after every file edit.
 - BDD feature files are written alongside the capability they cover (not all upfront) and their Gherkin scenarios are transcribed directly from the corresponding `openspec/.../specs/*/spec.md` `#### Scenario:` blocks, so spec and executable test stay in lockstep.

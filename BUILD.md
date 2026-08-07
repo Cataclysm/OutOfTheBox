@@ -25,15 +25,15 @@ This runs three test projects with very different speed characteristics. During 
 
 ```
 # Fast: pure logic, no process spawning, no real I/O beyond a couple of temp-directory tests
-dotnet test tests/UnitTests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj
+dotnet test tests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj
 
 # Fast: reflection over the built assemblies, no execution of "real" code
-dotnet test tests/ArchitectureTests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj
+dotnet test tests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj
 
 # Slow (several seconds to tens of seconds): genuinely spawns dotnet.exe against the checked-in
 # fixture repos under tests/Fixtures/, including two scenarios that deliberately let a command
 # hang and confirms it gets killed by its timeout.
-dotnet test tests/BehaviorTests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj
+dotnet test tests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj
 ```
 
 ## Test project layout
@@ -50,3 +50,9 @@ dotnet test tests/BehaviorTests/BuildAndTestService.BehaviorTests/BuildAndTestSe
 
 - `Directory.Build.props` enables `<Nullable>enable</Nullable>` and `<GenerateDocumentationFile>true</GenerateDocumentationFile>` with the missing-XML-doc-comment warning (`CS1591`) promoted to an error — a public type or member without a `///` doc comment fails the build. `tests/Directory.Build.props` relaxes this one rule for test projects (xUnit requires public test classes/methods, which aren't "public API" in the sense this rule targets).
 - Every `.cs` file under `src/` and `tests/{UnitTests,BehaviorTests,ArchitectureTests}` (not `tests/Fixtures/`) starts with a standard copyright header — see `CLAUDE.md` for the exact text and where it applies.
+- `.editorconfig` at the repo root covers formatting and a handful of C# style conventions (IDE-level suggestions, not build-breaking).
+- `Directory.Packages.props` centralizes every third-party package version — add new packages there, then reference them from a project's `.csproj` with no `Version` attribute.
+
+## Project layout
+
+`src/` and `tests/` are both flat: each project sits directly under `src/BuildAndTestService.<Name>/` or `tests/BuildAndTestService.<Name>/`, with no extra layer-name or test-type wrapper directory. The `.slnx`'s only solution folder is `Tests` (grouping the three test projects for IDE display); the five architecture projects sit unfoldered at the solution root. `tests/Fixtures/` is the one exception — see above.

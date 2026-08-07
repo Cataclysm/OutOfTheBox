@@ -1,22 +1,12 @@
 <Solution>
-  <Folder Name="/Application/">
-    <Project Path="src/Application/BuildAndTestService.Application/BuildAndTestService.Application.csproj" />
-  </Folder>
-  <Folder Name="/Domain/">
-    <Project Path="src/Domain/BuildAndTestService.Domain/BuildAndTestService.Domain.csproj" />
-  </Folder>
-  <Folder Name="/Host/">
-    <Project Path="src/Host/BuildAndTestService.Host/BuildAndTestService.Host.csproj" />
-  </Folder>
-  <Folder Name="/Infrastructure/">
-    <Project Path="src/Infrastructure/BuildAndTestService.Infrastructure/BuildAndTestService.Infrastructure.csproj" />
-  </Folder>
-  <Folder Name="/Presentation/">
-    <Project Path="src/Presentation/BuildAndTestService.Presentation/BuildAndTestService.Presentation.csproj" />
-  </Folder>
+  <Project Path="src/BuildAndTestService.Application/BuildAndTestService.Application.csproj" />
+  <Project Path="src/BuildAndTestService.Domain/BuildAndTestService.Domain.csproj" />
+  <Project Path="src/BuildAndTestService.Host/BuildAndTestService.Host.csproj" />
+  <Project Path="src/BuildAndTestService.Infrastructure/BuildAndTestService.Infrastructure.csproj" />
+  <Project Path="src/BuildAndTestService.Presentation/BuildAndTestService.Presentation.csproj" />
   <Folder Name="/Tests/">
-    <Project Path="tests/ArchitectureTests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj" />
-    <Project Path="tests/BehaviorTests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj" />
-    <Project Path="tests/UnitTests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj" />
+    <Project Path="tests/BuildAndTestService.ArchitectureTests/BuildAndTestService.ArchitectureTests.csproj" />
+    <Project Path="tests/BuildAndTestService.BehaviorTests/BuildAndTestService.BehaviorTests.csproj" />
+    <Project Path="tests/BuildAndTestService.UnitTests/BuildAndTestService.UnitTests.csproj" />
   </Folder>
 </Solution>
