@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="bunit" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -20,6 +21,10 @@
     <ProjectReference Include="..\..\src\OutOfTheBox.Domain\OutOfTheBox.Domain.csproj" />
     <ProjectReference Include="..\..\src\OutOfTheBox.Application\OutOfTheBox.Application.csproj" />
     <ProjectReference Include="..\..\src\OutOfTheBox.Infrastructure\OutOfTheBox.Infrastructure.csproj" />
+    <!-- For bUnit component tests (Presentation/Dashboard/*.razor) - closes the "no
+         Blazor-interactive test client" gap noted in tasks.md's §12/§13 deviations. Presentation
+         itself still never references Infrastructure; this is a test-only addition. -->
+    <ProjectReference Include="..\..\src\OutOfTheBox.Presentation\OutOfTheBox.Presentation.csproj" />
   </ItemGroup>
 
 </Project>
