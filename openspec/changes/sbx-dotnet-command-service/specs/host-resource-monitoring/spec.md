@@ -1,6 +1,6 @@
 ## Purpose
 
-Gives the operator visibility into host and process resource usage while `dotnet` commands run, and a way to terminate a specific hung process (e.g. a `testhost.exe` that won't exit) without necessarily tearing down the whole run.
+Gives the operator visibility into host and process resource usage while `dotnet`/`git` commands run, and a way to terminate a specific hung process (e.g. a `testhost.exe` that won't exit) without necessarily tearing down the whole run. Also backs the host-level resource series recorded for artifact transfers (per `artifact-transfer`), which spawn no process tree of their own.
 
 ## ADDED Requirements
 
@@ -19,7 +19,7 @@ The system SHALL periodically sample total host RAM usage (used vs. total) and t
 - **THEN** it includes total host RAM used/available and the service process's own memory usage, no more than a few seconds stale
 
 ### Requirement: Spawned processes are listed with resource usage
-The system SHALL enumerate the process tree rooted at each process the service itself launched (a `dotnet.exe` invocation and all of its descendants, such as `testhost.exe` or compiler worker processes) and report each one's name, process id, CPU usage, and RAM usage, refreshed at least every few seconds.
+The system SHALL enumerate the process tree rooted at each process the service itself launched (a `dotnet.exe` or `git.exe` invocation and all of its descendants, such as `testhost.exe` or compiler worker processes) and report each one's name, process id, CPU usage, and RAM usage, refreshed at least every few seconds.
 
 #### Scenario: Viewing spawned processes
 - **WHEN** a run is in flight and has spawned child processes
