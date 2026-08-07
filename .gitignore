@@ -1,0 +1,44 @@
+# .NET build output
+bin/
+obj/
+out/
+publish/
+*.pdb
+
+# Test results / coverage
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# IDE
+.vs/
+.idea/
+*.user
+*.sln.DotSettings.user
+.vscode/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Local/secret configuration - never commit real tokens or certs
+appsettings.*.local.json
+*.local.json
+.env
+secrets.json
+*.pfx
+*.pem
+*.key
+
+# Runtime data (SQLite db is generated at runtime, never checked in)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Claude Code local settings
+.claude/settings.local.json

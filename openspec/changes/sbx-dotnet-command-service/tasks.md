@@ -1,0 +1,195 @@
+## 1. Project Setup
+
+- [ ] 1.1 Create the `.slnx` solution at the repo root
+- [ ] 1.2 Create solution folders: `Domain`, `Application`, `Infrastructure`, `Presentation`, `Host`, `Tests`
+- [ ] 1.3 Scaffold `src/Domain/BuildAndTestService.Domain` (plain `net10.0` class library, no NuGet dependencies beyond the BCL), added to the `Domain` solution folder
+- [ ] 1.4 Scaffold `src/Application/BuildAndTestService.Application` (plain `net10.0` class library, references `Domain` only), added to the `Application` solution folder
+- [ ] 1.5 Scaffold `src/Infrastructure/BuildAndTestService.Infrastructure` (`net10.0-windows` class library, references `Application` + `Domain` only), added to the `Infrastructure` solution folder
+- [ ] 1.6 Scaffold `src/Presentation/BuildAndTestService.Presentation` (plain `net10.0` Razor Class Library — `Sdk="Microsoft.NET.Sdk.Razor"` — carrying `.razor` components, `wwwroot`, minimal API endpoint-mapping extension methods, and auth middleware; references `Application` + `Domain` only, **no reference to `Infrastructure`**), added to the `Presentation` solution folder
+- [ ] 1.7 Scaffold `src/Host/BuildAndTestService.Host` (`net10.0-windows` ASP.NET Core executable — the only project referencing all four others), added to the `Host` solution folder
+- [ ] 1.8 In `Host`'s `Program.cs`: build the `WebApplication`, call `Presentation`'s registration/endpoint-mapping extension methods, register `Infrastructure`'s concrete types against `Application`'s interfaces in DI, configure Kestrel
+- [ ] 1.9 Add `Microsoft.Extensions.Hosting.WindowsServices` to `Host` and configure `UseWindowsService()`
+- [ ] 1.10 Add configuration schema (appsettings.json + env var overrides) for: root directory, bearer token, listen port, default execution timeout (10 minutes), maximum execution timeout, output size cap, SQLite file path
+- [ ] 1.11 Enable `<Nullable>enable</Nullable>` and `<GenerateDocumentationFile>true</GenerateDocumentationFile>` (with `CS1591` as an error) on every project via a shared `Directory.Build.props`
+
+## 2. Test Suite Foundation
+
+- [ ] 2.1 Scaffold `tests/UnitTests/BuildAndTestService.UnitTests` (xUnit, `Microsoft.NET.Test.Sdk`), internally organized into `Domain/`, `Application/`, and `Infrastructure/` folders mirroring the layer under test; references `Domain`, `Application`, `Infrastructure` — no real process spawning, no real network; fakes/mocks for `Process`, `IRunEventBus`, `IResourceEventBus`; a real SQLite `:memory:` connection (not EF Core's InMemory provider) for repository-logic tests
+- [ ] 2.2 Scaffold `tests/BehaviorTests/BuildAndTestService.BehaviorTests` (Reqnroll + xUnit), references `Host`, for Gherkin `.feature`-file scenarios exercised against the real ASP.NET Core pipeline via `WebApplicationFactory<Program>`/`TestServer` (real `dotnet.exe` child-process spawning, real SQLite temp file per test run, no real TCP/TLS listener needed)
+- [ ] 2.3 Scaffold `tests/ArchitectureTests/BuildAndTestService.ArchitectureTests` (xUnit + `NetArchTest.Rules`), referencing all five projects (only for reflection over their assemblies, not for calling into them)
+- [ ] 2.4 Write the NetArchTest rules: `Domain` has no dependency on `Application`/`Infrastructure`/`Presentation`/`Host` or on ASP.NET Core/EF Core/`System.Management`/`PerformanceCounter` namespaces; `Application` has no dependency on `Infrastructure`/`Presentation`/`Host`; `Infrastructure` has no dependency on `Presentation`/`Host`; `Presentation` has no dependency on `Infrastructure`/`Host` — no exception for any of these; `Host` is excluded from the rule set entirely (it's the composition root, expected to reference everything)
+- [ ] 2.5 Add all three test projects, plus a `Fixtures` subfolder, under the `Tests` solution folder
+- [ ] 2.6 Add Reqnroll's generator/test-adapter and confirm a trivial scenario runs end-to-end via plain `dotnet test` before writing real feature files (Reqnroll-via-CLI and `.slnx`-in-Rider are both already confirmed working, so this is a smoke check, not an open feasibility question)
+- [ ] 2.7 Add `tests/Fixtures/` sample projects: one with a passing test, one with a failing test, one with an intentionally-hanging test — used by BDD scenarios that need a real, fast, deterministic target for `dotnet build`/`dotnet test`/`dotnet run`, instead of depending on an external repo
+- [ ] 2.8 Write one Gherkin feature file per capability (`dotnet-command-execution.feature`, `service-authentication.feature`, `run-history.feature`, `service-dashboard.feature`, `host-resource-monitoring.feature`), with each scenario's Given/When/Then derived directly from that capability's spec.md `#### Scenario:` blocks, so spec and executable test stay in lockstep
+- [ ] 2.9 Document the test convention: unit tests cover isolated Domain/Application logic (path-containment decision, auth comparison, lock/registry state machine, CPU%/aggregation math, kill-scope verification) plus targeted Infrastructure tests; BDD feature files cover the WHEN/THEN scenarios already written in each spec.md; NetArchTest covers layering; true end-to-end checks requiring a real deployed Windows Service/network/second machine remain the manual checklist in End-to-End Verification, not part of `dotnet test`
+- [ ] 2.10 Confirm `dotnet build` and `dotnet test` succeed from a clean checkout using only the .NET 10 SDK CLI — no Visual Studio, no additional global tool installs beyond what's restored via the SDK/NuGet
+- [ ] 2.11 Sanity-check the NetArchTest rules themselves: temporarily introduce an intentional layering violation (e.g. a `Domain` type referencing `Infrastructure`), confirm the corresponding rule fails `dotnet test`, then revert
+
+## 3. Authentication
+
+- [ ] 3.1 Implement middleware/filter requiring a bearer/API-key header on the command-execution and cancellation endpoints
+- [ ] 3.2 Reject missing credential with 401 before any command handling runs
+- [ ] 3.3 Compare provided credential to configured value using `CryptographicOperations.FixedTimeEquals`
+- [ ] 3.4 Read expected credential from configuration, not source code
+- [ ] 3.5 Unit test: constant-time comparison rejects a wrong credential and accepts the correct one
+- [ ] 3.6 BDD: rotate configured credential + restart, confirm old credential is rejected (`service-authentication.feature`)
+
+## 4. Path Confinement
+
+- [ ] 4.1 Implement path resolution: join caller-supplied relative path to configured root, `Path.GetFullPath` to canonicalize
+- [ ] 4.2 Resolve symlink/junction targets before containment check
+- [ ] 4.3 Reject requests whose resolved path is not under the root (full-path containment check, not string prefix)
+- [ ] 4.4 Unit test: path traversal (`../..`) is rejected; valid subdirectory is accepted; a sibling directory sharing a name prefix (e.g. root `C:\repos` vs `C:\repos-evil`) is rejected
+
+## 5. Command Execution
+
+- [ ] 5.1 Define request/event contract: argument list (array of strings) + working-directory string + optional per-request timeout in; run id returned via `X-Run-Id` header; SSE events out (`stdout`, `stderr` data events; terminal `done` event with exit code + truncation flag; terminal `error` event with a reason of `validation`, `timeout`, or `cancelled`)
+- [ ] 5.2 Implement process launch via `System.Diagnostics.Process` with `UseShellExecute = false` and `ArgumentList` (no string concatenation/shell parsing)
+- [ ] 5.3 Wire `OutputDataReceived`/`ErrorDataReceived` handlers to emit an SSE event per line as it's produced (no end-of-process buffering)
+- [ ] 5.4 Set response `Content-Type: text/event-stream`, disable response buffering, flush after each event write
+- [ ] 5.5 Cap total bytes emitted per execution; on cap, stop forwarding lines and flag truncation on the terminal event (let the process keep running/be reaped by timeout)
+- [ ] 5.6 Implement execution timeout: use the caller-supplied value if present, else the configured default (10 minutes), clamped in both cases to the configured maximum; kill process tree (`entireProcessTree: true`) on timeout, emit a terminal `error` event with reason `timeout`, close the stream
+- [ ] 5.7 Ensure "request never executed" (validation/auth failure, or repo already locked) emits `error` with reason `validation` before any `stdout`/`stderr` events, never a `done` event
+- [ ] 5.8 BDD: successful `dotnet build`/`dotnet test` round trip against the passing-test fixture — caller receives run id, incremental `stdout`/`stderr` events, then the terminal `done` event with correct exit code (`dotnet-command-execution.feature`)
+- [ ] 5.9 BDD: `dotnet test` against the failing-test fixture returns the non-zero exit code, not treated as a transport error
+- [ ] 5.10 Unit test: an argument value containing shell metacharacters (e.g. `; rm -rf /`) is passed as one literal `ArgumentList` entry, not concatenated into a shell string
+- [ ] 5.11 Unit/BDD: client using a non-streaming HTTP call (response fully buffered) still receives all events correctly once the response completes — streaming is a delivery optimization, not a correctness requirement
+- [ ] 5.12 Unit test: caller-supplied timeout shorter than the default is honored; caller-supplied timeout longer than the configured maximum is clamped to that maximum, not honored as-is
+- [ ] 5.13 BDD: a command with no caller-supplied timeout is killed at the configured default; a command with a short caller-supplied timeout against the hanging-test fixture is killed sooner than the default would allow
+
+## 6. Concurrency & Locking
+
+- [ ] 6.1 Implement an in-memory run registry: `ConcurrentDictionary<string, RunInfo>` keyed by canonicalized repo root, `RunInfo` holding run id + `Process` handle + `CancellationTokenSource`
+- [ ] 6.2 On request start, atomically `TryAdd` the repo-root key; on failure (already locked) reject with a conflict error carrying the existing run's id, without invoking `dotnet.exe`
+- [ ] 6.3 Remove the registry entry on every terminal state (`done`, `timeout`, `cancelled`), releasing the repo for the next request
+- [ ] 6.4 Unit test: `TryAdd` race between two simultaneous callers for the same key — exactly one wins
+- [ ] 6.5 BDD: two requests targeting different repos (passing and failing fixtures) execute concurrently and each completes independently
+- [ ] 6.6 BDD: a second request targeting a repo already locked is rejected with 409 + the first run's id, while the first command keeps running unaffected
+- [ ] 6.7 BDD: after a repo's in-flight run reaches a terminal state, a new request for that repo is accepted
+
+## 7. Cancellation API
+
+- [ ] 7.1 Assign a run id when a run's repo lock is acquired; return it via `X-Run-Id` response header before the SSE body begins
+- [ ] 7.2 Add authenticated `POST /run/{runId}/cancel` endpoint
+- [ ] 7.3 On cancel: look up run id in the registry; if active, call `Process.Kill(entireProcessTree: true)` (same mechanism as the timeout path)
+- [ ] 7.4 Ensure a killed-by-cancel run's SSE stream emits a terminal `error` event with reason `cancelled` (not `done`, not `timeout`) and the registry entry is removed
+- [ ] 7.5 Cancel request for an unknown or already-terminal run id returns 404 and has no side effects
+- [ ] 7.6 BDD: cancel an in-flight run against the hanging-test fixture; confirm process is killed, stream ends with reason `cancelled`, repo lock is released, and a subsequent request for that repo succeeds
+- [ ] 7.7 Unit/BDD: cancelling twice, or cancelling after natural completion, returns 404 on the redundant call without affecting the (already-finished) run
+
+## 8. Persistence (Run History)
+
+- [ ] 8.1 Add EF Core + SQLite provider packages; define `Run` entity (`Id`, `RepoPath`, `Arguments`, `StartedAt`, `CompletedAt`, `Outcome`, `ExitCode`, `Stdout`, `Stderr`, `Truncated`) and initial migration
+- [ ] 8.2 Apply pending migrations against the configured SQLite file path at startup
+- [ ] 8.3 Enable WAL journal mode on the SQLite connection
+- [ ] 8.4 Insert a `Run` row with `Outcome = Running` at the same point the in-memory registry entry is created
+- [ ] 8.5 Update the `Run` row's `CompletedAt`/`Outcome`/`ExitCode`/`Stdout`/`Stderr`/`Truncated` at the same point the registry entry is removed (single code path for "run is over")
+- [ ] 8.6 On startup, reconcile any row still `Outcome = Running` from a previous process to `Outcome = Interrupted`
+- [ ] 8.7 Add a query for listing runs most-recent-first (summary fields only) and a query for one run's full record by id
+- [ ] 8.8 Unit test (SQLite `:memory:`): a run's row exists with `Outcome = Running` while in flight, then is updated to its terminal outcome with full output on completion
+- [ ] 8.9 Unit test: persisted stdout/stderr and truncation flag match what was streamed for a truncated run
+- [ ] 8.10 BDD: a run's history record is retrievable after a service restart
+- [ ] 8.11 Unit test: a row left `Running` by a simulated crash is reconciled to `Interrupted` on next startup
+- [ ] 8.12 Define `RunResourceSample` entity (`RunId` FK, `Timestamp`, `CpuPercent`, `RamBytes`) with an index on `(RunId, Timestamp)`, and its migration
+- [ ] 8.13 Add a query returning a run's complete resource-sample series ordered by `Timestamp`, for both in-flight and completed runs
+- [ ] 8.14 BDD: a completed run's full resource-sample series (start to terminal state) is retrievable regardless of run duration
+
+## 9. Dashboard (Blazor Server)
+
+- [ ] 9.1 Add Blazor Server to the existing minimal API project (`AddServerSideBlazor`, root component host page)
+- [ ] 9.2 Implement `IRunEventBus` singleton (run-started / output-line / run-terminal events) published to from the same execution code paths as the registry and the SQLite writes
+- [ ] 9.3 Build login page: operator enters the shared token, validated via the same `CryptographicOperations.FixedTimeEquals` check, issues an auth cookie on success
+- [ ] 9.4 Require the auth cookie on all dashboard routes/circuits; unauthenticated access shows no run data
+- [ ] 9.5 Add a single dark CSS theme; no light-mode stylesheet, no `prefers-color-scheme` branching, no toggle
+- [ ] 9.6 Build top-level navigation with two views: **Status** (default) and **History**
+- [ ] 9.7 Build Status view's run list: in-flight runs (repo, args, run id, start time, elapsed time) from the in-memory registry, subscribed to `IRunEventBus` for live updates via `StateHasChanged`
+- [ ] 9.8 Build "idle" empty-state for the Status view when no runs are in flight
+- [ ] 9.9 Build History view's list: queries `Runs` table most-recent-first with summary fields
+- [ ] 9.10 Build run-detail view: full command, repo, timestamps, outcome, complete stdout/stderr, truncation indicator, by run id
+- [ ] 9.11 BDD: a new run appears in the Status view live, without reload, when started by another client (`service-dashboard.feature`)
+- [ ] 9.12 BDD: a run's completion is reflected live (status updates / moves to history) without reload
+- [ ] 9.13 BDD: History view and run-detail view render correctly for completed, timed-out, cancelled, and interrupted runs
+- [ ] 9.14 Add a `/version` endpoint (or dashboard footer) exposing the running build's assembly version, for upgrade verification
+
+## 10. Host Resource Monitoring
+
+- [ ] 10.1 Implement host CPU sampling via `PerformanceCounter` (`\Processor(_Total)\% Processor Time` and per-core `\Processor(N)\% Processor Time`), discarding each counter's first (always-zero) reading
+- [ ] 10.2 Implement host RAM sampling via `GlobalMemoryStatusEx` P/Invoke (total/available physical memory)
+- [ ] 10.3 Implement service-process RAM via `Process.GetCurrentProcess().WorkingSet64`
+- [ ] 10.4 Implement process-tree discovery: WMI `Win32_Process` query by `ParentProcessId`, recursively rooted at each tracked run's `Process.Id` from the run registry
+- [ ] 10.5 Implement per-process CPU% via delta-sampling `Process.TotalProcessorTime` between ticks, and per-process RAM via `WorkingSet64`
+- [ ] 10.6 Implement a background `PeriodicTimer`-based sampler (configurable interval, default a few seconds) that samples host + per-run-tree data each tick and publishes a snapshot to a new `IResourceEventBus`
+- [ ] 10.7 Implement `IProcessMonitor.KillAsync(pid)`: re-verify `pid` is currently part of a tracked run's process tree (including re-checking `Process.StartTime` to guard against PID reuse) immediately before killing; reject if not found; call `Process.Kill(entireProcessTree: true)` on the verified target
+- [ ] 10.8 Wire the Status view's per-run process sublist to `IResourceEventBus`, grouped under its owning run (not one global flat table), with a kill button per process calling `IProcessMonitor.KillAsync` directly (no new HTTP endpoint)
+- [ ] 10.9 Add host CPU (total + per-core) and RAM (total + service) tiles to the Status view header
+- [ ] 10.10 Unit test: total and per-core CPU figures and total/service RAM figures update on the configured interval (using a fake clock/timer)
+- [ ] 10.11 BDD: a run's spawned children (e.g. a `testhost.exe` under a `dotnet test` run) appear in that run's process sublist with plausible CPU/RAM values (`host-resource-monitoring.feature`)
+- [ ] 10.12 BDD: killing a listed process terminates it and its descendants, and it disappears from the list on the next refresh
+- [ ] 10.13 Unit test: `IProcessMonitor.KillAsync` rejects a PID outside any tracked run's process tree
+- [ ] 10.14 BDD: process list is empty when no runs are in flight, with no stale entries from a previous run
+- [ ] 10.15 Unit test: a run's aggregate CPU%/RAM figure equals the sum of that tick's per-process values across its tree
+- [ ] 10.16 Unit test (SQLite `:memory:`): one `RunResourceSample` row is written per in-flight run per tick, stopping once the run reaches a terminal state
+- [ ] 10.17 Maintain an in-memory 10-minute circular buffer per live series (host total/per-core, each in-flight run) fed by the same tick, independent of the SQLite write
+- [ ] 10.18 Unit test: the circular buffer evicts points older than 10 minutes while the persisted series (from 10.16) keeps every point
+
+## 11. Performance Graphs
+
+- [ ] 11.1 Vendor `chart.js` under `Presentation`'s `wwwroot` (no CDN reference)
+- [ ] 11.2 Build a minimal `IJSRuntime` interop wrapper: create a chart instance, push incremental points (`chart.data.datasets[...].data.push(...); chart.update('none')`), destroy on component dispose
+- [ ] 11.3 Build host CPU/RAM graph components in the Status header, always live, backed by the host in-memory circular buffers
+- [ ] 11.4 Build a per-run CPU/RAM graph component, lazily mounted only when that run's card is expanded, backed by that run's in-memory circular buffer
+- [ ] 11.5 Build a run-detail graph component for the History view, backed by the full `RunResourceSample` series for that run (not windowed)
+- [ ] 11.6 BDD: host graphs render and extend live as new samples arrive, showing at least the trailing 10 minutes
+- [ ] 11.7 BDD: an in-flight run's graph, once expanded, shows that run's own recent usage and continues updating live
+- [ ] 11.8 BDD: a completed run's history detail graph spans its entire recorded duration, including runs longer than 10 minutes
+- [ ] 11.9 Unit test: a run's live chart component is not instantiated (no interop calls, no per-run subscription) while its card is collapsed
+
+## 12. Transport & Network
+
+- [ ] 12.1 Configure Kestrel to require HTTPS on the configured port
+- [ ] 12.2 Document/generate the certificate used (self-signed acceptable for v1) and how the sbx-side client pins/trusts it
+- [ ] 12.3 Document Windows Firewall inbound rule scoping the command-API port to the sbx sandbox's IP, and the dashboard port/path to the operator's network
+- [ ] 12.4 Document required sbx-side client behavior for consuming SSE (e.g. `curl -N`, or HttpClient with `HttpCompletionOption.ResponseHeadersRead`) so responses aren't fully buffered before use
+
+## 13. Packaging & Install/Upgrade
+
+- [ ] 13.1 Configure `Host` for self-contained, single-file, win-x64 publish (`--self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`, trimming disabled); confirm publish targets only `src/Host/BuildAndTestService.Host`, not `Domain`/`Application`/`Infrastructure`/`Presentation` or the test projects individually (those are pulled in transitively as compiled dependencies and composed static web assets, not published as separate outputs)
+- [ ] 13.2 Verify the published exe runs standalone on a clean Windows machine with no .NET runtime installed
+- [ ] 13.3 Define the data directory layout (e.g. `%ProgramData%\BuildAndTestService\`) holding config and the SQLite file, separate from the install directory
+- [ ] 13.4 Write `install.ps1`: create a new dedicated local service account (least-privilege, not local admin); grant it log-on-as-a-service, read/write on the data directory, read/write on the configured repo root, and "Performance Monitor Users" membership; create install + data directories; copy the exe and publish-output files (including `wwwroot`); write initial config (root directory, bearer token, port, default/maximum timeout, output cap, SQLite path); create the Windows Service running as that account; configure SCM crash-recovery via `sc.exe failure`; open the required firewall rule(s); start the service; verify `chart.js` exists at its expected path
+- [ ] 13.5 Write `upgrade.ps1`: stop the service and wait/verify it reaches `Stopped` (abort with a clear error on timeout); copy the new exe and publish-output files over the install directory only; start the service; poll `/version` to confirm the new build is running
+- [ ] 13.6 Document the dedicated service account `install.ps1` creates (not local admin, not a pre-existing/shared account) and exactly what rights it's granted and why
+- [ ] 13.7 Document that the run registry is in-memory only: a restart drops all lock/run-id state (cancel calls for pre-restart run ids will 404; repos locked before restart become immediately available; SQLite rows reconcile to `Interrupted`)
+- [ ] 13.8 Document that the data directory (config + SQLite file) is untouched by `upgrade.ps1` and by reinstall, so history and configuration survive both
+- [ ] 13.9 Document that downgrade is unsupported (migrations are forward-only) and recommend operators copy the SQLite file before upgrading if they want a manual rollback point
+- [ ] 13.10 Manual test: `install.ps1` on a clean host results in a running, reachable, authenticated service with an empty history, working resource monitoring (confirming the Performance Monitor Users grant took effect), and working graphs (confirming `wwwroot`/`chart.js` was copied)
+- [ ] 13.11 Manual test: `upgrade.ps1` from one published build to a newer one preserves configuration and existing history (including resource samples), and `/version` reflects the new build afterward
+- [ ] 13.12 Manual test: killing the service process outright (simulated crash) results in SCM restarting it per the configured recovery actions
+
+## 14. Claude Code Skill
+
+- [ ] 14.1 Create `skills/dotnet-command-service/SKILL.md` with frontmatter (name, description) identifying it as the client guide for calling this service
+- [ ] 14.2 Document authentication: bearer header name/format, where the token value comes from (the sbx-side operator's own configuration, not hardcoded)
+- [ ] 14.3 Document starting a run: `POST /run` request shape (argument list, working directory, optional timeout), reading the `X-Run-Id` response header
+- [ ] 14.4 Document consuming the SSE stream from a Bash-based agent: the `curl -N` / background-process-and-poll pattern, the `stdout`/`stderr`/`done`/`error` event types, and the `error` reasons (`validation`, `timeout`, `cancelled`)
+- [ ] 14.5 Document cancelling a run: `POST /run/{runId}/cancel`, and what a 404 (unknown/already-finished run) means
+- [ ] 14.6 Document error responses relevant to the caller: 401 (missing/invalid credential), 409 (repo busy, with the blocking run's id)
+- [ ] 14.7 Explicitly scope the skill to API consumption only — no dashboard, resource-monitoring, or install/upgrade content, since those aren't for the sbx caller
+- [ ] 14.8 Cross-reference which spec files (`specs/dotnet-command-execution`, `specs/service-authentication`) the skill restates, as a marker for keeping it in sync when the API changes
+- [ ] 14.9 Manual test: have a real Claude Code instance follow only the skill's instructions (no other context) to authenticate, start a run against the passing-test fixture, observe streamed output, and cancel a separate hanging run — confirm it succeeds without needing to read the specs directly
+
+## 15. End-to-End Verification (manual, real deployment)
+
+- [ ] 15.1 From a real remote caller, send an authenticated `dotnet --version` request and confirm round trip
+- [ ] 15.2 Run a real `dotnet build` and `dotnet test` against a sample repo through the service and confirm results match running the same commands locally
+- [ ] 15.3 Confirm unauthenticated and path-escaping requests are rejected end-to-end
+- [ ] 15.4 Confirm parallel commands against two different repos both complete, and confirm a second command against a busy repo is rejected with the busy run's id
+- [ ] 15.5 Confirm cancelling a real in-flight run kills the process, ends the stream as `cancelled`, and frees the repo for a new run
+- [ ] 15.6 Confirm the dashboard, opened in a real browser during a run, shows it live and then shows it correctly in history afterward, including full output
+- [ ] 15.7 Restart the service mid-run and confirm the affected history row shows `Interrupted` while unrelated prior history remains intact
+- [ ] 15.8 Run the full install → use → upgrade sequence end-to-end on a clean host and confirm no manual steps beyond running the two scripts were needed
+- [ ] 15.9 During a real `dotnet test` run, confirm the dashboard shows live CPU/RAM (host and per-run process tree including `testhost.exe`), and confirm killing `testhost.exe` from the dashboard clears the hang without needing to cancel the whole run
+- [ ] 15.10 During and after that same run, confirm its live graph updates while in flight and its full-duration graph is viewable afterward in history
+- [ ] 15.11 Confirm `dotnet build` and `dotnet test` (unit + BDD) both pass on a clean checkout via the .NET 10 SDK CLI alone, with no manual setup beyond `dotnet restore`
+- [ ] 15.12 Confirm a real sbx-side Claude Code instance, using only the skill from §14, successfully drives a full build/test/cancel cycle against a real deployed instance of the service
