@@ -85,13 +85,15 @@ All 13 BehaviorTests scenarios pass in ~14s; 32/32 UnitTests; 5/5 ArchitectureTe
 
 ## 8. Cancellation API
 
-- [ ] 8.1 Assign a run id when a run's repo lock is acquired; return it via `X-Run-Id` response header before the SSE body begins
-- [ ] 8.2 Add authenticated `POST /run/{runId}/cancel` endpoint
-- [ ] 8.3 On cancel: look up run id in the registry; if active, call `Process.Kill(entireProcessTree: true)` (same mechanism as the timeout path)
-- [ ] 8.4 Ensure a killed-by-cancel run's SSE stream emits a terminal `error` event with reason `cancelled` (not `done`, not `timeout`) and the registry entry is removed
-- [ ] 8.5 Cancel request for an unknown or already-terminal run id returns 404 and has no side effects
-- [ ] 8.6 BDD: cancel an in-flight run against the hanging-test fixture; confirm process is killed, stream ends with reason `cancelled`, repo lock is released, and a subsequent request for that repo succeeds
-- [ ] 8.7 Unit/BDD: cancelling twice, or cancelling after natural completion, returns 404 on the redundant call without affecting the (already-finished) run
+- [x] 8.1 Already satisfied by §5/§6: `RunEndpoints` assigns `runId` and calls `response.StartAsync()` right after setting the `X-Run-Id` header, before any validation or the SSE body begins
+- [x] 8.2 Added authenticated `POST /run/{runId:guid}/cancel`, mapped alongside `POST /run` in `MapCommandExecutionEndpoints`
+- [x] 8.3 `RunRegistry` extended with a run-id-keyed index (`ConcurrentDictionary<Guid, RunHandle>`, alongside the existing repo-root index) storing a dedicated `cancelRequestCts` per run; `TryCancel(runId)` calls `.Cancel()` on it, which (linked into the same token passed to `IProcessRunner.RunAsync`) triggers `Process.Kill(entireProcessTree: true)` via the same cancellation-registration mechanism the timeout path already used
+- [x] 8.4 The `cancelRequestCts` is a **separate** linked-token source from `timeoutCts` (both linked into one `linkedCts` alongside `RequestAborted`), so `RunEndpoints` can tell which one fired and emit `error`/`cancelled` vs `error`/`timeout` correctly instead of collapsing both into one reason; the registry entry is removed in the same `finally` block as before
+- [x] 8.5 Cancel for an unknown/already-terminal run id returns `404 Not Found`; `RunRegistry.TryCancel` also catches `ObjectDisposedException` (a benign race if the run's `CancellationTokenSource` gets disposed between lookup and `.Cancel()`) and treats it identically to not-found — no side effects either way
+- [x] 8.6 BDD `Cancellation.feature`: cancelling an in-flight `HangingFixture` run returns 202, its SSE stream ends with `error`/`cancelled`, and a subsequent request against the same repo is accepted (not rejected as busy)
+- [x] 8.7 BDD: cancelling an already-completed run (`PassingFixture`, awaited to completion first) and cancelling an unknown run id both return 404; cancelling the same run twice returns 404 the second time **once the first cancellation has actually completed** (drained via the "stream ends with reason" step) — an earlier version of this scenario fired the second cancel immediately and incorrectly expected 404 while the run was still legitimately in-flight (cancellation requested but not yet terminated); fixed by sequencing the test correctly rather than changing the implementation, since spec.md only requires 404 for unknown-or-already-terminal runs
+
+All 17 BehaviorTests scenarios pass in ~14s; 36/36 UnitTests; 5/5 ArchitectureTests (58/58 total). No orphaned `testhost.exe` after cancel-triggered kills.
 
 ## 9. Persistence (Run History)
 

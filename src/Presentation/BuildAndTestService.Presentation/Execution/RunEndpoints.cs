@@ -16,10 +16,13 @@ namespace BuildAndTestService.Presentation.Execution;
 /// <summary>Maps the command-execution HTTP endpoint(s).</summary>
 public static class RunEndpoints
 {
-    /// <summary>Maps <c>POST /run</c>, requiring a valid bearer credential.</summary>
+    /// <summary>Maps <c>POST /run</c> and <c>POST /run/{runId}/cancel</c>, both requiring a valid bearer credential.</summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/run", HandleStartRunAsync)
+            .AddEndpointFilter<BearerAuthenticationFilter>();
+
+        endpoints.MapPost("/run/{runId:guid}/cancel", HandleCancelRunAsync)
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
         return endpoints;
@@ -62,8 +65,15 @@ public static class RunEndpoints
         }
 
         var repoRoot = resolution.ResolvedPath!;
-        if (!runRegistry.TryAcquire(repoRoot, runId, out var conflictingRunId))
+
+        // Dedicated to explicit caller cancellation only - kept separate from the timeout source
+        // below so that once a cancellation is observed, the code can tell *which* of the two
+        // fired and report the correct SSE error reason instead of collapsing both into one.
+        var cancelRequestCts = new CancellationTokenSource();
+
+        if (!runRegistry.TryAcquire(repoRoot, runId, cancelRequestCts, out var conflictingRunId))
         {
+            cancelRequestCts.Dispose();
             await writer.WriteErrorAsync("validation", httpContext.RequestAborted, conflictingRunId);
             return;
         }
@@ -76,7 +86,8 @@ public static class RunEndpoints
                 TimeSpan.FromSeconds(options.Value.MaximumExecutionTimeoutSeconds));
 
             using var timeoutCts = new CancellationTokenSource(timeout);
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, httpContext.RequestAborted);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                timeoutCts.Token, cancelRequestCts.Token, httpContext.RequestAborted);
 
             var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes);
 
@@ -89,14 +100,27 @@ public static class RunEndpoints
 
                 await writer.WriteDoneAsync(result.ExitCode, sink.Truncated, httpContext.RequestAborted);
             }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                await writer.WriteErrorAsync("timeout", CancellationToken.None);
+                if (cancelRequestCts.IsCancellationRequested)
+                {
+                    await writer.WriteErrorAsync("cancelled", CancellationToken.None);
+                }
+                else if (timeoutCts.IsCancellationRequested)
+                {
+                    await writer.WriteErrorAsync("timeout", CancellationToken.None);
+                }
+
+                // Otherwise the client disconnected (RequestAborted) - nothing left to write to.
             }
         }
         finally
         {
             runRegistry.Release(repoRoot);
+            cancelRequestCts.Dispose();
         }
     }
+
+    private static IResult HandleCancelRunAsync(Guid runId, RunRegistry runRegistry) =>
+        runRegistry.TryCancel(runId) ? Results.Accepted() : Results.NotFound();
 }
