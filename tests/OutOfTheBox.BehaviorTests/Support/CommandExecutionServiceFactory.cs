@@ -12,7 +12,10 @@ namespace OutOfTheBox.BehaviorTests.Support;
 /// a real running instance of the service (real ASP.NET Core pipeline, real `dotnet.exe` child
 /// processes) without a real deployed Windows Service or TCP/TLS listener.
 /// </summary>
-public sealed class CommandExecutionServiceFactory(int defaultExecutionTimeoutSeconds = 600, int maximumExecutionTimeoutSeconds = 3600)
+public sealed class CommandExecutionServiceFactory(
+    int defaultExecutionTimeoutSeconds = 600,
+    int maximumExecutionTimeoutSeconds = 3600,
+    string? rootDirectoryOverride = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>The bearer token configured for this test instance.</summary>
@@ -21,7 +24,12 @@ public sealed class CommandExecutionServiceFactory(int defaultExecutionTimeoutSe
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        var fixturesRoot = FindFixturesRoot();
+        // Most scenarios target the checked-in tests/Fixtures/ repos; git-command-execution
+        // scenarios instead point this at a freshly-generated GitFixture (see GitFixture.cs)
+        // via rootDirectoryOverride, since git commands mutate a working tree and a single
+        // checked-in fixture repo can't stay deterministic across runs the way a read-only
+        // dotnet fixture can.
+        var fixturesRoot = rootDirectoryOverride ?? FindFixturesRoot();
 
         builder.ConfigureAppConfiguration((_, config) =>
         {

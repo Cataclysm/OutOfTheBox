@@ -16,3 +16,13 @@ Feature: Concurrency and Locking
         When that run reaches a terminal state
         And a second authenticated run is started against "HangingFixture" with a 3 second timeout
         Then the second run is accepted
+
+    Scenario: A git run is rejected while a dotnet run is in flight for the same repo
+        Given an in-flight run against "HangingFixture"
+        When a second authenticated git run is started against "HangingFixture"
+        Then the second run is rejected identifying the in-flight run's id
+
+    Scenario: A dotnet run is rejected while a git run is in flight for the same repo
+        Given an in-flight git run against the git fixture
+        When a second authenticated run is started against the git fixture
+        Then the second run is rejected as a repo conflict

@@ -20,7 +20,7 @@ builder.Services
 // one place allowed to reference both Infrastructure and Presentation; neither references the
 // other directly.
 builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
-builder.Services.AddSingleton<IProcessRunner, DotnetProcessRunner>();
+builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 
 // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repo lock
 // would be meaningless (each request would get its own empty registry).

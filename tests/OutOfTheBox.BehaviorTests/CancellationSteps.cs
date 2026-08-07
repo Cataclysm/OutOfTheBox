@@ -20,6 +20,13 @@ public sealed class CancellationSteps : IDisposable
     private HttpResponseMessage? _cancelResponse;
     private Task<SseRunResult>? _secondRunTask;
 
+    // Only populated by the git-specific scenario below - see GitFixture.cs and
+    // ConcurrencyAndLockingSteps for why a git-backed in-flight run needs its own factory/client
+    // and can't rely on its own response headers to discover its run id.
+    private GitFixture? _gitFixture;
+    private CommandExecutionServiceFactory? _gitFactory;
+    private HttpClient? _gitClient;
+
     private CommandExecutionServiceFactory Factory => _factory ??= new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30);
 
     private HttpClient Client => _client ??= Factory.CreateClient();
@@ -52,20 +59,80 @@ public sealed class CancellationSteps : IDisposable
         result.Response.Dispose();
     }
 
+    [Given(@"a cancellable in-flight git run against the git fixture")]
+    public async Task GivenACancellableInFlightGitRunAgainstTheGitFixture()
+    {
+        _gitFixture = await GitFixture.CreateAsync(withBlockingHook: true);
+        _gitFactory = new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30, rootDirectoryOverride: _gitFixture.RootDirectory);
+        _gitClient = _gitFactory.CreateClient();
+
+        // Fire-and-forget, not awaited - see ConcurrencyAndLockingSteps for why this specific
+        // combination (a genuinely-blocked native process tree behind /run/git) can't be relied
+        // on to deliver its own response promptly. The run id is instead discovered below via the
+        // conflict payload of a throwaway probe request, once the lock is confirmed held.
+        var request = new HttpRequestMessage(HttpMethod.Post, "/run/git")
+        {
+            Content = JsonContent.Create(new { arguments = new[] { "commit", "--allow-empty", "-m", "blocked" }, workingDirectory = "GitFixture" }),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
+        _inFlightResponse = null;
+        _ = _gitClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+
+        // Give the fire-and-forget send an initial scheduling opportunity before the first poll -
+        // reduces (does not fully eliminate) an observed occasional delay before the background
+        // request's handler actually starts running.
+        await Task.Delay(50);
+
+        using var pollingClient = _gitFactory.CreateClient();
+        for (var attempt = 0; attempt < 150; attempt++)
+        {
+            var probe = await SseTestClient.PostAndReadAllEventsAsync(
+                pollingClient,
+                "/run",
+                new { arguments = new[] { "--version" }, workingDirectory = "GitFixture" },
+                CommandExecutionServiceFactory.TestBearerToken,
+                streaming: true,
+                CancellationToken.None);
+
+            var rejection = probe.Events.FirstOrDefault(e => e.Name == "error");
+            probe.Response.Dispose();
+
+            if (rejection is not null)
+            {
+                using var payload = JsonDocument.Parse(rejection.Data);
+                if (payload.RootElement.TryGetProperty("runId", out var runIdProperty))
+                {
+                    _runId = runIdProperty.GetGuid();
+                    return;
+                }
+            }
+
+            await Task.Delay(100);
+        }
+
+        throw new InvalidOperationException("The git run's repo lock was never observed as held.");
+    }
+
     [When(@"that run is cancelled")]
     [When(@"that run is cancelled again")]
-    public Task WhenThatRunIsCancelled() => CancelAsync(_runId);
+    public Task WhenThatRunIsCancelled() => CancelAsync(Client, _runId);
+
+    [When(@"that git run is cancelled")]
+    public Task WhenThatGitRunIsCancelled() =>
+        // A fresh client, not _gitClient (which still has the original blocked commit request
+        // pending on it) - see the head-of-line-blocking note in ConcurrencyAndLockingSteps.
+        CancelAsync(_gitFactory!.CreateClient(), _runId);
 
     [When(@"a cancel request is sent for an unknown run id")]
-    public Task WhenACancelRequestIsSentForAnUnknownRunId() => CancelAsync(Guid.NewGuid());
+    public Task WhenACancelRequestIsSentForAnUnknownRunId() => CancelAsync(Client, Guid.NewGuid());
 
-    private async Task CancelAsync(Guid runId)
+    private async Task CancelAsync(HttpClient client, Guid runId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/run/{runId}/cancel");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
 
         _cancelResponse?.Dispose();
-        _cancelResponse = await Client.SendAsync(request, CancellationToken.None);
+        _cancelResponse = await client.SendAsync(request, CancellationToken.None);
     }
 
     [Then(@"the cancel request is accepted")]
@@ -127,6 +194,44 @@ public sealed class CancellationSteps : IDisposable
         Assert.False(conflictRejection, "Expected the repo to be free after cancellation, not still locked.");
     }
 
+    [Then(@"the git fixture repo is accepted for a subsequent run")]
+    public async Task ThenTheGitFixtureRepoIsAcceptedForASubsequentRun()
+    {
+        using var pollingClient = _gitFactory!.CreateClient();
+
+        // Cancel returning 202 means cancellation was *requested*, not that the process tree has
+        // actually finished terminating and RunEndpoints' finally block has released the lock yet
+        // (killing a native git.exe -> sh.exe -> ping.exe tree takes measurably longer than the
+        // managed HangingFixture case the other cancellation scenarios use) - so this polls rather
+        // than asserting on a single attempt.
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            _secondRunTask = SseTestClient.PostAndReadAllEventsAsync(
+                pollingClient,
+                "/run",
+                new { arguments = new[] { "--version" }, workingDirectory = "GitFixture" },
+                CommandExecutionServiceFactory.TestBearerToken,
+                streaming: true,
+                CancellationToken.None);
+
+            var result = await _secondRunTask;
+
+            var conflictRejection = result.Events
+                .Where(e => e.Name == "error")
+                .Select(e => JsonDocument.Parse(e.Data))
+                .Any(payload => payload.RootElement.TryGetProperty("runId", out _));
+
+            if (!conflictRejection)
+            {
+                return;
+            }
+
+            await Task.Delay(100);
+        }
+
+        Assert.Fail("Expected the repo to become free after cancellation, not remain locked.");
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -140,5 +245,8 @@ public sealed class CancellationSteps : IDisposable
 
         _client?.Dispose();
         _factory?.Dispose();
+        _gitClient?.Dispose();
+        _gitFactory?.Dispose();
+        _gitFixture?.Dispose();
     }
 }

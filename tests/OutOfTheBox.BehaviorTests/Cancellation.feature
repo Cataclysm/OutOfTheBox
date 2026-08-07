@@ -25,3 +25,9 @@ Feature: Cancellation API
         And the run's stream ends with reason "cancelled"
         When that run is cancelled again
         Then the cancel request is rejected as not found
+
+    Scenario: Cancelling an in-flight git run kills it and frees the repo
+        Given a cancellable in-flight git run against the git fixture
+        When that git run is cancelled
+        Then the cancel request is accepted
+        And the git fixture repo is accepted for a subsequent run

@@ -7,12 +7,14 @@ using OutOfTheBox.Application.Execution;
 namespace OutOfTheBox.Infrastructure.Execution;
 
 /// <summary>
-/// Runs <c>dotnet.exe</c> via <see cref="Process"/> with <c>UseShellExecute = false</c> and
-/// arguments passed through <see cref="ProcessStartInfo.ArgumentList"/> - each element becomes
-/// one literal argv entry, so the OS never invokes a shell to parse them (no injection via shell
-/// metacharacters, regardless of what a caller's argument string contains).
+/// Runs <see cref="ProcessRunRequest.Executable"/> (<c>dotnet</c> or <c>git</c> - always fixed by
+/// the calling endpoint, never caller-supplied) via <see cref="Process"/> with
+/// <c>UseShellExecute = false</c> and arguments passed through
+/// <see cref="ProcessStartInfo.ArgumentList"/> - each element becomes one literal argv entry, so
+/// the OS never invokes a shell to parse them (no injection via shell metacharacters, regardless
+/// of what a caller's argument string contains).
 /// </summary>
-public sealed class DotnetProcessRunner : IProcessRunner
+public sealed class CliProcessRunner : IProcessRunner
 {
     /// <inheritdoc />
     public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken)
@@ -89,7 +91,7 @@ public sealed class DotnetProcessRunner : IProcessRunner
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = request.Executable,
             WorkingDirectory = request.WorkingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,

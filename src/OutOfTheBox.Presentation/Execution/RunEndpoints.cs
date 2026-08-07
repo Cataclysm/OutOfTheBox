@@ -16,10 +16,22 @@ namespace OutOfTheBox.Presentation.Execution;
 /// <summary>Maps the command-execution HTTP endpoint(s).</summary>
 public static class RunEndpoints
 {
-    /// <summary>Maps <c>POST /run</c> and <c>POST /run/{runId}/cancel</c>, both requiring a valid bearer credential.</summary>
+    /// <summary>
+    /// Maps <c>POST /run</c> (<c>dotnet</c>), <c>POST /run/git</c> (<c>git</c>), and
+    /// <c>POST /run/{runId}/cancel</c> (shared by both), all requiring a valid bearer credential.
+    /// The two run-starting endpoints share every code path except which executable is fixed -
+    /// same request contract, same SSE framing, same <see cref="RunRegistry"/> lock (so a
+    /// <c>dotnet</c> run and a <c>git</c> run against the same repo contend for the same lock,
+    /// bidirectionally), same cancellation plumbing.
+    /// </summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/run", HandleStartRunAsync)
+        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("dotnet", body, workingDirectoryResolver, processRunner, runRegistry, options, httpContext))
+            .AddEndpointFilter<BearerAuthenticationFilter>();
+
+        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IOptions<ServiceOptions> options, HttpContext httpContext) =>
+                HandleStartRunAsync("git", body, workingDirectoryResolver, processRunner, runRegistry, options, httpContext))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
         endpoints.MapPost("/run/{runId:guid}/cancel", HandleCancelRunAsync)
@@ -29,6 +41,7 @@ public static class RunEndpoints
     }
 
     private static async Task HandleStartRunAsync(
+        string executable,
         StartRunRequest body,
         IWorkingDirectoryResolver workingDirectoryResolver,
         IProcessRunner processRunner,
@@ -94,7 +107,7 @@ public static class RunEndpoints
             try
             {
                 var result = await processRunner.RunAsync(
-                    new ProcessRunRequest(body.Arguments, repoRoot),
+                    new ProcessRunRequest(body.Arguments, repoRoot, executable),
                     sink,
                     linkedCts.Token);
 

@@ -55,6 +55,36 @@ public sealed class RunRegistryTests
     }
 
     [Fact]
+    public void TryAcquire_is_shared_bidirectionally_between_dotnet_and_git_runs_against_the_same_repo()
+    {
+        // RunRegistry is keyed purely by resolved repo root - it has no notion of "run kind" at
+        // all, so a dotnet run and a git run contend for exactly the same lock, in both
+        // directions. Per specs/dotnet-command-execution's and specs/git-command-execution's
+        // "shared per-repo lock" scenarios: this requires no code change here, only proof it
+        // already holds - the run id is what distinguishes them, not which endpoint (POST /run vs
+        // POST /run/git) called TryAcquire.
+        var registry = new RunRegistry();
+        var dotnetRunId = Guid.NewGuid();
+        var gitRunId = Guid.NewGuid();
+
+        var dotnetAcquired = registry.TryAcquire(@"C:\repos\repo-a", dotnetRunId, new CancellationTokenSource(), out _);
+        var gitRejected = registry.TryAcquire(@"C:\repos\repo-a", gitRunId, new CancellationTokenSource(), out var conflictingRunId);
+
+        Assert.True(dotnetAcquired);
+        Assert.False(gitRejected);
+        Assert.Equal(dotnetRunId, conflictingRunId);
+
+        registry.Release(@"C:\repos\repo-a");
+
+        var gitAcquired = registry.TryAcquire(@"C:\repos\repo-a", gitRunId, new CancellationTokenSource(), out _);
+        var dotnetRejected = registry.TryAcquire(@"C:\repos\repo-a", Guid.NewGuid(), new CancellationTokenSource(), out var secondConflictingRunId);
+
+        Assert.True(gitAcquired);
+        Assert.False(dotnetRejected);
+        Assert.Equal(gitRunId, secondConflictingRunId);
+    }
+
+    [Fact]
     public async Task TryAcquire_under_concurrent_callers_for_the_same_repo_exactly_one_wins()
     {
         var registry = new RunRegistry();
