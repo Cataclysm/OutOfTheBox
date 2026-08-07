@@ -1,4 +1,4 @@
-using BuildAndTestService.Host;
+using BuildAndTestService.Application.Configuration;
 using Microsoft.Extensions.Hosting.WindowsServices;
 
 var builder = WebApplication.CreateBuilder(args);

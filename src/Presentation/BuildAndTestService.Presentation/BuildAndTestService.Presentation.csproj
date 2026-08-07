@@ -4,16 +4,16 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
-
   <ItemGroup>
-    <SupportedPlatform Include="browser" />
+    <!-- Server-side only (Blazor Server, per design.md) - needs the full ASP.NET Core shared
+         framework for minimal API types (IEndpointFilter, IResult, etc.), not just the
+         browser-safe Components.Web package an RCL gets by default. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.10" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <!-- Microsoft.AspNetCore.Components.Web ships as part of the Microsoft.AspNetCore.App shared
+         framework referenced above, so an explicit PackageReference to it is redundant here. -->
     <ProjectReference Include="..\..\Application\BuildAndTestService.Application\BuildAndTestService.Application.csproj" />
     <ProjectReference Include="..\..\Domain\BuildAndTestService.Domain\BuildAndTestService.Domain.csproj" />
   </ItemGroup>

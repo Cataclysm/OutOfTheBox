@@ -28,12 +28,12 @@
 
 ## 3. Authentication
 
-- [ ] 3.1 Implement middleware/filter requiring a bearer/API-key header on the command-execution and cancellation endpoints
-- [ ] 3.2 Reject missing credential with 401 before any command handling runs
-- [ ] 3.3 Compare provided credential to configured value using `CryptographicOperations.FixedTimeEquals`
-- [ ] 3.4 Read expected credential from configuration, not source code
-- [ ] 3.5 Unit test: constant-time comparison rejects a wrong credential and accepts the correct one
-- [ ] 3.6 BDD: rotate configured credential + restart, confirm old credential is rejected (`service-authentication.feature`)
+- [x] 3.1 Implemented `BearerAuthenticationFilter` (`IEndpointFilter`, in `Presentation`) requiring an `Authorization: Bearer <token>` header — built as a reusable filter, not yet attached to the command-execution/cancellation endpoints since those are built in §5/§7 (`.AddEndpointFilter<BearerAuthenticationFilter>()` happens when those endpoints are mapped)
+- [x] 3.2 Filter returns `Results.Unauthorized()` and short-circuits (never calls `next`) before any handler runs, for both a missing and a wrong credential
+- [x] 3.3 Comparison implemented in `Domain.Authentication.CredentialComparer` via `CryptographicOperations.FixedTimeEquals` — kept in `Domain` since it's pure logic with zero framework dependency, callable from `Presentation`'s filter
+- [x] 3.4 Expected credential read from `ServiceOptions.BearerToken`, bound from configuration in `Host`'s `Program.cs` — **correction**: `ServiceOptions` was relocated from `Host` to `Application.Configuration`, since `Presentation` (which needs it for the filter) cannot depend on `Host` per the architecture rule; `Host` still owns binding the actual `IConfiguration` values into it
+- [x] 3.5 Unit tests in `CredentialComparerTests.cs`: identical/different/different-length/case-sensitivity/missing-provided/empty-expected — 7 cases, all passing
+- [x] 3.6 BDD in `ServiceAuthentication.feature` (4 scenarios: missing/valid/wrong credential + rotation), driving the real filter through `EndpointFilterInvocationContext.Create` (the documented pattern for unit-testing `IEndpointFilter` without a live host) rather than a full `WebApplicationFactory` run, since no endpoint exists yet to attach it to — the literal "does not invoke `dotnet.exe`" claim from spec.md gets additional coverage once §5 wires the real endpoint
 
 ## 4. Path Confinement
 

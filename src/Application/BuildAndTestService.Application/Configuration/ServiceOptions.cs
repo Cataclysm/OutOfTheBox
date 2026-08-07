@@ -1,4 +1,4 @@
-namespace BuildAndTestService.Host;
+namespace BuildAndTestService.Application.Configuration;
 
 /// <summary>
 /// Strongly-typed binding of the <c>BuildAndTestService</c> configuration section, sourced from
