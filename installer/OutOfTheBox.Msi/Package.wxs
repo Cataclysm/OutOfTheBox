@@ -26,6 +26,20 @@
     <WixVariable Id="WixUIBannerBmp" Value="$(var.BrandAssetsPath)banner-493x58.bmp" />
     <WixVariable Id="WixUIDialogBmp" Value="$(var.BrandAssetsPath)dialog-493x312.bmp" />
 
+    <!-- Dark-theme dialog backgrounds, matching the dashboard's own dark palette and body wash
+         (see dashboard.css's :root/body rules) - a native MSI dialog is a real Win32 dialog, so
+         Edit/PushButton/CheckBox controls are OS-drawn and can't be recolored (no MSI table for
+         "edit box background") regardless of what's declared here. What CAN be themed, and is
+         below: each overridden dialog's own background (a full-dialog Bitmap control, replacing
+         the default white dialog face) and its static Text controls (Transparent + a light
+         TextStyle, so they read against the dark bitmap instead of sitting in an opaque white
+         text box). One bitmap per distinct dialog size in play, sized to that dialog's own aspect
+         ratio - Bitmap controls always stretch-to-fit, so a mismatched aspect ratio would visibly
+         distort the glow shape. -->
+    <Binary Id="PanelBmp370x290" SourceFile="$(var.BrandAssetsPath)panel-370x290.bmp" />
+    <Binary Id="PanelBmp370x270" SourceFile="$(var.BrandAssetsPath)panel-370x270.bmp" />
+    <Binary Id="PanelBmp260x85" SourceFile="$(var.BrandAssetsPath)panel-260x85.bmp" />
+
     <!-- Native upgrade sequencing (tasks.md 17.11) - supersedes the old upgrade.ps1's hand-rolled
          stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
          product's files are installed, which is what makes the Windows Service's file replacement
@@ -247,30 +261,49 @@
          written into the service's Environment registry value by ServiceComponent above. Spliced
          into WixUI_Minimal's sequence between the Welcome and Verify-Ready dialogs via overriding
          Publish entries (Order="2", higher than the extension's own default so it wins) - the
-         standard WiX pattern for adding a custom page to a stock dialog set. -->
+         standard WiX pattern for adding a custom page to a stock dialog set.
+
+         Dark theming (see the Binary/comment above): WelcomeDlg/ExitDialog need no changes at all
+         - WixUI_Minimal's own "dialog style" layout already covers ~90% of their area with our
+         WixUIDialogBmp (the same violet/pink logo art used for the bootstrapper icon etc.), which
+         is already dark. ConfigDlg/InvalidConfigDlg are ours outright, themed fully below.
+
+         Every OTHER stock WixUI_Minimal dialog (VerifyReadyDlg, CancelDlg, ProgressDlg, ...) was
+         deliberately left with its default light styling, not by choice but because WiX has no
+         mechanism to override an individual dialog from a referenced extension's dialog set: a
+         genuine attempt to redeclare CancelDlg/ProgressDlg here (same Id, only Bitmap/TextStyle/
+         Transparent added, no behavior changed) failed the build outright with WIX0091 "Duplicate
+         Control/Dialog" - the linker treats a same-Id symbol pulled in from `ui:WixUI`'s
+         referenced wixlib as a hard conflict with a locally-authored one, not an override. Short
+         of hand-authoring the *entire* WixUI_Minimal dialog set from scratch (every dialog, not
+         just the ones worth reskinning) there's no partial-override path here - confirmed by
+         actually trying it and reading the linker error, not assumed. -->
     <UI>
+      <TextStyle Id="OOTB_Title" FaceName="Tahoma" Size="9" Bold="yes" Red="255" Green="255" Blue="255" />
+      <TextStyle Id="OOTB_Body" FaceName="Tahoma" Size="8" Red="230" Green="232" Blue="235" />
+      <TextStyle Id="OOTB_Muted" FaceName="Tahoma" Size="8" Red="154" Green="162" Blue="175" />
+
       <Dialog Id="ConfigDlg" Width="370" Height="290" Title="Configure OutOfTheBox">
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Configure OutOfTheBox v[ProductVersion]" />
+        <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="370" Height="290" TabSkip="no" Text="PanelBmp370x290" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Title}Configure OutOfTheBox v[ProductVersion]" />
         <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
              RegistryValue from a prior install's PersistedSecretsComponent was found during
              AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
              line. -->
-        <Control Id="UpgradeNotice" Type="Text" X="15" Y="21" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
+        <Control Id="UpgradeNotice" Type="Text" X="15" Y="21" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Muted}Upgrading from version [EXISTINGVERSION]"
                  HideCondition="EXISTINGVERSION = &quot;&quot;" ShowCondition="EXISTINGVERSION &lt;&gt; &quot;&quot;" />
         <Control Id="Description" Type="Text" X="15" Y="38" Width="340" Height="20" Transparent="yes" NoPrefix="yes"
-                 Text="These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
-        <Control Id="BannerLine" Type="Line" X="0" Y="62" Width="370" Height="0" />
+                 Text="{\OOTB_Muted}These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
 
-        <Control Id="RepoRootLabel" Type="Text" X="15" Y="73" Width="150" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepoRootLabel" Type="Text" X="15" Y="73" Width="150" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Body}Repository root directory:" />
         <Control Id="RepoRootEdit" Type="Edit" X="15" Y="88" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="113" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="113" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Body}Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
         <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="128" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
-        <Control Id="PortLabel" Type="Text" X="15" Y="153" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
+        <Control Id="PortLabel" Type="Text" X="15" Y="153" Width="150" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Body}Port:" />
         <Control Id="PortEdit" Type="Edit" X="15" Y="168" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
 
-        <Control Id="BottomLine" Type="Line" X="0" Y="254" Width="370" Height="0" />
         <Control Id="Back" Type="PushButton" X="180" Y="263" Width="56" Height="17" Text="Back">
           <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
         </Control>
@@ -292,8 +325,9 @@
       <!-- Minimal message dialog for the Next-button validation above - reuses the same OK-only
            shape as WiX's own stock error dialogs rather than introducing a new visual pattern. -->
       <Dialog Id="InvalidConfigDlg" Width="260" Height="85" Title="Configure OutOfTheBox">
-        <Control Id="Text" Type="Text" X="10" Y="10" Width="240" Height="40" NoPrefix="yes"
-                 Text="Repository root directory, bearer token, and port are all required." />
+        <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="260" Height="85" TabSkip="no" Text="PanelBmp260x85" />
+        <Control Id="Text" Type="Text" X="10" Y="10" Width="240" Height="40" Transparent="yes" NoPrefix="yes"
+                 Text="{\OOTB_Body}Repository root directory, bearer token, and port are all required." />
         <Control Id="OK" Type="PushButton" X="95" Y="55" Width="56" Height="17" Text="OK">
           <Publish Event="EndDialog" Value="Return" Order="1" />
         </Control>
