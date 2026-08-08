@@ -292,16 +292,37 @@
          WixUIDialogBmp (the same violet/pink logo art used for the bootstrapper icon etc.), which
          is already dark. ConfigDlg/InvalidConfigDlg are ours outright, themed fully below.
 
-         Every OTHER stock WixUI_Minimal dialog (VerifyReadyDlg, CancelDlg, ProgressDlg, ...) was
-         deliberately left with its default light styling, not by choice but because WiX has no
-         mechanism to override an individual dialog from a referenced extension's dialog set: a
-         genuine attempt to redeclare CancelDlg/ProgressDlg here (same Id, only Bitmap/TextStyle/
-         Transparent added, no behavior changed) failed the build outright with WIX0091 "Duplicate
-         Control/Dialog" - the linker treats a same-Id symbol pulled in from `ui:WixUI`'s
-         referenced wixlib as a hard conflict with a locally-authored one, not an override. Short
-         of hand-authoring the *entire* WixUI_Minimal dialog set from scratch (every dialog, not
-         just the ones worth reskinning) there's no partial-override path here - confirmed by
-         actually trying it and reading the linker error, not assumed. -->
+         Every OTHER stock WixUI_Minimal dialog (CancelDlg, ProgressDlg, ...) was deliberately left
+         with its default light styling, not by choice but because WiX has no mechanism to override
+         an individual dialog from a referenced extension's dialog set: a genuine attempt to
+         redeclare CancelDlg/ProgressDlg here (same Id, only Bitmap/TextStyle/Transparent added, no
+         behavior changed) failed the build outright with WIX0091 "Duplicate Control/Dialog" - the
+         linker treats a same-Id symbol pulled in from `ui:WixUI`'s referenced wixlib as a hard
+         conflict with a locally-authored one, not an override; a later attempt at a lighter-weight
+         per-control override (a standalone top-level `<ControlCondition>`, mirroring the
+         `<Publish Dialog="..." Control="...">` pattern this file already uses to hook into
+         WelcomeDlg/VerifyReadyDlg's own Next/Back buttons without redeclaring them) failed too,
+         with WIX0005 "unexpected child element" - `<UI>` only accepts a standalone `<Publish>`,
+         not a standalone `<ControlCondition>`. Both confirmed by actually trying them and reading
+         the linker error, not assumed.
+
+         VerifyReadyDlg (the "Ready to install..." confirmation screen) is the one exception - it's
+         reached on every single install, unlike Cancel/Progress which are edge cases, so once the
+         combination of `banner-493x58.bmp`'s dark branding (17.9b) and this dialog's own default
+         black title text (sitting directly on top of the banner, unreadably) was found on a real
+         install, hand-authoring a full replacement was worth the extra risk this section's own
+         reasoning above weighs against for the other stock dialogs. `VerifyReadyThemedDlg` below is
+         a full copy of stock VerifyReadyDlg's actual compiled behavior (extracted via `wix msi
+         decompile` against this project's own build, not reconstructed from memory - the five
+         install/change/repair/remove/update states each have their own disk-space-exhaustion
+         sub-branches that would be easy to get subtly wrong by hand) under a new Id, themed the
+         same way ConfigDlg/InvalidConfigDlg are (full-dialog Background Bitmap, `{\OOTB_Title}`/
+         `{\OOTB_Body}` styled Transparent text, no Banner/Line controls - WiX has no mechanism to
+         recolor a `Line` control either, same reasoning as those two dialogs already established).
+         Native PushButtons (Install/Change/Repair/Remove/Update/Back/Cancel) are left exactly as
+         stock renders them, per the same "dark chrome, light inputs" scope decision. Reuses
+         `panel-370x270.bmp` - already generated for this exact 370x270 dialog size back when this
+         dialog's theming was first attempted and abandoned, left unreferenced ever since. -->
     <UI>
       <TextStyle Id="OOTB_Title" FaceName="Tahoma" Size="9" Bold="yes" Red="255" Green="255" Blue="255" />
       <TextStyle Id="OOTB_Body" FaceName="Tahoma" Size="8" Red="230" Green="232" Blue="235" />
@@ -339,7 +360,7 @@
                genuinely invalid one, and duplicating full numeric-range validation here isn't
                worth the extra dialog complexity for a v1 config page. -->
           <Publish Event="SpawnDialog" Value="InvalidConfigDlg" Order="1" Condition="REPOROOTDIR = &quot;&quot; OR BEARERTOKEN = &quot;&quot; OR PORTNUMBER = &quot;&quot;" />
-          <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="2" Condition="REPOROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
+          <Publish Event="NewDialog" Value="VerifyReadyThemedDlg" Order="2" Condition="REPOROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="304" Y="263" Width="56" Height="17" Cancel="yes" Text="Cancel">
           <Publish Event="SpawnDialog" Value="CancelDlg" Order="1" />
@@ -357,8 +378,118 @@
         </Control>
       </Dialog>
 
+      <!-- Full replacement for stock VerifyReadyDlg (see the comment above this <UI> block for why
+           this one dialog gets the full-rewrite treatment the others don't) - every Control/Publish
+           below is copied from `wix msi decompile` output against this project's own compiled MSI,
+           i.e. the actual current stock behavior including the two <Publish Dialog="..."> overrides
+           this file used to add externally, now folded directly into this dialog's own Back control
+           instead (no longer needed as external overrides once this dialog is fully owned). Only
+           the Background control, the *Title/*Text controls' styling (added Transparent="yes" +
+           {\OOTB_*} style prefix), and the dropped Banner/Line controls differ from stock. -->
+      <Dialog Id="VerifyReadyThemedDlg" X="50" Y="50" Width="370" Height="270" TrackDiskSpace="yes" Title="[ProductName] Setup">
+        <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="370" Height="270" TabSkip="no" Text="PanelBmp370x270" />
+
+        <Control Id="Install" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Install" Disabled="yes" Hidden="yes" ElevationShield="yes" ShowCondition="NOT Installed AND ALLUSERS" EnableCondition="NOT Installed" DefaultCondition="NOT Installed" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="InstallNoShield" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Install" Disabled="yes" Hidden="yes" ShowCondition="NOT Installed AND NOT ALLUSERS" EnableCondition="NOT Installed" DefaultCondition="NOT Installed" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="Change" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Change" Disabled="yes" Hidden="yes" ElevationShield="yes" ShowCondition="WixUI_InstallMode = &quot;Change&quot; AND ALLUSERS AND (ADDLOCAL OR REMOVE)" EnableCondition="WixUI_InstallMode = &quot;Change&quot;" DefaultCondition="WixUI_InstallMode = &quot;Change&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="ChangeNoShield" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Change" Disabled="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Change&quot; AND (NOT ALLUSERS OR (NOT ADDLOCAL AND NOT REMOVE))" EnableCondition="WixUI_InstallMode = &quot;Change&quot;" DefaultCondition="WixUI_InstallMode = &quot;Change&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="Repair" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="Re&amp;pair" Disabled="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" EnableCondition="WixUI_InstallMode = &quot;Repair&quot;" DefaultCondition="WixUI_InstallMode = &quot;Repair&quot;" TabSkip="no" Default="yes">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="ReinstallMode" Value="ecmus" />
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="Reinstall" Value="All" />
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="Remove" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Remove" Disabled="yes" Hidden="yes" ElevationShield="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot; AND ALLUSERS" EnableCondition="WixUI_InstallMode = &quot;Remove&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="Remove" Value="All" />
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="RemoveNoShield" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Remove" Disabled="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot; AND NOT ALLUSERS" EnableCondition="WixUI_InstallMode = &quot;Remove&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="Remove" Value="All" />
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="Update" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Update" Disabled="yes" Hidden="yes" ElevationShield="yes" ShowCondition="WixUI_InstallMode = &quot;Update&quot; AND ALLUSERS" EnableCondition="WixUI_InstallMode = &quot;Update&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="UpdateNoShield" Type="PushButton" X="212" Y="243" Width="80" Height="17" Text="&amp;Update" Disabled="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Update&quot; AND NOT ALLUSERS" EnableCondition="WixUI_InstallMode = &quot;Update&quot;" TabSkip="no">
+          <Publish Condition="OutOfDiskSpace &lt;&gt; 1" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST=&quot;P&quot; OR NOT PROMPTROLLBACKCOST)" Event="SpawnDialog" Value="OutOfRbDiskDlg" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EndDialog" Value="Return" />
+          <Publish Condition="OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST=&quot;D&quot;" Event="EnableRollback" Value="False" />
+          <Publish Condition="(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST=&quot;F&quot;)" Event="SpawnDialog" Value="OutOfDiskDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Text="Cancel" TabSkip="no" Cancel="yes">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <Control Id="Back" Type="PushButton" X="156" Y="243" Width="56" Height="17" Text="&amp;Back" DefaultCondition="WixUI_InstallMode = &quot;Remove&quot;" TabSkip="no">
+          <Publish Event="NewDialog" Value="MaintenanceTypeDlg" />
+          <Publish Condition="NOT Installed" Event="NewDialog" Value="ConfigDlg" />
+          <Publish Condition="Installed AND PATCH" Event="NewDialog" Value="WelcomeDlg" />
+        </Control>
+        <Control Id="InstallTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Text="{\OOTB_Title}Ready to install [ProductName]" Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="NOT Installed" TabSkip="yes" />
+        <Control Id="InstallText" Type="Text" X="25" Y="70" Width="320" Height="80" Text="{\OOTB_Body}Click Install to begin the installation. Click Back to review or change any of your installation settings. Click Cancel to exit the wizard." Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="NOT Installed" TabSkip="yes" />
+        <Control Id="ChangeTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Text="{\OOTB_Title}Ready to change [ProductName]" Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Change&quot;" TabSkip="yes" />
+        <Control Id="ChangeText" Type="Text" X="25" Y="70" Width="320" Height="80" Text="{\OOTB_Body}Click Change to begin the installation. Click Back to review or change any of your installation settings. Click Cancel to exit the wizard." Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Change&quot;" TabSkip="yes" />
+        <Control Id="RepairTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Text="{\OOTB_Title}Ready to repair [ProductName]" Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" TabSkip="yes" />
+        <Control Id="RepairText" Type="Text" X="25" Y="70" Width="320" Height="80" Text="{\OOTB_Body}Click Repair to repair the installation of [ProductName]. Click Back to review or change any of your installation settings. Click Cancel to exit the wizard." Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" TabSkip="yes" />
+        <Control Id="RemoveTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Text="{\OOTB_Title}Ready to remove [ProductName]" Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" TabSkip="yes" />
+        <Control Id="RemoveText" Type="Text" X="25" Y="70" Width="320" Height="80" Text="{\OOTB_Body}Click Remove to remove [ProductName] from your computer. Click Back to review or change any of your installation settings. Click Cancel to exit the wizard." Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" TabSkip="yes" />
+        <Control Id="UpdateTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Text="{\OOTB_Title}Ready to update [ProductName]" Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Update&quot;" TabSkip="yes" />
+        <Control Id="UpdateText" Type="Text" X="25" Y="70" Width="320" Height="80" Text="{\OOTB_Body}Click Update to update [ProductName] from your computer. Click Back to review or change any of your installation settings. Click Cancel to exit the wizard." Hidden="yes" Transparent="yes" NoPrefix="yes" ShowCondition="WixUI_InstallMode = &quot;Update&quot;" TabSkip="yes" />
+      </Dialog>
+
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
+
+      <!-- Every other reachable path into stock VerifyReadyDlg also needs retargeting to
+           VerifyReadyThemedDlg, not just ConfigDlg.Next above - confirmed by querying the compiled
+           ControlEvent table for every remaining "NewDialog -> VerifyReadyDlg" row rather than
+           assuming ConfigDlg's own Next button was the only entry point: WelcomeDlg's patch-install
+           case (never actually exercised by this project - no .msp is authored - but closed anyway
+           for correctness), and MaintenanceTypeDlg's Repair/Remove buttons, which very much are a
+           real path (Programs and Features repair/uninstall). Order="10" is deliberately far above
+           any native or already-authored value on these same Dialog/Control pairs, so there's no
+           ambiguity about which one wins. -->
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyThemedDlg" Order="10" Condition="Installed AND PATCH" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyThemedDlg" Order="10" Condition="1" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyThemedDlg" Order="10" Condition="1" />
     </UI>
 
   </Package>
