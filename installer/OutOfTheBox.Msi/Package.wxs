@@ -248,11 +248,26 @@
                        Remove="uninstall"
                        Wait="yes" />
 
+      <!-- OutOfTheBox__SqliteFilePath was missing here entirely - a real gap found only once an
+           actual installed service started for the first time and crashed outright: the bundled
+           default appsettings.json ships SqliteFilePath="" (deliberately, so a WebApplicationFactory
+           test's in-memory config override isn't shadowed by a bundled default - see the
+           AddDbContext comment in Program.cs), and since the installer never wrote a data-directory
+           appsettings.json (it writes environment variables instead, per the property comment
+           above) nor set this specific variable, every real install has been running with an empty
+           SqliteFilePath the entire time. An empty SQLite "Data Source" opens a fresh anonymous
+           private database per connection rather than one shared file - migrations succeeded on one
+           such connection during startup, then ReconcileInterruptedAsync's own query opened a
+           different one with no migrated schema at all, crashing with "SQLite Error 1: 'no such
+           table: Runs'" (a real crash log from Event Viewer, not a hypothetical). Fixed by pointing
+           it at outofthebox.db inside the data directory - the exact filename INSTALL.md's own
+           upgrade-rollback guidance already assumed existed, even though nothing ever actually
+           created it there before now. -->
       <RegistryValue Root="HKLM"
                       Key="SYSTEM\CurrentControlSet\Services\OutOfTheBox"
                       Name="Environment"
                       Type="multiString"
-                      Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]&#x9;OutOfTheBox__RootDirectory=[REPOROOTDIR]&#x9;OutOfTheBox__BearerToken=[BEARERTOKEN]&#x9;Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
+                      Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]&#x9;OutOfTheBox__RootDirectory=[REPOROOTDIR]&#x9;OutOfTheBox__BearerToken=[BEARERTOKEN]&#x9;OutOfTheBox__SqliteFilePath=[DATADIRFOLDER]outofthebox.db&#x9;Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
     </Component>
 
     <!-- Firewall rule (tasks.md 17.8) - scoped by port only here (the installer doesn't know the
