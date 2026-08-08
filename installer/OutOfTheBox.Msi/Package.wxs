@@ -39,8 +39,16 @@
     <!-- Native upgrade sequencing (tasks.md 17.11) - supersedes the old upgrade.ps1's hand-rolled
          stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
          product's files are installed, which is what makes the Windows Service's file replacement
-         safe around the service still (briefly) running the old binary. -->
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+         safe around the service still (briefly) running the old binary.
+         AllowSameVersionUpgrades="yes" (WiX default is "no"): without it, re-running the installer
+         at an unchanged ProductVersion isn't recognized as an upgrade at all - the Upgrade table's
+         version range excludes an exact match, so RemoveExistingProducts never fires and the old
+         product just sits there, found on real-machine use (this project's Version has stayed
+         1.0.0 through many rebuilds). Note this only fixes upgrade *recognition* - a component's
+         file is still only overwritten if its own file-version resource is newer than what's on
+         disk, a separate MSI mechanism this flag doesn't touch; a same-ProductVersion reinstall
+         still won't replace unchanged-FileVersion binaries, only a real version bump does that. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
     <!-- Defense in depth (tasks.md 17.10): the Burn bootstrapper is expected to have already
          guaranteed git is present before this MSI ever runs, but the MSI can be invoked directly,
