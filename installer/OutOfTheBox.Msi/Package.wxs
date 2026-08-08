@@ -93,6 +93,14 @@
     <Property Id="EXISTINGSERVICEACCOUNTPASSWORD" Secure="yes">
       <RegistrySearch Id="ExistingServiceAccountPasswordSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="raw" />
     </Property>
+    <!-- Protects the self-signed HTTPS certificate ResolveSecrets generates (CertificateGenerator)
+         - same generate-once-then-preserve reasoning as the two secrets above, since the PFX file
+         itself is also never regenerated once it exists (see ResolveSecrets.cs), so the password
+         that can actually open it has to be preserved just as durably. -->
+    <Property Id="CERTPASSWORD" Hidden="yes" Secure="yes" />
+    <Property Id="EXISTINGCERTPASSWORD" Secure="yes">
+      <RegistrySearch Id="ExistingCertPasswordSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="CertificatePassword" Type="raw" />
+    </Property>
 
     <!-- The version a prior install left behind, if any - same RegistrySearch-during-AppSearch
          mechanism as the two secrets above, used by ConfigDlg to show "upgrading from vX.Y.Z"
@@ -142,6 +150,7 @@
     <Component Id="PersistedSecretsComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a05">
       <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="BearerToken" Type="string" Value="[BEARERTOKEN]" KeyPath="yes" />
       <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="string" Value="[SERVICEACCOUNTPASSWORD]" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="CertificatePassword" Type="string" Value="[CERTPASSWORD]" />
       <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="Version" Type="string" Value="[ProductVersion]" />
     </Component>
 
@@ -259,6 +268,12 @@
         <MultiString Value="OutOfTheBox__BearerToken=[BEARERTOKEN]" />
         <MultiString Value="OutOfTheBox__SqliteFilePath=[DATADIRFOLDER]outofthebox.db" />
         <MultiString Value="Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
+        <!-- ResolveSecrets (installer/OutOfTheBox.Msi.CustomActions) generates this PFX and writes
+             it to the data directory if it doesn't already exist - previously nothing configured a
+             certificate at all, and the service crashed on every install with "No server
+             certificate was specified" the moment it tried to start Kestrel's HTTPS endpoint. -->
+        <MultiString Value="Kestrel__Endpoints__Https__Certificate__Path=[DATADIRFOLDER]outofthebox.pfx" />
+        <MultiString Value="Kestrel__Endpoints__Https__Certificate__Password=[CERTPASSWORD]" />
       </RegistryValue>
     </Component>
 

@@ -33,8 +33,21 @@ run this service over plain HTTP.
 ### Certificate
 
 A private/self-signed certificate is sufficient for v1: both the Out of the Box host and the sbx
-sandbox caller are under the same operator's control, not exposed to the public internet. Generate
-one and bind it to Kestrel via the standard ASP.NET Core configuration shape, e.g.:
+sandbox caller are under the same operator's control, not exposed to the public internet.
+
+**The [production install](#production-install) below generates and configures this
+automatically** — the installer's own `ResolveSecrets` custom action creates a self-signed
+certificate (covering the machine's hostname, `localhost`, and its local IPv4 addresses) the first
+time it installs, writes it to `%ProgramData%\OutOfTheBox\outofthebox.pfx`, and points Kestrel at
+it via the same environment-variable mechanism used for every other setting — no manual step
+required, and an upgrade never regenerates or invalidates an already-issued certificate (the same
+generate-once-then-preserve reasoning already applied to the bearer token and service account
+password). This was not always true: an earlier real install crashed outright on startup ("No
+server certificate was specified") because nothing configured a certificate at all — that gap is
+what this automation closes.
+
+For the [development run](#today-development-run) above (`dotnet run`, no installer involved),
+generate one yourself and bind it via the standard ASP.NET Core configuration shape:
 
 ```
 dotnet dev-certs https -ep C:\ProgramData\OutOfTheBox\outofthebox.pfx -p <password>
@@ -56,6 +69,11 @@ point Kestrel at it:
   }
 }
 ```
+
+This is also how to supply your own certificate instead of the installer-generated one for a
+production install: replace `%ProgramData%\OutOfTheBox\outofthebox.pfx` with your own file before
+first install (the installer never overwrites an existing one), or update the service's own
+`Kestrel__Endpoints__Https__Certificate__*` environment variables afterward and restart it.
 
 Because the certificate isn't from a publicly trusted CA, the sbx-side caller must pin/trust it
 explicitly rather than relying on the OS/CA trust store — e.g. for `curl`, pass `--cacert
@@ -210,8 +228,8 @@ This:
   somehow still missing even after the bootstrapper's own check (e.g. the MSI was run directly,
   bypassing the bootstrapper).
 
-Certificate binding for Kestrel HTTPS is not yet wired into the installer — see
-[Network & transport](#network--transport) above for generating one manually in the meantime.
+Certificate binding for Kestrel HTTPS is generated and wired up automatically — see
+[Network & transport](#network--transport) above for how, and how to supply your own instead.
 
 ### 4. Upgrade / uninstall
 
