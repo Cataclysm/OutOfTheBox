@@ -334,7 +334,7 @@
         <Control Id="RepoRootLabel" Type="Text" X="15" Y="112" Width="340" Height="15" NoPrefix="yes" Text="Repository root directory:" />
         <Control Id="RepoRootEdit" Type="Edit" X="15" Y="127" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="152" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="152" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (auth credential for the sbx caller) - random by default, editable:" />
         <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="167" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
         <Control Id="PortLabel" Type="Text" X="15" Y="192" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
