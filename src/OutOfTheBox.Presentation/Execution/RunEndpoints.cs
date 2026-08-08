@@ -164,7 +164,7 @@ public static class RunEndpoints
                     run.Outcome = RunOutcome.Cancelled;
                 }
             }
-            catch (IOException)
+            catch (IOException ex)
             {
                 // A hard connection reset (the caller's process died, or the network reset without
                 // a clean close) surfaces here as IOException/ConnectionResetException, NOT
@@ -177,23 +177,28 @@ public static class RunEndpoints
                 // but run.Outcome was never updated, leaving the row parked at Running forever
                 // regardless of any configured timeout. Recorded the same way an ordinary disconnect
                 // is - the distinction between "clean abort" and "hard reset" isn't meaningful to an
-                // operator looking at run history.
+                // operator looking at run history, but the message is still captured into Stderr
+                // (appended after any already-captured process output) in case it helps explain an
+                // otherwise-surprising cancellation.
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Stdout = sink.Stdout;
-                run.Stderr = sink.Stderr;
+                run.Stderr = AppendDetail(sink.Stderr, ex.Message);
                 run.Truncated = sink.Truncated;
                 run.Outcome = RunOutcome.Cancelled;
             }
-            catch (Win32Exception)
+            catch (Win32Exception ex)
             {
                 // The executable failing to even start (missing/corrupted dotnet or git) - same
                 // class of "operation attempted but failed outside caller control" the other
                 // catches above handle for connection/cancellation reasons. Without this, the
                 // exception would propagate out of this handler entirely, past the UpdateAsync
-                // call below, leaving the run parked at Running forever.
+                // call below, leaving the run parked at Running forever. The message (e.g. "The
+                // system cannot find the file specified") is captured into Stderr and sent as the
+                // SSE error event's detail, so an operator/caller sees why, not just that it failed.
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Failed;
-                await writer.WriteErrorAsync("failed", CancellationToken.None);
+                run.Stderr = ex.Message;
+                await writer.WriteErrorAsync("failed", CancellationToken.None, detail: ex.Message);
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
@@ -205,6 +210,10 @@ public static class RunEndpoints
             cancelRequestCts.Dispose();
         }
     }
+
+    /// <summary>Appends an exception's message to already-captured process output, on its own line, so neither is lost.</summary>
+    private static string AppendDetail(string existing, string detail) =>
+        string.IsNullOrEmpty(existing) ? detail : existing + Environment.NewLine + detail;
 
     /// <summary>
     /// Per specs/repository-management's "The REST cancel endpoint does not affect

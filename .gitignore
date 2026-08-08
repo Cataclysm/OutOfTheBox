@@ -44,6 +44,7 @@ secrets.json
 *.pfx
 *.pem
 *.key
+token.txt
 
 # Runtime data (SQLite db is generated at runtime, never checked in)
 *.db

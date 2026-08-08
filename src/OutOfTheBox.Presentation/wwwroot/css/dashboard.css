@@ -567,7 +567,12 @@ input[type="checkbox"] {
 .history-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
+    /* Centered, not flex-end: filter groups mix wildly different heights (a stacked
+       label+text-input, a single-row checkbox label, the multi-checkbox Kind fieldset, a bare
+       button) - bottom-aligning them left the short ones (checkboxes) visibly floating below the
+       taller ones' actual controls instead of lining up against them. Centering keeps every
+       group's own control vertically centered on a shared line regardless of its own height. */
+    align-items: center;
     gap: 1.25rem;
     margin-bottom: 1.25rem;
     padding: 1rem 1.25rem;
@@ -664,6 +669,13 @@ input[type="checkbox"] {
 
 .run-output::-webkit-scrollbar-thumb:hover {
     background: var(--border-strong);
+}
+
+/* A captured exception message (repository deletion, a failed clone/transfer) - same monospace
+   block as stdout/stderr, with a red accent so it reads as an error rather than ordinary output. */
+.error-detail {
+    border-color: var(--danger);
+    color: #ffb3b3;
 }
 
 .back-link {

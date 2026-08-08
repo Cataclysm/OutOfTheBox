@@ -61,6 +61,11 @@ else
         <h2>Stderr</h2>
         <pre class="run-output">@_run.Stderr</pre>
     }
+    else if (!string.IsNullOrEmpty(_run.Stderr))
+    {
+        <h2>Error</h2>
+        <pre class="run-output error-detail">@_run.Stderr</pre>
+    }
 }
 
 @code {

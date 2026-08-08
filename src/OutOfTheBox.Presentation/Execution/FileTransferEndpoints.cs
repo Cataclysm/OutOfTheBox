@@ -126,13 +126,17 @@ public static class FileTransferEndpoints
                 // another process, or a permission/read-only problem. Deliberately a separate try
                 // from the copy below: this is a distinct failure (never even started, not a
                 // connection dying mid-transfer) and headers haven't been sent yet at this point,
-                // so a real status code can still be returned rather than just ending the
-                // connection the way the copy-phase catches below do.
+                // so a real status code (with a JSON body carrying the reason, matching every other
+                // endpoint's error-body convention) can still be returned rather than just ending
+                // the connection the way the copy-phase catches below do. The message is also
+                // captured into Stderr so the dashboard's run-detail view can show it.
                 response.StatusCode = StatusCodes.Status500InternalServerError;
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Failed;
+                run.Stderr = ex.Message;
                 await runRepository.UpdateAsync(run, CancellationToken.None);
                 runEventBus.Publish(new RunEvent(runId, RunKind.FileTransfer, RunEventType.Terminal, repositoryRoot));
+                await response.WriteAsJsonAsync(new { reason = "failed", detail = ex.Message });
                 return;
             }
 
@@ -159,15 +163,17 @@ public static class FileTransferEndpoints
                     run.CompletedAt = DateTimeOffset.UtcNow;
                     run.Outcome = timeoutCts.IsCancellationRequested ? RunOutcome.TimedOut : RunOutcome.Cancelled;
                 }
-                catch (IOException)
+                catch (IOException ex)
                 {
                     // A hard connection reset surfaces as IOException/ConnectionResetException, not
                     // OperationCanceledException - see the matching catch in RunEndpoints.cs for the
                     // full explanation (found on real-machine use: this exception type was escaping
                     // uncaught, leaving the run parked at Running even after the timeout fix above
-                    // narrowed the window it could happen in).
+                    // narrowed the window it could happen in). Message captured into Stderr for the
+                    // same reason RunEndpoints' matching catch does.
                     run.CompletedAt = DateTimeOffset.UtcNow;
                     run.Outcome = RunOutcome.Cancelled;
+                    run.Stderr = ex.Message;
                 }
 
                 await runRepository.UpdateAsync(run, CancellationToken.None);

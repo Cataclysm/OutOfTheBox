@@ -180,18 +180,29 @@ public sealed class RepositoryManager(
 
         try
         {
+            // Directory.Delete(recursive: true) throws UnauthorizedAccessException on Windows for
+            // any read-only file in the tree instead of just deleting it - a real, common case for
+            // a git checkout (git itself sometimes leaves pack/object files read-only), found on
+            // real-machine use: deletion kept failing (silently, before the catch below existed)
+            // even though nothing else held the directory open. Clearing the attribute first is the
+            // standard workaround; a genuinely locked file (open elsewhere) still fails below, now
+            // with the actual reason captured instead of just a bare "it failed."
+            ClearReadOnlyAttributes(targetPath);
             Directory.Delete(targetPath, recursive: true);
             run.Outcome = RunOutcome.Completed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // A locked file (still open in another process) or a permission/read-only-attribute
-            // problem - found on real-machine use: without this catch, Directory.Delete's
-            // exception propagated straight out of this method (only a `finally` existed, no
-            // `catch`), which still ran and set CompletedAt but never reached the line above that
-            // sets Outcome, leaving the persisted row in the contradictory Running-but-completed
-            // state that surfaced the bug - and nothing was actually deleted, silently.
+            // A locked file (still open in another process) or a permission problem the read-only
+            // clear above didn't cover - found on real-machine use: without this catch,
+            // Directory.Delete's exception propagated straight out of this method (only a `finally`
+            // existed, no `catch`), which still ran and set CompletedAt but never reached the line
+            // above that sets Outcome, leaving the persisted row in the contradictory
+            // Running-but-completed state that surfaced the bug - and nothing was actually deleted,
+            // silently. The exception's own message is captured into Stderr so an operator can see
+            // *why* it failed, not just that it did.
             run.Outcome = RunOutcome.Failed;
+            run.Stderr = ex.Message;
         }
         finally
         {
@@ -205,6 +216,21 @@ public sealed class RepositoryManager(
         }
 
         return new RepositoryActionResult.Accepted(runId);
+    }
+
+    /// <summary>
+    /// Recursively clears the read-only attribute from every file under <paramref name="path"/> -
+    /// see <see cref="DeleteAsync"/>'s own remarks for why this is necessary before a recursive delete.
+    /// </summary>
+    private static void ClearReadOnlyAttributes(string path)
+    {
+        foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
+        {
+            if (file.Attributes.HasFlag(FileAttributes.ReadOnly))
+            {
+                file.Attributes &= ~FileAttributes.ReadOnly;
+            }
+        }
     }
 
     private async Task RunCloneToCompletionAsync(Run run, string targetPath, string url, CancellationTokenSource cancelRequestCts)
@@ -240,7 +266,7 @@ public sealed class RepositoryManager(
                 run.Truncated = sink.Truncated;
                 run.Outcome = cancelRequestCts.IsCancellationRequested ? RunOutcome.Cancelled : RunOutcome.TimedOut;
             }
-            catch (Win32Exception)
+            catch (Win32Exception ex)
             {
                 // git.exe failing to even start (missing/corrupted) - same class of "operation
                 // attempted but failed outside caller control" as RepositoryManager.DeleteAsync's
@@ -248,9 +274,11 @@ public sealed class RepositoryManager(
                 // propagate out of this background continuation entirely, skipping the
                 // UpdateAsync call below and leaving the run parked at Running forever - this
                 // method has no HTTP response to abort onto, so there's no other signal that
-                // would ever surface the failure.
+                // would ever surface the failure. The message is captured into Stderr the same way
+                // DeleteAsync's catch does, so an operator sees why, not just that it failed.
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Failed;
+                run.Stderr = ex.Message;
             }
 
             // A fresh scope/DbContext, not the caller's - the Blazor circuit that started this

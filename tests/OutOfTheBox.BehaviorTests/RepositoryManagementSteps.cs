@@ -203,7 +203,7 @@ public sealed class RepositoryManagementSteps : IDisposable
         _lockedFile = new FileStream(markerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
 
-    [Then(@"the deletion is accepted but the run records a failed outcome")]
+    [Then(@"the deletion is accepted but the run records a failed outcome with error detail")]
     public async Task ThenTheDeletionIsAcceptedButTheRunRecordsAFailedOutcome()
     {
         var accepted = Assert.IsType<RepositoryActionResult.Accepted>(_deleteResult);
@@ -217,6 +217,22 @@ public sealed class RepositoryManagementSteps : IDisposable
         // exception Directory.Delete threw - a contradictory persisted state (in flight, but with
         // a completion timestamp) that's now impossible since the catch fixes the exact cause.
         Assert.NotNull(run.CompletedAt);
+
+        // The underlying exception's own message, not just a bare "it failed" - what makes the
+        // failure diagnosable from the dashboard instead of requiring host-side log access.
+        Assert.False(string.IsNullOrEmpty(run.Stderr));
+    }
+
+    [Given(@"a file inside that repository is read-only")]
+    public void GivenAFileInsideThatRepositoryIsReadOnly()
+    {
+        var markerPath = Path.Combine(_gitFixture!.RootDirectory, TargetName, "marker.txt");
+
+        // Matches a real git checkout, where git itself sometimes leaves pack/object files
+        // read-only - Directory.Delete(recursive: true) throws UnauthorizedAccessException for a
+        // read-only file instead of just removing it, the exact real-machine bug this scenario
+        // guards against (deletion silently kept failing even though nothing held the file open).
+        File.SetAttributes(markerPath, File.GetAttributes(markerPath) | FileAttributes.ReadOnly);
     }
 
     [Then(@"the repository still exists on disk")]

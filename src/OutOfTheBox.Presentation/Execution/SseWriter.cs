@@ -9,7 +9,8 @@ namespace OutOfTheBox.Presentation.Execution;
 /// Writes Server-Sent Events for the command-execution endpoint's response stream: <c>stdout</c>/
 /// <c>stderr</c> data events per output line, a terminal <c>done</c> event with the exit code and
 /// truncation flag, or a terminal <c>error</c> event with a reason of <c>validation</c>,
-/// <c>timeout</c>, <c>cancelled</c>, or <c>failed</c> (a busy repository also carries the blocking run's id).
+/// <c>timeout</c>, <c>cancelled</c>, or <c>failed</c> (a busy repository also carries the blocking
+/// run's id; a <c>failed</c> reason also carries the underlying exception's message as <c>detail</c>).
 /// </summary>
 public sealed class SseWriter(HttpResponse response)
 {
@@ -31,13 +32,20 @@ public sealed class SseWriter(HttpResponse response)
     /// <summary>
     /// Writes the terminal <c>error</c> event for a run that never produced an exit code.
     /// <paramref name="conflictingRunId"/> is included only for a busy-repository rejection, identifying
-    /// the run already holding that repository's lock.
+    /// the run already holding that repository's lock. <paramref name="detail"/> carries the
+    /// underlying exception's message for a <c>reason</c> of <c>failed</c> - a caller acting on the
+    /// wire contract needs only <c>reason</c>, but <c>detail</c> is what makes the failure
+    /// diagnosable (e.g. distinguishing "not found" from "access denied") instead of just a bare
+    /// "something went wrong."
     /// </summary>
-    public Task WriteErrorAsync(string reason, CancellationToken cancellationToken, Guid? conflictingRunId = null)
+    public Task WriteErrorAsync(string reason, CancellationToken cancellationToken, Guid? conflictingRunId = null, string? detail = null)
     {
-        var payload = conflictingRunId is { } runId
-            ? JsonSerializer.Serialize(new { reason, runId })
-            : JsonSerializer.Serialize(new { reason });
+        var payload = (conflictingRunId, detail) switch
+        {
+            ({ } runId, _) => JsonSerializer.Serialize(new { reason, runId }),
+            (null, { } message) => JsonSerializer.Serialize(new { reason, detail = message }),
+            _ => JsonSerializer.Serialize(new { reason }),
+        };
         return WriteEventAsync("error", payload, cancellationToken);
     }
 

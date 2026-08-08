@@ -22,7 +22,7 @@ public static class RunDisplay
     /// </summary>
     public static string ShortLabel(this RunKind kind) => kind switch
     {
-        RunKind.DotnetCommand => "DotNET",
+        RunKind.DotnetCommand => "Dotnet",
         RunKind.GitCommand => "Git",
         RunKind.FileTransfer => "Transfer",
         RunKind.RepositoryClone => "Clone",
@@ -59,14 +59,22 @@ public static class RunDisplay
     /// <summary>
     /// The kind-specific "what happened" detail for a run - the command line for a
     /// <c>dotnet</c>/<c>git</c> run, the requested path for a transfer, the source URL for a clone.
-    /// Empty for a delete, which has no further detail beyond its repository name.
+    /// Falls back to the captured error message (<see cref="Run.Stderr"/>) when a kind has no detail
+    /// of its own (a delete) and the run failed, so a failure is never a blank cell.
     /// </summary>
-    public static string Detail(Run run) => run.Kind switch
+    public static string Detail(Run run)
     {
-        RunKind.DotnetCommand => run.Arguments is null ? string.Empty : "dotnet " + string.Join(' ', run.Arguments),
-        RunKind.GitCommand => run.Arguments is null ? string.Empty : "git " + string.Join(' ', run.Arguments),
-        RunKind.FileTransfer => run.FilePath ?? string.Empty,
-        RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
-        _ => string.Empty,
-    };
+        var kindDetail = run.Kind switch
+        {
+            RunKind.DotnetCommand => run.Arguments is null ? string.Empty : "dotnet " + string.Join(' ', run.Arguments),
+            RunKind.GitCommand => run.Arguments is null ? string.Empty : "git " + string.Join(' ', run.Arguments),
+            RunKind.FileTransfer => run.FilePath ?? string.Empty,
+            RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
+            _ => string.Empty,
+        };
+
+        return kindDetail.Length == 0 && run.Outcome == RunOutcome.Failed && !string.IsNullOrEmpty(run.Stderr)
+            ? run.Stderr
+            : kindDetail;
+    }
 }

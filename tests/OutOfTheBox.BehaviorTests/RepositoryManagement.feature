@@ -40,8 +40,15 @@ Feature: Repository Management
         Given an idle repository exists
         And a file inside that repository is locked open
         When an operator deletes that repository
-        Then the deletion is accepted but the run records a failed outcome
+        Then the deletion is accepted but the run records a failed outcome with error detail
         And the repository still exists on disk
+
+    Scenario: Deletion succeeds even when a file inside the repository is read-only
+        Given an idle repository exists
+        And a file inside that repository is read-only
+        When an operator deletes that repository
+        Then the repository no longer exists on disk or in the repository list
+        And a history record exists for the deletion with a completed outcome
 
     Scenario: Deletion of a busy repository is rejected
         Given a command run is in flight against a repository
