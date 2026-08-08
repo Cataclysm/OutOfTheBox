@@ -2,6 +2,7 @@
 
 using System.Net;
 using OutOfTheBox.BehaviorTests.Support;
+using OutOfTheBox.Presentation.Dashboard;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Reqnroll;
 
@@ -88,15 +89,26 @@ public sealed class ServiceDashboardSteps : IDisposable
     [When(@"the operator opens the Status view")]
     public async Task WhenTheOperatorOpensTheStatusView() => _response = await GetWithSessionAsync("/");
 
-    [Then(@"the rendered page shows the service name and running version")]
-    public async Task ThenTheRenderedPageShowsTheServiceNameAndRunningVersion()
+    [Then(@"the rendered page shows the service name")]
+    public async Task ThenTheRenderedPageShowsTheServiceName()
     {
         Assert.Equal(HttpStatusCode.OK, _response!.StatusCode);
         var body = await _response.Content.ReadAsStringAsync();
 
         // Blazor Server prerenders the shared layout into the initial HTML response before the
         // SignalR circuit attaches, so the branding element is observable without a real browser.
-        Assert.Contains("Out of the Box v", body, StringComparison.Ordinal);
+        Assert.Contains("Out of the Box", body, StringComparison.Ordinal);
+    }
+
+    [Then(@"the rendered page shows the running version")]
+    public async Task ThenTheRenderedPageShowsTheRunningVersion()
+    {
+        Assert.Equal(HttpStatusCode.OK, _response!.StatusCode);
+        var body = await _response.Content.ReadAsStringAsync();
+
+        // Same prerendering reasoning as the service-name check above - the Status view's "Service"
+        // tile (not the shared header, which no longer repeats the version) is what's observed here.
+        Assert.Contains(VersionInfo.Current, body, StringComparison.Ordinal);
     }
 
     [When(@"an unauthenticated request is made for the running version")]

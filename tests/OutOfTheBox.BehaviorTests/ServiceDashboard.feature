@@ -24,10 +24,15 @@ Feature: Service Dashboard
         When the operator logs out
         Then the dashboard once again redirects to the login page
 
-    Scenario: Version is visible from any view
+    Scenario: Service name is visible from any view
         Given the operator has logged in with the correct token
         When the operator opens the Status view
-        Then the rendered page shows the service name and running version
+        Then the rendered page shows the service name
+
+    Scenario: Running version is visible on the Status view
+        Given the operator has logged in with the correct token
+        When the operator opens the Status view
+        Then the rendered page shows the running version
 
     Scenario: The version endpoint is reachable without a credential
         When an unauthenticated request is made for the running version

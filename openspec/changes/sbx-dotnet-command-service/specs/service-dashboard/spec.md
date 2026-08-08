@@ -4,12 +4,16 @@ Gives a human operator a pleasant, at-a-glance view of what the service is doing
 
 ## ADDED Requirements
 
-### Requirement: Dashboard identifies the running software and its version
-The system SHALL display the service's name and running version on every dashboard view (e.g. in a persistent header or footer), sourced from the same build version `/version` reports.
+### Requirement: Dashboard identifies the running software, and its version on the Status view
+The system SHALL display the service's name on every dashboard view (e.g. in a persistent header or footer). The running version, sourced from the same build version `/version` reports, SHALL be shown once, on the Status view, rather than repeated on every view.
 
-#### Scenario: Version is visible from any view
+#### Scenario: Service name is visible from any view
 - **WHEN** an operator is on any dashboard view
-- **THEN** the service's name and version are visible without navigating elsewhere
+- **THEN** the service's name is visible without navigating elsewhere
+
+#### Scenario: Running version is visible on the Status view
+- **WHEN** an operator is on the Status view
+- **THEN** the running version is visible
 
 ### Requirement: Dashboard shows current in-flight runs of every kind
 The system SHALL provide a human-readable web page listing every currently in-flight run — `dotnet` commands, `git` commands, artifact transfers, and repository clones alike — with its repo, run id, start time, elapsed time, and kind-appropriate detail (arguments for a command run, requested file path for a transfer, source URL for a clone).
