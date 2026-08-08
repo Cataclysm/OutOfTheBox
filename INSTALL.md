@@ -112,7 +112,7 @@ per the same two-level path-confinement policy the working-directory resolution 
 
 ## Production install
 
-Packaged as a WiX Toolset installer: a Burn bootstrapper (`OutOfTheBox_Setup.exe`) that ensures the
+Packaged as a WiX Toolset installer: a Burn bootstrapper (`OutOfTheBoxSetup.exe`) that ensures the
 .NET 10 SDK and Git for Windows are present (installing either one silently if missing, skipping
 the check entirely if already satisfied), then runs the actual MSI.
 
@@ -136,7 +136,7 @@ dotnet build installer/OutOfTheBox.Bootstrapper -c Release
 ```
 
 Produces `installer/OutOfTheBox.Msi/bin/x64/Release/OutOfTheBox.Msi.msi` (~40 MB, cabinet embedded)
-and `installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBox_Setup.exe` (the thing an
+and `installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe` (the thing an
 operator actually runs — the bootstrapper project's own `OutputName` renames it from the project's
 `OutOfTheBox.Bootstrapper` assembly name to this operator-facing one). Both projects are
 deliberately outside `OutOfTheBox.slnx` and outside the repo's Central Package Management
@@ -150,7 +150,7 @@ annual revenue exceeds $10,000.
 
 ### 3. Install
 
-Run `OutOfTheBox_Setup.exe` elevated. The MSI has its own interactive config page (repo root
+Run `OutOfTheBoxSetup.exe` elevated. The MSI has its own interactive config page (repo root
 directory, bearer token, port) verified working when the MSI is run directly
 (`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking it) — inspected via the Windows Installer COM
 API directly (Dialog/ControlEvent tables), not just "the build succeeded". The config page's title
@@ -166,7 +166,7 @@ level UI is built instead), pass the same properties on the bootstrapper's own c
 Burn forwards through to the chained MSI:
 
 ```
-OutOfTheBox_Setup.exe REPOROOTDIR="C:\repos" PORTNUMBER=5443
+OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" PORTNUMBER=5443
 ```
 
 **The bearer token doesn't need to be supplied** — a cryptographically random one is generated
@@ -212,12 +212,12 @@ Certificate binding for Kestrel HTTPS is not yet wired into the installer — se
 
 ### 4. Upgrade / uninstall
 
-Run a newer build's `OutOfTheBox_Setup.exe` — `MajorUpgrade` handles it natively (WiX sequences the
+Run a newer build's `OutOfTheBoxSetup.exe` — `MajorUpgrade` handles it natively (WiX sequences the
 old version's removal and the new version's install around the service's own stop/start), so this
 is the same command as a fresh install, not a separate script. Configuration and history (including
 resource samples, across every run kind) survive, per the data-directory guarantee above.
 
-Uninstall via Programs and Features (or `OutOfTheBox_Setup.exe /uninstall`) removes the installed
+Uninstall via Programs and Features (or `OutOfTheBoxSetup.exe /uninstall`) removes the installed
 files, the Windows Service, and the dedicated service account — but, same as upgrade, never touches
 the data directory. Reinstalling recovers prior history automatically.
 
