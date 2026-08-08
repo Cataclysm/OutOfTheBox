@@ -478,6 +478,27 @@
 
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
 
+      <!-- WixUI_Minimal's real fresh-install entry point is WelcomeEulaDlg (NOT WelcomeDlg, which
+           only fires for a patch install - essentially dead in this project, no .msp is authored) -
+           found only by finally querying the compiled InstallUISequence table directly, something
+           earlier work never actually did (a first query attempt failed on a PowerShell quoting
+           issue and was never retried, so every prior "no license text anywhere in the MSI" check
+           was against WelcomeDlg, the wrong dialog). WelcomeEulaDlg carries WixUI_Minimal's own
+           default placeholder license RTF verbatim ("Lorem ipsum dolor sit amet...") and its own
+           "Install" button - not a "Next" - ends the dialog sequence immediately once the license
+           checkbox is checked, bypassing ConfigDlg entirely regardless of any ControlEvent wiring
+           elsewhere in this file. `<Show Dialog="override X">` (the exact syntax WiX's own
+           WIX7009 error names) suppresses WelcomeEulaDlg outright (Condition="0"); "override
+           WelcomeDlg" hits a second, different conflict (WIX0091 against WixUI_Minimal.wxs's own
+           internal duplicate declaration of that same row) so rather than fight that too, a fresh
+           install now launches straight into ConfigDlg - a genuinely new InstallUISequence entry,
+           not an override, so no symbol conflict - skipping the Welcome text step entirely rather
+           than showing it via an unnecessary intermediate stock dialog. -->
+      <InstallUISequence>
+        <Show Dialog="override WelcomeEulaDlg" Before="ProgressDlg" Condition="0" />
+        <Show Dialog="ConfigDlg" Before="ProgressDlg" Condition="NOT Installed" />
+      </InstallUISequence>
+
       <!-- Every other reachable path into stock VerifyReadyDlg also needs retargeting to
            VerifyReadyThemedDlg, not just ConfigDlg.Next above - confirmed by querying the compiled
            ControlEvent table for every remaining "NewDialog -> VerifyReadyDlg" row rather than
