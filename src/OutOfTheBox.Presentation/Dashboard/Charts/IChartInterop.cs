@@ -23,8 +23,8 @@ public enum ChartValueFormat
 /// </summary>
 public interface IChartInterop
 {
-    /// <summary>Creates a line chart in the canvas identified by <paramref name="canvasId"/>, with one dataset per label.</summary>
-    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None);
+    /// <summary>Creates a line chart in the canvas identified by <paramref name="canvasId"/>, with one dataset per label. <paramref name="showLegend"/> is false for a many-line chart (per-core CPU) where a dataset-per-line legend is just noise, not information.</summary>
+    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true);
 
     /// <summary>Appends one point to the given dataset and redraws without animation.</summary>
     ValueTask PushPointAsync(string canvasId, int datasetIndex, DateTimeOffset timestamp, double value);

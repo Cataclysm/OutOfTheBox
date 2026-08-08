@@ -8,7 +8,7 @@ namespace OutOfTheBox.Presentation.Dashboard.Charts;
 public sealed class ChartInterop(IJSRuntime jsRuntime) : IChartInterop
 {
     /// <inheritdoc />
-    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None) =>
+    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true) =>
         jsRuntime.InvokeVoidAsync(
             "outOfTheBoxCharts.createLineChart",
             canvasId,
@@ -18,7 +18,8 @@ public sealed class ChartInterop(IJSRuntime jsRuntime) : IChartInterop
                 ChartValueFormat.Bytes => "bytes",
                 ChartValueFormat.BytesPerSecond => "bytesPerSecond",
                 _ => null,
-            });
+            },
+            showLegend);
 
     /// <inheritdoc />
     public ValueTask PushPointAsync(string canvasId, int datasetIndex, DateTimeOffset timestamp, double value) =>

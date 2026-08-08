@@ -14,15 +14,18 @@ internal sealed class SpyChartInterop : IChartInterop
 {
     public List<string> CreatedCanvasIds { get; } = [];
 
+    public List<(string CanvasId, IReadOnlyList<string> DatasetLabels, ChartValueFormat YAxisFormat, bool ShowLegend)> CreatedCharts { get; } = [];
+
     public List<(string CanvasId, int DatasetIndex, DateTimeOffset Timestamp, double Value)> PushedPoints { get; } = [];
 
     public List<(string CanvasId, int DatasetIndex, List<(DateTimeOffset Timestamp, double Value)> Points)> SeriesSet { get; } = [];
 
     public List<string> DestroyedCanvasIds { get; } = [];
 
-    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None)
+    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true)
     {
         CreatedCanvasIds.Add(canvasId);
+        CreatedCharts.Add((canvasId, datasetLabels, yAxisFormat, showLegend));
         return ValueTask.CompletedTask;
     }
 

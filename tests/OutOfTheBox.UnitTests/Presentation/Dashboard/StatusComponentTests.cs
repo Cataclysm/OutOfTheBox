@@ -158,6 +158,36 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
+    public void Service_tile_shows_the_running_builds_version()
+    {
+        var cut = Render<Status>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("resource-tile-label\">Service<", cut.Markup);
+            Assert.Contains($"resource-tile-value\">{VersionInfo.Current}", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void Single_line_host_charts_hide_their_legend_but_the_two_line_network_chart_keeps_it()
+    {
+        // CPU/RAM/per-core all hide their legend - CPU and RAM because a single-entry legend is
+        // redundant with the chart's own ".resource-graph-label" heading, per-core because an
+        // 8+-entry legend is noise, not information (see the dedicated per-core test this replaced).
+        // Network is the one chart where the legend still earns its place: Sent vs. Received can't
+        // be told apart without it.
+        var cut = Render<Status>();
+
+        cut.WaitForAssertion(() => Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-network-", StringComparison.Ordinal)));
+
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-cpu-", StringComparison.Ordinal) && !c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-ram-", StringComparison.Ordinal) && !c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-per-core-", StringComparison.Ordinal) && !c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-network-", StringComparison.Ordinal) && c.ShowLegend);
+    }
+
+    [Fact]
     public void Host_tiles_update_live_when_a_resource_snapshot_is_published()
     {
         var cut = Render<Status>();

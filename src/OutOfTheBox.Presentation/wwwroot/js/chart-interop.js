@@ -61,7 +61,7 @@ window.outOfTheBoxCharts = (() => {
         return formatBytes(bytesPerSecond) + "/s";
     }
 
-    function createLineChart(canvasId, datasetLabels, yAxisFormat) {
+    function createLineChart(canvasId, datasetLabels, yAxisFormat, showLegend) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
@@ -94,6 +94,9 @@ window.outOfTheBoxCharts = (() => {
                 animation: false,
                 parsing: false,
                 normalized: true,
+                plugins: {
+                    legend: { display: showLegend !== false },
+                },
                 scales: {
                     x: { type: "time", ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                     y: { beginAtZero: true, ticks: yTicks },

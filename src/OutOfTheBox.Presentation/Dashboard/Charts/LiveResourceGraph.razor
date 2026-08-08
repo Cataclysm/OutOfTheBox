@@ -81,8 +81,8 @@ else
             return;
         }
 
-        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"]);
-        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes);
+        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"], showLegend: false);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes, showLegend: false);
 
         var initial = HistoryBuffer.Get(SeriesKey);
         await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, initial.Select(p => (p.Timestamp, p.CpuPercent)));
@@ -90,7 +90,7 @@ else
 
         if (IsHost)
         {
-            await ChartInterop.CreateLineChartAsync(_perCoreCanvasId, CoreLabels);
+            await ChartInterop.CreateLineChartAsync(_perCoreCanvasId, CoreLabels, showLegend: false);
             await ChartInterop.CreateLineChartAsync(_networkCanvasId, NetworkLabels, ChartValueFormat.BytesPerSecond);
 
             for (var core = 0; core < CoreLabels.Count; core++)

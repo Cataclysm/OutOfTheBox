@@ -29,6 +29,10 @@
         <span class="resource-tile-value">@FormatBytes(_host.ServiceRamBytes)</span>
     </div>
     <div class="resource-tile">
+        <span class="resource-tile-label">Service</span>
+        <span class="resource-tile-value">@VersionInfo.Current</span>
+    </div>
+    <div class="resource-tile">
         <span class="resource-tile-label">Git Version</span>
         <span class="resource-tile-value">@(_toolVersions.GitVersion ?? "not detected")</span>
     </div>
