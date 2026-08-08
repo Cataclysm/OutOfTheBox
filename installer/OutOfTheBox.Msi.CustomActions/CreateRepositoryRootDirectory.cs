@@ -28,11 +28,12 @@ namespace OutOfTheBox.Msi.CustomActions
         public static void EnsureExists(string path) => Directory.CreateDirectory(path);
 
         /// <summary>
-        /// Grants <paramref name="accountName"/> full control of <paramref name="path"/> - the
-        /// directory itself (with inheritance, so newly created repositories automatically pick it
-        /// up) and, since inheritance only ever applies going forward, every already-existing file
-        /// and subdirectory too (a repository cloned before this fix ran, or by a different
-        /// identity entirely, e.g. an operator's own interactive <c>git clone</c>).
+        /// Grants <paramref name="accountDomain"/>\<paramref name="accountName"/> full control of
+        /// <paramref name="path"/> - the directory itself (with inheritance, so newly created
+        /// repositories automatically pick it up) and, since inheritance only ever applies going
+        /// forward, every already-existing file and subdirectory too (a repository cloned before
+        /// this fix ran, or by a different identity entirely, e.g. an operator's own interactive
+        /// <c>git clone</c>).
         ///
         /// Found necessary on real-machine use: <see cref="Directory.CreateDirectory(string)"/>
         /// above gives the new directory whatever ACL its parent's default inheritance provides,
@@ -50,10 +51,20 @@ namespace OutOfTheBox.Msi.CustomActions
         /// or manually alongside the service, not just a same-class variant of the account-SID-
         /// recreation problem <c>ConfigureGitSafeDirectoryAction</c> already documents for git's own
         /// trust check.
+        ///
+        /// <paramref name="accountDomain"/> is required, not optional, despite <see cref="NTAccount"/>
+        /// having a single-string constructor that looks like it should accept a bare name - found on
+        /// real-machine use: <c>new NTAccount("svc-outofthebox")</c> (no domain qualifier) threw
+        /// <see cref="IdentityNotMappedException"/> even though the account demonstrably existed
+        /// (<c>Wix4CreateUser_X64</c>/<c>InstallServices</c> both completed earlier in the very same
+        /// install), while the qualified <c>.\svc-outofthebox</c> form <c>Package.wxs</c>'s own
+        /// <c>ServiceInstall/@Account="[SERVICEACCOUNTDOMAIN]\[SERVICEACCOUNTNAME]"</c> already uses
+        /// successfully does resolve - the two-argument constructor here mirrors that exact format
+        /// rather than reintroducing the bare form as a single pre-concatenated string.
         /// </summary>
-        public static void GrantServiceAccountAccess(string path, string accountName)
+        public static void GrantServiceAccountAccess(string path, string accountDomain, string accountName)
         {
-            var account = new NTAccount(accountName);
+            var account = new NTAccount(accountDomain, accountName);
 
             // Files can't carry inheritance flags at all (they have no children to propagate to) -
             // .NET's AddAccessRule throws ArgumentException if any are set on a file-targeted rule,
@@ -135,15 +146,22 @@ namespace OutOfTheBox.Msi.CustomActions
         public static ActionResult CreateRepositoryRootDirectory(Session session)
         {
             var path = session["REPOSITORYROOTDIR"];
+            var accountDomain = session["SERVICEACCOUNTDOMAIN"];
+            var accountName = session["SERVICEACCOUNTNAME"];
             EnsureExists(path);
 
             try
             {
-                GrantServiceAccountAccess(path, session["SERVICEACCOUNTNAME"]);
+                GrantServiceAccountAccess(path, accountDomain, accountName);
             }
             catch (Exception ex)
             {
-                session.Log("CreateRepositoryRootDirectory: failed to grant the service account access to '{0}': {1}", path, ex);
+                // The account string itself is logged explicitly, not just left to whatever the
+                // exception's own message happens to include (IdentityNotMappedException's is a
+                // generic "Some or all identity references could not be translated," naming no
+                // account at all) - found necessary while diagnosing this exact failure the first
+                // time, from a log that otherwise gave no way to tell which identity was attempted.
+                session.Log("CreateRepositoryRootDirectory: failed to grant '{0}\\{1}' access to '{2}': {3}", accountDomain, accountName, path, ex);
                 return ActionResult.Failure;
             }
 

@@ -14,8 +14,14 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         // The real MSI grants svc-outofthebox, which won't exist on a dev/CI machine - the current
         // process' own identity is a stand-in that's guaranteed to exist and, since a temp
         // directory this process creates is always owned by it, doesn't need elevation to modify
-        // (WRITE_DAC on an object you own doesn't require any special privilege).
-        private static readonly string TestAccountName = WindowsIdentity.GetCurrent().Name;
+        // (WRITE_DAC on an object you own doesn't require any special privilege). Split into domain
+        // and bare name, matching GrantServiceAccountAccess's own two-argument shape - a real
+        // regression this split guards against: a single pre-qualified "DOMAIN\name" string passed
+        // through NTAccount's one-argument constructor is a silently different (and, on a real
+        // install, failing) code path from the two-argument constructor the production code uses.
+        private static readonly string CurrentIdentityName = WindowsIdentity.GetCurrent().Name;
+        private static readonly string TestAccountDomain = CurrentIdentityName.Split('\\')[0];
+        private static readonly string TestAccountName = CurrentIdentityName.Split('\\')[1];
 
         [Fact]
         public void EnsureExists_creates_a_missing_directory()
@@ -63,7 +69,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
 
             try
             {
-                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountDomain, TestAccountName);
 
                 Assert.True(HasFullControlRule(new DirectoryInfo(path).GetAccessControl()));
             }
@@ -88,7 +94,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
             try
             {
                 Assert.ThrowsAny<IdentityNotMappedException>(
-                    () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N")));
+                    () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, ".", "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N")));
             }
             finally
             {
@@ -111,7 +117,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
 
             try
             {
-                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountDomain, TestAccountName);
 
                 Assert.True(HasFullControlRule(new DirectoryInfo(subdirectory).GetAccessControl()));
                 Assert.True(HasFullControlRule(new FileInfo(packFile).GetAccessControl()));
@@ -126,7 +132,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
             security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(NTAccount))
                 .Cast<FileSystemAccessRule>()
                 .Any(rule =>
-                    rule.IdentityReference.Value.Equals(TestAccountName, StringComparison.OrdinalIgnoreCase) &&
+                    rule.IdentityReference.Value.Equals(CurrentIdentityName, StringComparison.OrdinalIgnoreCase) &&
                     rule.AccessControlType == AccessControlType.Allow &&
                     (rule.FileSystemRights & FileSystemRights.FullControl) == FileSystemRights.FullControl);
     }
