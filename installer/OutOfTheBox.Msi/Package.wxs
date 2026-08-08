@@ -266,8 +266,13 @@
       <RegistryValue Root="HKLM"
                       Key="SYSTEM\CurrentControlSet\Services\OutOfTheBox"
                       Name="Environment"
-                      Type="multiString"
-                      Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]&#x9;OutOfTheBox__RootDirectory=[REPOROOTDIR]&#x9;OutOfTheBox__BearerToken=[BEARERTOKEN]&#x9;OutOfTheBox__SqliteFilePath=[DATADIRFOLDER]outofthebox.db&#x9;Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
+                      Type="multiString">
+        <MultiString Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]" />
+        <MultiString Value="OutOfTheBox__RootDirectory=[REPOROOTDIR]" />
+        <MultiString Value="OutOfTheBox__BearerToken=[BEARERTOKEN]" />
+        <MultiString Value="OutOfTheBox__SqliteFilePath=[DATADIRFOLDER]outofthebox.db" />
+        <MultiString Value="Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
+      </RegistryValue>
     </Component>
 
     <!-- Firewall rule (tasks.md 17.8) - scoped by port only here (the installer doesn't know the
