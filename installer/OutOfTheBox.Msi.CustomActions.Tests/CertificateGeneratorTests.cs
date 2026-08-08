@@ -56,5 +56,21 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
                 Assert.True(certificate.NotAfter > DateTime.Now.AddYears(5));
             }
         }
+
+        [Fact]
+        public void CanOpen_returns_true_for_the_matching_password()
+        {
+            var pfxBytes = CertificateGenerator.CreateSelfSignedPfx("TestPassword123!");
+
+            Assert.True(CertificateGenerator.CanOpen(pfxBytes, "TestPassword123!"));
+        }
+
+        [Fact]
+        public void CanOpen_returns_false_for_a_mismatched_password()
+        {
+            var pfxBytes = CertificateGenerator.CreateSelfSignedPfx("CorrectPassword");
+
+            Assert.False(CertificateGenerator.CanOpen(pfxBytes, "WrongPassword"));
+        }
     }
 }

@@ -60,6 +60,27 @@ namespace OutOfTheBox.Msi.CustomActions
             }
         }
 
+        /// <summary>
+        /// True if <paramref name="password"/> actually opens the PFX in <paramref name="pfxBytes"/>.
+        /// Used to detect a certificate/password mismatch before trusting an on-disk certificate as
+        /// still usable - see the caller in <see cref="ResolveSecretsAction"/> for why this can
+        /// happen even though neither side is nominally ever regenerated.
+        /// </summary>
+        public static bool CanOpen(byte[] pfxBytes, string password)
+        {
+            try
+            {
+                using (new X509Certificate2(pfxBytes, password))
+                {
+                    return true;
+                }
+            }
+            catch (CryptographicException)
+            {
+                return false;
+            }
+        }
+
         private static IEnumerable<IPAddress> GetLocalIPv4Addresses()
         {
             foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())

@@ -47,11 +47,24 @@ namespace OutOfTheBox.Msi.CustomActions
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OutOfTheBox");
             var certificatePath = Path.Combine(dataDirectory, "outofthebox.pfx");
 
-            // Never regenerate an existing certificate - an upgrade must not silently invalidate a
-            // certificate the operator or an sbx caller may have already pinned/trusted, the same
-            // "preserve, don't rotate" reasoning SecretResolution already applies to the bearer
-            // token and service account password.
-            if (!File.Exists(certificatePath))
+            // Never regenerate an existing certificate that the resolved password can still open -
+            // an upgrade must not silently invalidate a certificate the operator or an sbx caller
+            // may have already pinned/trusted, the same "preserve, don't rotate" reasoning
+            // SecretResolution already applies to the bearer token and service account password.
+            //
+            // But "the file exists" alone isn't enough to trust it: EXISTINGCERTPASSWORD is read
+            // from PersistedSecretsComponent, an ordinary (non-permanent) registry component that a
+            // full uninstall removes - while the PFX itself lives in the data directory, which
+            // deliberately survives uninstall (see Program.cs's own dataDirectory comment). An
+            // uninstall followed by a reinstall (not an upgrade) therefore leaves the old PFX file
+            // on disk with no recoverable password: EXISTINGCERTPASSWORD comes back empty, a fresh
+            // certPassword gets generated above, and the file/password pair goes out of sync -
+            // Kestrel then fails to start with "The specified network password is not correct."
+            // Verifying the password against the actual file (not just checking existence) catches
+            // that case and regenerates, exactly as if the file had never existed.
+            var hasUsableCertificate = File.Exists(certificatePath)
+                && CertificateGenerator.CanOpen(File.ReadAllBytes(certificatePath), certPassword);
+            if (!hasUsableCertificate)
             {
                 Directory.CreateDirectory(dataDirectory);
                 File.WriteAllBytes(certificatePath, CertificateGenerator.CreateSelfSignedPfx(certPassword));
