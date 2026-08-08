@@ -3,7 +3,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.BehaviorTests.Support;
+using OutOfTheBox.Domain.Runs;
 using Reqnroll;
 
 namespace OutOfTheBox.BehaviorTests;
@@ -21,10 +24,15 @@ public sealed class ArtifactTransferSteps : IDisposable
     private string? _sourceFilePath;
     private string? _largeFilePath;
     private Guid _transferRunId;
+    private int _maximumTimeoutSecondsOverride = 3600;
 
-    private CommandExecutionServiceFactory Factory => _factory ??= new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30);
+    private CommandExecutionServiceFactory Factory => _factory ??= new CommandExecutionServiceFactory(
+        defaultExecutionTimeoutSeconds: 30, maximumExecutionTimeoutSeconds: _maximumTimeoutSecondsOverride);
 
     private HttpClient Client => _client ??= Factory.CreateClient();
+
+    [Given(@"the configured maximum execution timeout is (\d+) seconds")]
+    public void GivenTheConfiguredMaximumExecutionTimeoutIsSeconds(int seconds) => _maximumTimeoutSecondsOverride = seconds;
 
     [Given(@"a dotnet test run has produced ""(.*)"" in ""(.*)""")]
     public async Task GivenADotnetTestRunHasProduced(string relativeFilePath, string fixtureName)
@@ -142,6 +150,33 @@ public sealed class ArtifactTransferSteps : IDisposable
 
     [Then(@"the transfer cancel request is accepted")]
     public void ThenTheTransferCancelRequestIsAccepted() => Assert.Equal(HttpStatusCode.Accepted, _cancelResponse!.StatusCode);
+
+    [Then(@"the transfer is eventually recorded as timed out")]
+    public async Task ThenTheTransferIsEventuallyRecordedAsTimedOut()
+    {
+        // The connection is deliberately never read from (see "starts transferring ... from ...",
+        // which only reads response headers) - the execution timeout is the only thing that can
+        // ever end this transfer, so polling the persisted run is the only way to observe it: there's
+        // no SSE-style terminal event for a plain file response, and the HTTP response itself never
+        // naturally completes or errors out from the client's perspective within this test.
+        using var scope = Factory.Services.CreateScope();
+        var runRepository = scope.ServiceProvider.GetRequiredService<IRunRepository>();
+
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        Run? run = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            run = await runRepository.FindByIdAsync(_transferRunId, CancellationToken.None);
+            if (run?.Outcome == RunOutcome.TimedOut)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+        }
+
+        Assert.Fail($"Expected run {_transferRunId} to be TimedOut within 10 seconds, but was last observed as {(run is null ? "not found" : run.Outcome.ToString())}.");
+    }
 
     [Then(@"fewer bytes were received than the file's full size")]
     public void ThenFewerBytesWereReceivedThanTheFileSFullSize()

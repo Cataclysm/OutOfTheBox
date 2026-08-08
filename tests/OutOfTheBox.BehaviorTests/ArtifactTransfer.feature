@@ -32,3 +32,9 @@ Feature: Artifact Transfer
         And that transfer is cancelled
         Then the transfer cancel request is accepted
         And fewer bytes were received than the file's full size
+
+    Scenario: A transfer whose connection never completes is still killed by the execution timeout
+        Given the configured maximum execution timeout is 3 seconds
+        And a large file "big.bin" exists in "PassingFixture"
+        When an authenticated caller starts transferring "big.bin" from "PassingFixture"
+        Then the transfer is eventually recorded as timed out

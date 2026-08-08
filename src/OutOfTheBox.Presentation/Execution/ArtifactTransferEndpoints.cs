@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Concurrency;
+using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
@@ -9,6 +10,7 @@ using OutOfTheBox.Presentation.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Presentation.Execution;
 
@@ -35,6 +37,7 @@ public static class ArtifactTransferEndpoints
         RunRegistry runRegistry,
         IRunRepository runRepository,
         IRunEventBus runEventBus,
+        IOptions<ServiceOptions> options,
         HttpContext httpContext)
     {
         var runId = Guid.NewGuid();
@@ -97,8 +100,17 @@ public static class ArtifactTransferEndpoints
 
         try
         {
+            // Bounds the transfer the same way POST /run's execution timeout bounds a command,
+            // regardless of connection health: without this, a transfer whose client connection
+            // dies silently (no clean close, so RequestAborted never fires - Kestrel/the OS only
+            // detect a truly vanished peer on a subsequent failed write, which never happens if
+            // nothing is left to write) would sit at RunOutcome.Running forever. There's no
+            // caller-suppliable override here (ArtifactTransferRequest has no timeout field, unlike
+            // StartRunRequest) - MaximumExecutionTimeoutSeconds doubles as this transfer's own fixed
+            // ceiling, the same outer bound every other run kind already respects.
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.Value.MaximumExecutionTimeoutSeconds));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancelRequestCts.Token, httpContext.RequestAborted);
+                timeoutCts.Token, cancelRequestCts.Token, httpContext.RequestAborted);
 
             await using var fileStream = new FileStream(
                 filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
@@ -117,12 +129,12 @@ public static class ArtifactTransferEndpoints
             }
             catch (OperationCanceledException)
             {
-                // Cancelled (explicitly, or the client disconnected) - the copy just stops; there's
-                // no SSE-style terminal event to write for a plain file response, the connection
-                // ending part-way through is the signal. ArtifactSizeBytes stays unset per
-                // design.md - it's only meaningful for a transfer that actually finished.
+                // Cancelled (explicitly, timed out, or the client disconnected) - the copy just
+                // stops; there's no SSE-style terminal event to write for a plain file response,
+                // the connection ending part-way through is the signal. ArtifactSizeBytes stays
+                // unset per design.md - it's only meaningful for a transfer that actually finished.
                 run.CompletedAt = DateTimeOffset.UtcNow;
-                run.Outcome = RunOutcome.Cancelled;
+                run.Outcome = timeoutCts.IsCancellationRequested ? RunOutcome.TimedOut : RunOutcome.Cancelled;
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
