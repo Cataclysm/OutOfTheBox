@@ -145,9 +145,14 @@ namespace OutOfTheBox.Msi.CustomActions
         [CustomAction]
         public static ActionResult CreateRepositoryRootDirectory(Session session)
         {
-            var path = session["REPOSITORYROOTDIR"];
-            var accountDomain = session["SERVICEACCOUNTDOMAIN"];
-            var accountName = session["SERVICEACCOUNTNAME"];
+            // Deferred + Impersonate="no" (see this action's own Package.wxs authoring for why) can
+            // only read CustomActionData, not the live session property table directly - Session's
+            // own indexer would silently return empty strings here instead of the real values, since
+            // deferred actions don't have access to the property table at all, only whatever an
+            // earlier immediate action packed into CustomActionData for them.
+            var path = session.CustomActionData["REPOSITORYROOTDIR"];
+            var accountDomain = session.CustomActionData["SERVICEACCOUNTDOMAIN"];
+            var accountName = session.CustomActionData["SERVICEACCOUNTNAME"];
             EnsureExists(path);
 
             try

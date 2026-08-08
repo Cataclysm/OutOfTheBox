@@ -119,10 +119,43 @@
 
     <Binary Id="ResolveSecretsCA" SourceFile="$(var.ResolveSecretsCaDllPath)" />
     <CustomAction Id="ResolveSecrets" BinaryRef="ResolveSecretsCA" DllEntry="ResolveSecrets" Execute="immediate" Return="check" />
-    <CustomAction Id="CreateRepositoryRootDirectory" BinaryRef="ResolveSecretsCA" DllEntry="CreateRepositoryRootDirectory" Execute="immediate" Return="check" />
+
+    <!-- CreateRepositoryRootDirectory itself is deferred + Impersonate="no" (runs as SYSTEM), not
+         immediate like every other custom action here - found necessary on a real install: the
+         Windows Installer log showed "Hello, I'm your 64bit Impersonated custom action server"
+         immediately before this action ran, meaning it was executing impersonating the installing
+         user, not as SYSTEM, unlike util:User's own account-creation action (logged as "running
+         with sufficient privileges" - the phrasing for a genuinely elevated, non-impersonated
+         action). Resolving svc-outofthebox's SID (via NTAccount.Translate, inside
+         GrantServiceAccountAccess) failed with IdentityNotMappedException specifically under that
+         impersonated context even though the account demonstrably existed by then (util:User's own
+         action, and InstallServices - which itself needs the account to exist to configure the
+         service to log on as it - had both already completed) - an impersonated logon session's
+         view of local SAM accounts can apparently be stale relative to one SYSTEM only just
+         created, even though the underlying write (an admin-elevated calling user can already
+         write arbitrary ACLs) would not itself have been the problem. A deferred, non-impersonated
+         action can't read Session properties directly (per the Windows Installer execution model,
+         only CustomActionData survives into the deferred/elevated context) - SetCreateRepositoryRootDirectoryData
+         below is the standard MSI pattern for bridging that: an immediate action packs the needed
+         property values into a property named after the deferred action's own Id, which Windows
+         Installer then exposes to it as Session.CustomActionData. -->
+    <CustomAction Id="SetCreateRepositoryRootDirectoryData"
+                  Property="CreateRepositoryRootDirectory"
+                  Value="REPOSITORYROOTDIR=[REPOSITORYROOTDIR];SERVICEACCOUNTDOMAIN=[SERVICEACCOUNTDOMAIN];SERVICEACCOUNTNAME=[SERVICEACCOUNTNAME]" />
+    <CustomAction Id="CreateRepositoryRootDirectory"
+                  BinaryRef="ResolveSecretsCA"
+                  DllEntry="CreateRepositoryRootDirectory"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
     <!-- Return="ignore": ConfigureGitSafeDirectoryAction already never throws (catches internally),
          but this makes the "never fail the install over this" intent visible in the authoring too,
-         not just the C# doc comment. -->
+         not just the C# doc comment. Still immediate/impersonated, unlike CreateRepositoryRootDirectory
+         above - its own write (git's system-wide config file, under an already-elevated admin's own
+         Program Files installation) depends only on the calling user's own rights, which impersonation
+         of that same (already-admin) user doesn't remove, not on resolving a different principal's SID
+         the way GrantServiceAccountAccess does - no evidence this one has the same problem. -->
     <CustomAction Id="ConfigureGitSafeDirectory" BinaryRef="ResolveSecretsCA" DllEntry="ConfigureGitSafeDirectory" Execute="immediate" Return="ignore" />
 
     <!-- Scheduled in both sequences: InstallUISequence so ConfigDlg's fields already show the
@@ -156,8 +189,15 @@
            - its compiled runtime name, visible in the install log - and the unprefixed "CreateUser"
            were tried and rejected by the linker with WIX0094, "identifier could not be found").
            Still safely before StartServices, so the directory/permissions are ready before the
-           service itself starts and tries to use them. -->
-      <Custom Action="CreateRepositoryRootDirectory" After="InstallServices" />
+           service itself starts and tries to use them. SetCreateRepositoryRootDirectoryData (the
+           immediate property-setting half of the deferred-action pair - see the CustomAction
+           authoring above for why this needs to be deferred+elevated at all) is scheduled directly
+           in front of the deferred action it feeds; scheduling it any earlier would risk a later
+           action changing REPOSITORYROOTDIR/SERVICEACCOUNTDOMAIN/SERVICEACCOUNTNAME before the
+           snapshot is taken (none currently do, but there's no benefit to scheduling it earlier
+           than strictly necessary either). -->
+      <Custom Action="SetCreateRepositoryRootDirectoryData" After="InstallServices" />
+      <Custom Action="CreateRepositoryRootDirectory" After="SetCreateRepositoryRootDirectoryData" />
       <!-- Same InstallExecuteSequence-only reasoning as CreateRepositoryRootDirectory just above -
            needs REPOSITORYROOTDIR's final value, and doesn't need to run before it (the system-wide git
            config write doesn't care whether the directory exists yet, only CreateRepositoryRootDirectory does). -->
