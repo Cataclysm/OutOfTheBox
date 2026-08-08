@@ -325,8 +325,13 @@
              stock WixUI_Minimal dialogs use for their own title (e.g. VerifyReadyDlg's
              InstallTitle), which this dialog's title previously didn't (it sat below the banner
              instead), reading as "no title" by comparison since it wasn't where an operator's eye
-             goes first on every other dialog in the sequence. -->
-        <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure [ProductName] v[ProductVersion]" />
+             goes first on every other dialog in the sequence. Transparent="yes" matters here
+             specifically - it's what stock titles sitting on a banner always carry (confirmed
+             against InstallTitle's own attributes); without it a Text control paints its own
+             opaque background box, which is exactly what showed up as an "unwanted background"
+             once this title moved onto the banner bitmap. Every other control here sits on the
+             plain dialog body below the banner (no bitmap under it), so none of them need it. -->
+        <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure [ProductName] v[ProductVersion]" />
         <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
              RegistryValue from a prior install's PersistedSecretsComponent was found during
              AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
@@ -376,6 +381,15 @@
       </Dialog>
 
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
+      <!-- Stock VerifyReadyDlg's own Back button only knows about MaintenanceTypeDlg (its
+           unconditional native target) - it has no idea ConfigDlg exists at all, since ConfigDlg
+           is this project's own addition. This override was present from ConfigDlg's original
+           17.9 authoring but got dropped when VerifyReadyDlg was temporarily replaced with a fully
+           custom VerifyReadyThemedDlg (which folded the same logic directly into its own Back
+           control instead) and then never restored when that replacement was reverted back to
+           stock - a real regression, caught by an operator actually clicking Back and landing on
+           "Change/Repair/Uninstall" instead of returning to config. -->
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
 
       <!-- WixUI_Minimal's real fresh-install entry point is WelcomeEulaDlg (NOT WelcomeDlg, which
            only fires for a patch install - essentially dead in this project, no .msp is authored) -

@@ -19,7 +19,7 @@
     <Window Width="485" Height="300" HexStyle="100a0000" FontId="0" Caption="#(loc.Caption)">
         <ImageControl X="11" Y="11" Width="96" Height="96" ImageFile="logo.png" Visible="yes"/>
         <Label X="122" Y="33" Width="-11" Height="30" FontId="1" Visible="yes" DisablePrefix="yes">#(loc.Title)</Label>
-        <Label X="125" Y="62" Width="-11" Height="18" FontId="4" Visible="yes" DisablePrefix="yes">#(loc.InstallVersion)</Label>
+        <Label X="122" Y="62" Width="-11" Height="18" FontId="4" Visible="yes" DisablePrefix="yes">#(loc.InstallVersion)</Label>
 
         <Page Name="Help">
             <Label X="11" Y="118" Width="-11" Height="30" FontId="2" DisablePrefix="yes">#(loc.HelpHeader)</Label>
