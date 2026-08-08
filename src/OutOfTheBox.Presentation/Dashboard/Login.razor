@@ -2,11 +2,11 @@
 @layout LoginLayout
 @attribute [AllowAnonymous]
 
-<PageTitle>OutOfTheBox - Log in</PageTitle>
+<PageTitle>@VersionInfo.DisplayName - Log in</PageTitle>
 
 <div class="login-card">
-    <img src="_content/OutOfTheBox.Presentation/img/logo.png" alt="" class="login-logo" />
-    <h1>OutOfTheBox v@(VersionInfo.Current)</h1>
+    <img src="_content/OutOfTheBox.Presentation/img/logo.png" alt="@VersionInfo.DisplayName" class="login-logo" />
+    <h1>@VersionInfo.DisplayName v@(VersionInfo.Current)</h1>
 
     @if (Error)
     {

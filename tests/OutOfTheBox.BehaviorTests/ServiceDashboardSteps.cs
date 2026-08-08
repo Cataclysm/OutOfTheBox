@@ -96,7 +96,7 @@ public sealed class ServiceDashboardSteps : IDisposable
 
         // Blazor Server prerenders the shared layout into the initial HTML response before the
         // SignalR circuit attaches, so the branding element is observable without a real browser.
-        Assert.Contains("OutOfTheBox v", body, StringComparison.Ordinal);
+        Assert.Contains("Out of the Box v", body, StringComparison.Ordinal);
     }
 
     [When(@"an unauthenticated request is made for the running version")]
@@ -111,7 +111,7 @@ public sealed class ServiceDashboardSteps : IDisposable
     {
         Assert.Equal(HttpStatusCode.OK, _response!.StatusCode);
         var body = await _response.Content.ReadAsStringAsync();
-        Assert.Contains("OutOfTheBox", body, StringComparison.Ordinal);
+        Assert.Contains("Out of the Box", body, StringComparison.Ordinal);
     }
 
     private async Task<HttpResponseMessage> GetWithSessionAsync(string requestUri)

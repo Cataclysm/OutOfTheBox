@@ -32,7 +32,7 @@ run this service over plain HTTP.
 
 ### Certificate
 
-A private/self-signed certificate is sufficient for v1: both the OutOfTheBox host and the sbx
+A private/self-signed certificate is sufficient for v1: both the Out of the Box host and the sbx
 sandbox caller are under the same operator's control, not exposed to the public internet. Generate
 one and bind it to Kestrel via the standard ASP.NET Core configuration shape, e.g.:
 
@@ -77,12 +77,13 @@ Restrict inbound connections on the configured port to exactly the two clients t
 On Windows, this is a single inbound rule scoped by remote address, e.g.:
 
 ```powershell
-New-NetFirewallRule -DisplayName "OutOfTheBox" -Direction Inbound -Protocol TCP -LocalPort 5443 `
+New-NetFirewallRule -DisplayName "Out of the Box" -Direction Inbound -Protocol TCP -LocalPort 5443 `
     -RemoteAddress <sbx-sandbox-ip>,<operator-ip> -Action Allow
 ```
 
-`install.ps1` (see [Planned: production install](#planned-production-install)) will create this
-rule automatically; the command above documents the equivalent manual step in the meantime.
+The [production install](#production-install) below already opens this port for you (scoped to any
+address, since the installer doesn't know the sbx sandbox's or operator's IPs at install time) - the
+command above documents narrowing that to specific remote addresses afterward.
 
 ### Consuming Server-Sent Events (`/run`, `/run/git`)
 
@@ -150,20 +151,22 @@ annual revenue exceeds $10,000.
 
 ### 3. Install
 
-Run `OutOfTheBoxSetup.exe` elevated. The MSI has its own interactive config page (repo root
-directory, bearer token, port) verified working when the MSI is run directly
-(`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking it) — inspected via the Windows Installer COM
-API directly (Dialog/ControlEvent tables), not just "the build succeeded". The config page's title
-shows the version being installed (`Configure OutOfTheBox vX.Y.Z`), and on an upgrade an additional
-"Upgrading from version X.Y.Z" line appears above it, read back from the prior install's own
-registry-persisted version. The bootstrapper, MSI Add/Remove Programs entry, and dashboard
-(favicon, header, login page) all share the same brand mark, so the product looks consistent
-end to end. **Whether that config page is shown when installing through the bootstrapper is not yet
-verified on a real machine**: Burn's
-standard bootstrapper application runs chained MSI packages at a reduced UI level by default, so it
-may run this MSI silently rather than showing its dialog. Until that's confirmed (or a bootstrapper-
-level UI is built instead), pass the same properties on the bootstrapper's own command line, which
-Burn forwards through to the chained MSI:
+Run `OutOfTheBoxSetup.exe` elevated. It shows its own welcome screen first (installing the .NET
+SDK/Git for Windows prerequisites if either is missing), then hands off to the MSI's own interactive
+config page (repo root directory, bearer token, port) - `bal:DisplayInternalUICondition` on the
+chained `MsiPackage` (scoped to `WixBundleAction = 6`, i.e. only during an actual install/upgrade,
+never uninstall/modify/repair) is what makes that page reachable through the bootstrapper at all;
+without it, Burn's standard bootstrapper application runs a chained MSI silently by default. Verified
+both ways - running the MSI directly (`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking it) and
+through the bootstrapper - via the Windows Installer COM API directly (Dialog/ControlEvent tables),
+not just "the build succeeded". The config page's title shows the version being installed
+(`Configure Out of the Box vX.Y.Z`), and on an upgrade an additional "Upgrading from version X.Y.Z"
+line appears above it, read back from the prior install's own registry-persisted version. The
+bootstrapper, MSI Add/Remove Programs entry, and dashboard (favicon, header, login page) all share
+the same brand mark, so the product looks consistent end to end.
+
+If you ever need to skip the interactive page (e.g. a fully unattended install), pass the same
+properties on the bootstrapper's own command line, which Burn forwards through to the chained MSI:
 
 ```
 OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" PORTNUMBER=5443
@@ -181,7 +184,7 @@ way, entirely internally — there's nothing to supply for it.
 This:
 
 - Detects and, if missing, silently installs the .NET 10 SDK and Git for Windows (each is a
-  separate, `Permanent="yes"` chained package — uninstalling OutOfTheBox later does **not** remove
+  separate, `Permanent="yes"` chained package — uninstalling Out of the Box later does **not** remove
   either, since other things on the host may depend on them too).
 - Creates a dedicated local service account (`svc-outofthebox`, via the WiX Util extension's
   `util:User`) — **not** local admin, **not** a pre-existing/shared account — with log-on-as-a-service

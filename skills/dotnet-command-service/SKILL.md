@@ -1,11 +1,11 @@
 ---
 name: dotnet-command-service
-description: Client guide for calling the OutOfTheBox service from a sandboxed Claude Code instance - run dotnet/git commands and download build artifacts on a Windows host that has the .NET toolchain, since the sandbox itself doesn't. Covers authentication, starting/streaming/cancelling a run, and downloading artifacts. Does NOT cover the dashboard, resource monitoring, install/upgrade, or repository management - those have no API surface for this caller at all.
+description: Client guide for calling the Out of the Box service from a sandboxed Claude Code instance - run dotnet/git commands and download build artifacts on a Windows host that has the .NET toolchain, since the sandbox itself doesn't. Covers authentication, starting/streaming/cancelling a run, and downloading artifacts. Does NOT cover the dashboard, resource monitoring, install/upgrade, or repository management - those have no API surface for this caller at all.
 ---
 
-# OutOfTheBox command service - client guide
+# Out of the Box command service - client guide
 
-OutOfTheBox is a Windows-hosted service that lets you (running in a sandboxed environment with no
+Out of the Box is a Windows-hosted service that lets you (running in a sandboxed environment with no
 local .NET toolchain) run `dotnet`/`git` commands and pull build artifacts from a repo on a real
 Windows host, over HTTPS. This skill documents exactly how to call it. It restates behavior from
 `specs/dotnet-command-execution`, `specs/git-command-execution`, `specs/artifact-transfer`, and

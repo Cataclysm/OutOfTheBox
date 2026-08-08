@@ -11,6 +11,14 @@ namespace OutOfTheBox.Presentation.Dashboard;
 /// </summary>
 public static class VersionInfo
 {
+    /// <summary>
+    /// The product's human-readable display name - "Out of the Box" (spaced, the way an operator
+    /// would actually write it), distinct from the "OutOfTheBox" identifier used throughout the
+    /// codebase/repo/file names. Every dashboard page and <see cref="VersionEndpoints"/> reads the
+    /// same constant, rather than each hardcoding its own copy of the string.
+    /// </summary>
+    public const string DisplayName = "Out of the Box";
+
     /// <summary>The running build's informational version (from <c>Directory.Build.props</c>'s <c>&lt;Version&gt;</c>), or <c>"unknown"</c> if unavailable.</summary>
     public static string Current { get; } =
         Assembly.GetEntryAssembly()?

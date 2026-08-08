@@ -2,7 +2,10 @@
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
-  <Bundle Name="OutOfTheBox"
+  <!-- Name is "Out of the Box" (spaced), matching Package.wxs's own Package/@Name - what the
+       bootstrapper's own welcome text and the bundle's Programs and Features entry actually show,
+       distinct from the "OutOfTheBox" identifier used in code/file/repo names. -->
+  <Bundle Name="Out of the Box"
           Manufacturer="Dennis Freise"
           Version="$(ProductVersion)"
           UpgradeCode="899fedcf-6b86-4c88-8a39-56a27874008d"
@@ -71,15 +74,19 @@
                             DownloadUrl="https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.3/Git-2.55.0.3-64-bit.exe" />
       </ExePackage>
 
-      <!-- NOTE: Burn's WixStandardBootstrapperApplication runs chained MsiPackages with a
-           reduced (non-interactive) UI level by default, so ConfigDlg (see Package.wxs) is not
-           currently shown when installing via this bootstrapper - only when the MSI is run
-           directly (`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking the .msi itself). Until
-           that's wired up (would need either a WiX v3-style DisplayInternalUI equivalent - not
-           found in the v4+ MsiPackage schema - or a custom Bootstrapper Application UI collecting
-           the same properties and passing them down via MsiProperty), the bootstrapper path relies
-           on command-line MsiProperty pass-through, per INSTALL.md's documented invocation. -->
-      <MsiPackage Id="OutOfTheBoxMsiPackage" SourceFile="$(var.MsiSourcePath)" Vital="yes" />
+      <!-- Burn's WixStandardBootstrapperApplication runs chained MsiPackages at a reduced,
+           non-interactive UI level by default - without this, ConfigDlg (see Package.wxs) never
+           showed when installing via this bootstrapper, only when the MSI was run directly
+           (`msiexec /i`). bal:DisplayInternalUICondition (not a plain MsiPackage attribute - v3's
+           DisplayInternalUI was relocated into the bal: namespace for v4+, confirmed via WiX's own
+           FAQ and a maintainer response, not the non-existent v4+ MsiPackage attribute tried and
+           abandoned earlier) restores the chained MSI's own internal UI, scoped to
+           WixBundleAction = 6 (BOOTSTRAPPER_ACTION_INSTALL specifically) so it fires only for an
+           actual install/upgrade, not uninstall/modify/repair, where a config-collection dialog
+           makes no sense. Confirmed to work with the standard BA specifically (not just a custom
+           one) via a WiX maintainer's own response, not assumed. -->
+      <MsiPackage Id="OutOfTheBoxMsiPackage" SourceFile="$(var.MsiSourcePath)" Vital="yes"
+                  bal:DisplayInternalUICondition="WixBundleAction = 6" />
     </Chain>
 
   </Bundle>

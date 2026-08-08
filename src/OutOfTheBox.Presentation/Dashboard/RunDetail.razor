@@ -3,7 +3,7 @@
 @using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 
-<PageTitle>OutOfTheBox - Run detail</PageTitle>
+<PageTitle>@VersionInfo.DisplayName - Run detail</PageTitle>
 
 @if (_run is null)
 {

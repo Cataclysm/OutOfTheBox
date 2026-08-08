@@ -1,4 +1,6 @@
-# OutOfTheBox
+# Out of the Box
+
+*(repository/codebase name: `OutOfTheBox`)*
 
 A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet`/`git` commands and transfer build artifacts against repos on this host, since the sandbox has no local .NET toolchain.
 

@@ -17,7 +17,7 @@ public static class VersionEndpoints
     /// <summary>Maps <c>GET /version</c>.</summary>
     public static IEndpointRouteBuilder MapVersionEndpoint(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/version", () => Results.Ok(new { name = "OutOfTheBox", version = VersionInfo.Current }));
+        endpoints.MapGet("/version", () => Results.Ok(new { name = VersionInfo.DisplayName, version = VersionInfo.Current }));
 
         return endpoints;
     }

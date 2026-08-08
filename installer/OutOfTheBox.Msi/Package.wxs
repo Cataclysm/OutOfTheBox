@@ -3,13 +3,22 @@
      xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
-  <Package Name="OutOfTheBox"
+  <!-- Name is "Out of the Box" (spaced, human-written), not the "OutOfTheBox" identifier used
+       throughout the codebase/repo/file names - this is what Programs and Features, the Services
+       console, dialog titles, and every stock WixUI_Minimal dialog (via the built-in [ProductName]
+       substitution, already proven with [ProductVersion] below) actually show an operator. Most
+       user-visible text in this file references [ProductName] rather than repeating the literal
+       string, so the two names can never drift apart again the way they briefly did. -->
+  <Package Name="Out of the Box"
            Manufacturer="Dennis Freise"
            Version="$(ProductVersion)"
            UpgradeCode="5ab0e967-6c6a-434d-b262-4aa613b49f5e"
            Scope="perMachine">
 
-    <SummaryInformation Description="OutOfTheBox - dotnet/git command execution service" />
+    <!-- SummaryInformation doesn't support [Property] runtime formatting (it's static .msi file
+         metadata, not something the installer engine evaluates), so this one has to be a literal
+         string kept in sync by hand rather than referencing [ProductName]. -->
+    <SummaryInformation Description="Out of the Box - dotnet/git command execution service" />
 
     <!-- Embed the cabinet directly in the .msi (WiX's default is a separate .cab file alongside
          it) - the resulting single ~40 MB .msi is simpler to hand to the Burn bootstrapper below
@@ -44,7 +53,7 @@
          stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
          product's files are installed, which is what makes the Windows Service's file replacement
          safe around the service still (briefly) running the old binary. -->
-    <MajorUpgrade DowngradeErrorMessage="A newer version of OutOfTheBox is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
     <!-- Defense in depth (tasks.md 17.10): the Burn bootstrapper is expected to have already
          guaranteed git is present before this MSI ever runs, but the MSI can be invoked directly,
@@ -120,7 +129,7 @@
       <Custom Action="ResolveSecrets" After="AppSearch" />
     </InstallExecuteSequence>
 
-    <Feature Id="MainFeature" Title="OutOfTheBox Service" Level="1">
+    <Feature Id="MainFeature" Title="Out of the Box Service" Level="1">
       <ComponentGroupRef Id="PublishOutputComponents" />
       <ComponentRef Id="ServiceAccountComponent" />
       <ComponentRef Id="DataDirectoryComponent" />
@@ -199,9 +208,13 @@
     <Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a03">
       <File Id="ServiceExeForInstall" Source="$(var.PublishOutputPath)OutOfTheBox.Host.exe" KeyPath="yes" />
 
+      <!-- Name (the actual SCM service key, matched by ServiceControl/@Name and the Environment
+           registry key path below) stays the plain "OutOfTheBox" identifier deliberately - unlike
+           DisplayName (what services.msc actually shows an operator), this is a technical key
+           other things reference by exact string match, not a place to introduce a space. -->
       <ServiceInstall Id="OutOfTheBoxServiceInstall"
                        Name="OutOfTheBox"
-                       DisplayName="OutOfTheBox"
+                       DisplayName="[ProductName]"
                        Description="Runs dotnet/git commands and transfers build artifacts for a sandboxed Claude Code caller."
                        Type="ownProcess"
                        Start="auto"
@@ -236,7 +249,7 @@
          specific remote addresses after install, per design.md's Network & transport decision. -->
     <Component Id="FirewallComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a04">
       <fire:FirewallException Id="OutOfTheBoxFirewallRule"
-                               Name="OutOfTheBox"
+                               Name="Out of the Box"
                                Port="[PORTNUMBER]"
                                Protocol="tcp"
                                Scope="any"
@@ -283,9 +296,9 @@
       <TextStyle Id="OOTB_Body" FaceName="Tahoma" Size="8" Red="230" Green="232" Blue="235" />
       <TextStyle Id="OOTB_Muted" FaceName="Tahoma" Size="8" Red="154" Green="162" Blue="175" />
 
-      <Dialog Id="ConfigDlg" Width="370" Height="290" Title="Configure OutOfTheBox">
+      <Dialog Id="ConfigDlg" Width="370" Height="290" Title="Configure [ProductName]">
         <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="370" Height="290" TabSkip="no" Text="PanelBmp370x290" />
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Title}Configure OutOfTheBox v[ProductVersion]" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\OOTB_Title}Configure [ProductName] v[ProductVersion]" />
         <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
              RegistryValue from a prior install's PersistedSecretsComponent was found during
              AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
@@ -324,7 +337,7 @@
 
       <!-- Minimal message dialog for the Next-button validation above - reuses the same OK-only
            shape as WiX's own stock error dialogs rather than introducing a new visual pattern. -->
-      <Dialog Id="InvalidConfigDlg" Width="260" Height="85" Title="Configure OutOfTheBox">
+      <Dialog Id="InvalidConfigDlg" Width="260" Height="85" Title="Configure [ProductName]">
         <Control Id="Background" Type="Bitmap" X="0" Y="0" Width="260" Height="85" TabSkip="no" Text="PanelBmp260x85" />
         <Control Id="Text" Type="Text" X="10" Y="10" Width="240" Height="40" Transparent="yes" NoPrefix="yes"
                  Text="{\OOTB_Body}Repository root directory, bearer token, and port are all required." />
