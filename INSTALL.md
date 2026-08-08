@@ -148,9 +148,15 @@ annual revenue exceeds $10,000.
 
 ### 3. Install
 
-Run `OutOfTheBoxSetup.exe` elevated. Today this collects configuration via MSI properties passed on
-the command line rather than an interactive dialog (a `WixUI` config page is planned but not yet
-built):
+Run `OutOfTheBoxSetup.exe` elevated. The MSI has its own interactive config page (repo root
+directory, bearer token, port) verified working when the MSI is run directly
+(`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking it) — inspected via the Windows Installer COM
+API directly (Dialog/ControlEvent tables), not just "the build succeeded". **Whether that same page
+is shown when installing through the bootstrapper is not yet verified on a real machine**: Burn's
+standard bootstrapper application runs chained MSI packages at a reduced UI level by default, so it
+may run this MSI silently rather than showing its dialog. Until that's confirmed (or a bootstrapper-
+level UI is built instead), pass the same properties on the bootstrapper's own command line, which
+Burn forwards through to the chained MSI:
 
 ```
 OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" BEARERTOKEN="<a real secret>" PORTNUMBER=5443

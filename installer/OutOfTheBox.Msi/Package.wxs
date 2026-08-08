@@ -1,6 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
-     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package Name="OutOfTheBox"
            Manufacturer="Dennis Freise"
@@ -153,6 +154,74 @@
                                Scope="any"
                                IgnoreFailure="yes" />
     </Component>
+
+    <!-- Minimal (Welcome/Progress/Exit only) rather than InstallDir - this installer's own
+         install location isn't something an operator needs to choose (per design.md, it's
+         disposable/upgrade-replaced), so a directory-chooser page for THAT would be a confusing
+         second "pick a folder" step alongside ConfigDlg's own repo-root field below.
+
+         This UI content lives directly under <Package> (not a separate Fragment in its own file)
+         deliberately: a Fragment elsewhere is only pulled into the linked output if something
+         reachable from <Package> references one of its identifiers, and nothing does that for a
+         <ui:WixUI>/<Dialog>/override-<Publish> block on its own - putting it in a standalone
+         Fragment silently compiled clean but produced an MSI with no Dialog/Control table at all
+         (verified via the Windows Installer COM API directly, since wix msi decompile doesn't
+         cover UI tables either - a real "build succeeded, feature entirely absent" trap). -->
+    <ui:WixUI Id="WixUI_Minimal" />
+
+    <!-- Config-collection page (tasks.md 17.9) - repo root directory, bearer token, and port,
+         written into the service's Environment registry value by ServiceComponent above. Spliced
+         into WixUI_Minimal's sequence between the Welcome and Verify-Ready dialogs via overriding
+         Publish entries (Order="2", higher than the extension's own default so it wins) - the
+         standard WiX pattern for adding a custom page to a stock dialog set. -->
+    <UI>
+      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Configure OutOfTheBox">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Configure OutOfTheBox" />
+        <Control Id="Description" Type="Text" X="15" Y="20" Width="340" Height="20" Transparent="yes" NoPrefix="yes"
+                 Text="These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="RepoRootLabel" Type="Text" X="15" Y="55" Width="150" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="70" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
+
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="95" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present):" />
+        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="110" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
+
+        <Control Id="PortLabel" Type="Text" X="15" Y="135" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
+        <Control Id="PortEdit" Type="Edit" X="15" Y="150" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
+          <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next">
+          <!-- Refuse to proceed without a repo root and a non-trivial bearer token - an installer
+               that silently accepted blank/weak values here would produce a service that's either
+               broken (no root configured) or authenticated by an empty credential. Port left
+               unvalidated beyond "not blank" - msiexec/Kestrel will fail loudly enough on a
+               genuinely invalid one, and duplicating full numeric-range validation here isn't
+               worth the extra dialog complexity for a v1 config page. -->
+          <Publish Event="SpawnDialog" Value="InvalidConfigDlg" Order="1" Condition="REPOROOTDIR = &quot;&quot; OR BEARERTOKEN = &quot;&quot; OR PORTNUMBER = &quot;&quot;" />
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="2" Condition="REPOROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" Order="1" />
+        </Control>
+      </Dialog>
+
+      <!-- Minimal message dialog for the Next-button validation above - reuses the same OK-only
+           shape as WiX's own stock error dialogs rather than introducing a new visual pattern. -->
+      <Dialog Id="InvalidConfigDlg" Width="260" Height="85" Title="Configure OutOfTheBox">
+        <Control Id="Text" Type="Text" X="10" Y="10" Width="240" Height="40" NoPrefix="yes"
+                 Text="Repository root directory, bearer token, and port are all required." />
+        <Control Id="OK" Type="PushButton" X="95" Y="55" Width="56" Height="17" Text="OK">
+          <Publish Event="EndDialog" Value="Return" Order="1" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="2" Condition="NOT Installed" />
+    </UI>
 
   </Package>
 </Wix>
