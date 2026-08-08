@@ -44,13 +44,15 @@ dotnet test tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj
 | `BehaviorTests` | Reqnroll (Gherkin) + xUnit | End-to-end scenarios through the real ASP.NET Core pipeline (`WebApplicationFactory<Program>`), including real `dotnet.exe` child processes against `tests/Fixtures/` |
 | `ArchitectureTests` | xUnit + NetArchTest | Mechanically enforces the Clean Architecture dependency rules from `design.md` |
 
-`tests/Fixtures/` (`PassingFixture`, `FailingFixture`, `HangingFixture`) are deliberately **not** part of the `.slnx` — they're target repos the service spawns `dotnet` against during `BehaviorTests`, not test projects of this repo. Running `dotnet test` on the solution never touches them directly for that reason (a failing/hanging test inside one would otherwise break this repo's own test run).
+`tests/Fixtures/` (`PassingFixture`, `FailingFixture`, `HangingFixture`, `GitFixture`) are deliberately **not** part of the `.slnx` — they're target repos the service spawns `dotnet`/`git` against during `BehaviorTests`, not test projects of this repo. Running `dotnet test` on the solution never touches them directly for that reason (a failing/hanging test inside one would otherwise break this repo's own test run).
+
+`installer/OutOfTheBox.Msi.CustomActions.Tests` (xUnit, net472) is a separate, standalone test suite covering the installer's own custom-action logic (bearer token/service-account-password generation and precedence). It's outside `OutOfTheBox.slnx` and this doc's scope — see [`INSTALL.md`](INSTALL.md) for building the installer itself; run it directly with `dotnet test installer/OutOfTheBox.Msi.CustomActions.Tests`.
 
 ## Code quality gates
 
 - `Directory.Build.props` enables `<Nullable>enable</Nullable>` and `<GenerateDocumentationFile>true</GenerateDocumentationFile>` with the missing-XML-doc-comment warning (`CS1591`) promoted to an error — a public type or member without a `///` doc comment fails the build. `tests/Directory.Build.props` relaxes this one rule for test projects (xUnit requires public test classes/methods, which aren't "public API" in the sense this rule targets).
 - Every `.cs` file under `src/` and `tests/{UnitTests,BehaviorTests,ArchitectureTests}` (not `tests/Fixtures/`) starts with a standard copyright header — see `CLAUDE.md` for the exact text and where it applies.
-- `.editorconfig` at the repo root covers formatting and a handful of C# style conventions (IDE-level suggestions, not build-breaking).
+- `.editorconfig` at the repo root covers formatting and modern-C#-construct style conventions (pattern matching, target-typed `new`, collection expressions, unused usings/parameters, ...), enforced at `warning` severity and surfaced during `dotnet build` itself (`EnforceCodeStyleInBuild`), not just as IDE-level hints — still non-build-breaking, since `CS1591` above remains the only rule promoted to an error.
 - `Directory.Packages.props` centralizes every third-party package version — add new packages there, then reference them from a project's `.csproj` with no `Version` attribute.
 
 ## Project layout
