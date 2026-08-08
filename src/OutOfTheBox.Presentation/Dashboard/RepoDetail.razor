@@ -1,5 +1,6 @@
 @page "/repos/{Name}"
 @attribute [Authorize]
+@using System.Globalization
 @using OutOfTheBox.Application.Execution
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
@@ -45,7 +46,7 @@ else
             <li class="run-row">
                 <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
                 <span class="run-outcome">@run.Outcome</span>
-                <span class="run-started">@run.StartedAt.ToLocalTime()</span>
+                <span class="run-started">@FormatDateTime(run.StartedAt)</span>
                 @if (run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
                 {
                     <a href="@($"history/{run.Id}")">View</a>
@@ -104,4 +105,8 @@ else
 
         return status;
     }
+
+    // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.
+    private static string FormatDateTime(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }

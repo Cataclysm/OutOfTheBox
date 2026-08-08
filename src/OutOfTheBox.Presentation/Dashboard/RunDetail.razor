@@ -1,5 +1,6 @@
 @page "/history/{RunId:guid}"
 @attribute [Authorize]
+@using System.Globalization
 @using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 
@@ -18,9 +19,9 @@ else
         <dt>Outcome</dt>
         <dd>@_run.Outcome</dd>
         <dt>Started</dt>
-        <dd>@_run.StartedAt.ToLocalTime()</dd>
+        <dd>@FormatDateTime(_run.StartedAt)</dd>
         <dt>Completed</dt>
-        <dd>@(_run.CompletedAt is { } completedAt ? completedAt.ToLocalTime().ToString() : "-")</dd>
+        <dd>@(_run.CompletedAt is { } completedAt ? FormatDateTime(completedAt) : "-")</dd>
 
         @if (_run.Kind is RunKind.DotnetCommand or RunKind.GitCommand)
         {
@@ -70,4 +71,12 @@ else
     /// <inheritdoc />
     protected override async Task OnInitializedAsync() =>
         _run = await RunRepository.FindByIdAsync(RunId, CancellationToken.None);
+
+    // Local time, no offset suffix - DateTimeOffset's own default ToString() keeps the "+HH:mm"
+    // offset even after ToLocalTime(), which is redundant clutter for an operator who only ever
+    // cares about their own wall-clock time. Invariant-culture-formatted for the same reason
+    // Status.razor's FormatBytes/FormatPercent are - a locale-dependent format is easy to never
+    // notice on a US/UK-locale dev machine.
+    private static string FormatDateTime(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }

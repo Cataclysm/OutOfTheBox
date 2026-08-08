@@ -1,5 +1,6 @@
 @page "/history"
 @attribute [Authorize]
+@using System.Globalization
 @inject IRunRepository RunRepository
 
 <PageTitle>@VersionInfo.DisplayName - History</PageTitle>
@@ -59,7 +60,7 @@ else
                 <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
                 <span class="run-outcome">@run.Outcome</span>
                 <span class="run-repo">@run.RepoPath</span>
-                <span class="run-started">@run.StartedAt.ToLocalTime()</span>
+                <span class="run-started">@FormatDateTime(run.StartedAt)</span>
                 <a href="@($"history/{run.Id}")">View</a>
             </li>
         }
@@ -139,4 +140,8 @@ else
 
         _runs = await RunRepository.ListAsync(query, CancellationToken.None);
     }
+
+    // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.
+    private static string FormatDateTime(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }

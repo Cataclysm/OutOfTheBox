@@ -290,6 +290,35 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         Assert.Empty(_chartInterop.CreatedCanvasIds);
     }
 
+    [Fact]
+    public async Task Started_and_completed_timestamps_render_as_local_time_with_no_offset_suffix()
+    {
+        // DateTimeOffset's own default ToString() keeps a "+HH:mm"/"Z" suffix even after
+        // ToLocalTime() - regression coverage for FormatDateTime stripping it, since a raw
+        // .ToLocalTime() call (no format string) would silently reintroduce it.
+        var run = await AddRunAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.DotnetCommand,
+            RepoPath = @"C:\repos\example",
+            Arguments = ["build"],
+            StartedAt = new DateTimeOffset(2026, 3, 4, 12, 30, 45, TimeSpan.Zero),
+            CompletedAt = new DateTimeOffset(2026, 3, 4, 12, 31, 0, TimeSpan.Zero),
+            Outcome = RunOutcome.Completed,
+            ExitCode = 0,
+            Stdout = string.Empty,
+            Stderr = string.Empty,
+        });
+
+        var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain('+', cut.Markup);
+            Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", cut.Markup);
+        });
+    }
+
     private async Task<Run> AddRunAsync(Run run)
     {
         await Services.GetRequiredService<IRunRepository>().AddAsync(run, CancellationToken.None);
