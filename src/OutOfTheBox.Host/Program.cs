@@ -79,14 +79,7 @@ builder.Services.AddSingleton<IRunEventBus, InMemoryRunEventBus>();
 // API's per-request bearer header, since a long-lived circuit can't carry an Authorization header
 // per interaction, but checked against the exact same ServiceOptions.BearerToken (per design.md's
 // "Dashboard auth" decision - one shared credential, not two).
-// TEMPORARY DIAGNOSTIC: DetailedErrors=true surfaces the real exception in the browser's own
-// DevTools console instead of just "There was an unhandled exception on the current circuit" -
-// needed because the dedicated low-privilege service account this runs under may lack rights to
-// register/write to a Windows Event Log source, so server-side logging alone isn't yielding the
-// actual exception. MUST be reverted once the circuit-crash bug (tasks.md 17.18j) is root-caused -
-// detailed exception info (stack traces, internal state) should never be exposed to a browser
-// client in normal operation.
-builder.Services.AddRazorComponents().AddInteractiveServerComponents(options => options.DetailedErrors = true);
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
