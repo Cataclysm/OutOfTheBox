@@ -159,8 +159,17 @@ level UI is built instead), pass the same properties on the bootstrapper's own c
 Burn forwards through to the chained MSI:
 
 ```
-OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" BEARERTOKEN="<a real secret>" PORTNUMBER=5443
+OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" PORTNUMBER=5443
 ```
+
+**The bearer token doesn't need to be supplied** — a cryptographically random one is generated
+automatically on first install (shown pre-filled in the config page, or silently resolved on a
+fully unattended install) and preserved automatically on every subsequent upgrade, so operators
+don't need to remember or re-enter it. Pass `BEARERTOKEN="<a value you choose>"` explicitly (either
+on the command line, or by editing the field in the dialog) only if you want a specific token
+instead of the generated one — an explicit value always takes precedence, on a fresh install or an
+upgrade alike. The service account's own Windows logon password is generated and preserved the same
+way, entirely internally — there's nothing to supply for it.
 
 This:
 

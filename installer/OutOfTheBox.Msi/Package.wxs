@@ -53,13 +53,66 @@
     <Property Id="BEARERTOKEN" Hidden="yes" Secure="yes" />
     <Property Id="PORTNUMBER" Value="5443" />
 
+    <!-- The service account's name/domain qualifier - fixed, not operator-configurable. "." is
+         the standard way to qualify a local (non-domain) account in a service Account string. -->
+    <Property Id="SERVICEACCOUNTNAME" Value="svc-outofthebox" />
+    <Property Id="SERVICEACCOUNTDOMAIN" Value="." />
+
+    <!-- Secrets: the service account's own logon password (SERVICEACCOUNTPASSWORD) and the
+         bearer token (BEARERTOKEN, above) both need a real value with no operator involvement
+         required, generated once and then preserved across every subsequent upgrade rather than
+         rotated out from under the operator (or, for the account password, out from under the
+         service's own already-configured Windows logon). ResolveSecrets (below) is what actually
+         resolves both; these two Secure properties are what feed it the prior value on an upgrade,
+         found via RegistrySearch into the persisted copies HKLM\SOFTWARE\OutOfTheBox stores (see
+         PersistedSecretsComponent) - AppSearch (which runs RegistrySearch) always completes before
+         ResolveSecrets' own scheduling point, on both the UI and silent (no-UI) install paths. -->
+    <Property Id="EXISTINGBEARERTOKEN" Secure="yes">
+      <RegistrySearch Id="ExistingBearerTokenSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="BearerToken" Type="raw" />
+    </Property>
+    <Property Id="EXISTINGSERVICEACCOUNTPASSWORD" Secure="yes">
+      <RegistrySearch Id="ExistingServiceAccountPasswordSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="raw" />
+    </Property>
+
+    <Binary Id="ResolveSecretsCA" SourceFile="$(var.ResolveSecretsCaDllPath)" />
+    <CustomAction Id="ResolveSecrets" BinaryRef="ResolveSecretsCA" DllEntry="ResolveSecrets" Execute="immediate" Return="check" />
+
+    <!-- Scheduled in both sequences: InstallUISequence so ConfigDlg's fields already show the
+         resolved (generated-or-preserved) values by the time the operator sees the page, and
+         InstallExecuteSequence so a genuinely silent (`msiexec /quiet`, no UI at all) install or
+         upgrade still resolves them - the two sequences are independent, neither implies the
+         other ran. -->
+    <InstallUISequence>
+      <Custom Action="ResolveSecrets" After="AppSearch" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="ResolveSecrets" After="AppSearch" />
+    </InstallExecuteSequence>
+
     <Feature Id="MainFeature" Title="OutOfTheBox Service" Level="1">
       <ComponentGroupRef Id="PublishOutputComponents" />
       <ComponentRef Id="ServiceAccountComponent" />
       <ComponentRef Id="DataDirectoryComponent" />
       <ComponentRef Id="ServiceComponent" />
       <ComponentRef Id="FirewallComponent" />
+      <ComponentRef Id="PersistedSecretsComponent" />
     </Feature>
+
+    <!-- Persists whatever ResolveSecrets resolved BEARERTOKEN/SERVICEACCOUNTPASSWORD to (freshly
+         generated, or reused from here on a prior install) so the *next* upgrade's
+         EXISTINGBEARERTOKEN/EXISTINGSERVICEACCOUNTPASSWORD RegistrySearch above finds it - this is
+         what makes "upgrades don't change the bearer token, but the operator still can by editing
+         ConfigDlg" true: whatever value ConfigDlg ends up showing (generated default, preserved
+         prior value, or an operator's own edit) is what gets written here and carried forward.
+         Deliberately a plain Registry key (SOFTWARE\OutOfTheBox), not under the service's own
+         Services\OutOfTheBox key used for the Environment value in ServiceComponent - keeps "where
+         the running process reads its config from" and "where the installer stores its own
+         install-to-install bookkeeping" clearly separate, even though both currently hold the same
+         value. -->
+    <Component Id="PersistedSecretsComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a05">
+      <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="BearerToken" Type="string" Value="[BEARERTOKEN]" KeyPath="yes" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="string" Value="[SERVICEACCOUNTPASSWORD]" />
+    </Component>
 
     <!-- Wildcard file harvesting (WiX v4+'s built-in replacement for the old standalone heat.exe
          tool) - every file under the publish output becomes its own Component/File automatically,
@@ -81,7 +134,7 @@
          separate rights-assignment step is needed for that specific right. Removed on uninstall. -->
     <Component Id="ServiceAccountComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a01">
       <util:User Id="ServiceAccount"
-                 Name="svc-outofthebox"
+                 Name="[SERVICEACCOUNTNAME]"
                  Password="[SERVICEACCOUNTPASSWORD]"
                  PasswordNeverExpires="yes"
                  CanNotChangePassword="yes"
@@ -184,7 +237,7 @@
         <Control Id="RepoRootLabel" Type="Text" X="15" Y="55" Width="150" Height="15" NoPrefix="yes" Text="Repository root directory:" />
         <Control Id="RepoRootEdit" Type="Edit" X="15" Y="70" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="95" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present):" />
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="95" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
         <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="110" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
         <Control Id="PortLabel" Type="Text" X="15" Y="135" Width="150" Height="15" NoPrefix="yes" Text="Port:" />

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net472, not net10.0: this DLL is loaded in-process by msiexec.exe (a native host), and
+         .NET Framework 4.7.2 is present on every supported Windows version out of the box - using
+         it avoids this custom action depending on any .NET runtime OutOfTheBox itself needs
+         (this installer's whole point is to *establish* that runtime, so the installer's own
+         custom action can't assume it's there yet). -->
+    <TargetFramework>net472</TargetFramework>
+    <!-- Overrides the repo-root Directory.Build.props' <Nullable>enable</Nullable>/
+         <ImplicitUsings>enable</ImplicitUsings> - net472's default C# language version (7.3)
+         predates both nullable reference type syntax and global using directives entirely. -->
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>7.3</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Dtf.CustomAction" Version="7.0.0" />
+  </ItemGroup>
+
+</Project>

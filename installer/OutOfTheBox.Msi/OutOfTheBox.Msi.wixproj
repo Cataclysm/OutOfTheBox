@@ -11,8 +11,20 @@
          app" and "package the app" as separate, independently re-runnable steps, matching how the
          Burn bootstrapper below also just consumes this MSI's output rather than building it. -->
     <PublishOutputPath Condition="'$(PublishOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\OutOfTheBox.Host\</PublishOutputPath>
-    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath)</DefineConstants>
+    <!-- OutOfTheBox.Msi.CustomActions also inherits the repo-root Directory.Build.props'
+         UseArtifactsOutput, so its build output lands under artifacts/bin/, not a local bin/
+         folder - $(Configuration) is lowercased there, matching the .NET SDK's artifacts-layout
+         convention (e.g. "debug", not "Debug"). -->
+    <ResolveSecretsCaDllPath>$(MSBuildThisFileDirectory)..\..\artifacts\bin\OutOfTheBox.Msi.CustomActions\$(Configuration.ToLowerInvariant())\OutOfTheBox.Msi.CustomActions.CA.dll</ResolveSecretsCaDllPath>
+    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath);ResolveSecretsCaDllPath=$(ResolveSecretsCaDllPath)</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Build-ordering only (WiX doesn't automatically consume a referenced C# project's output
+         as a Binary the way it does for the harvested publish output above) - Package.wxs
+         references the built .CA.dll directly via $(var.ResolveSecretsCaDllPath). -->
+    <ProjectReference Include="..\OutOfTheBox.Msi.CustomActions\OutOfTheBox.Msi.CustomActions.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
