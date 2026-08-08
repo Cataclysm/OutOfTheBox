@@ -25,7 +25,8 @@ public sealed class RepositoryManagementSteps : IDisposable
     private Guid _inFlightRunId;
     private CancellationTokenSource? _inFlightCts;
     private string _inFlightTargetPath = string.Empty;
-    private const string TargetName = "cloned-repo";
+    private FileStream? _lockedFile;
+    private const string TargetName = "cloned-repository";
 
     private async Task EnsureFactoryAsync()
     {
@@ -39,7 +40,7 @@ public sealed class RepositoryManagementSteps : IDisposable
         _scope = _factory.Services.CreateScope();
     }
 
-    private string SourceRepoPath => Path.Combine(_gitFixture!.RootDirectory, "GitFixture");
+    private string SourceRepositoryPath => Path.Combine(_gitFixture!.RootDirectory, "GitFixture");
 
     private IRepositoryManager RepositoryManager => _scope!.ServiceProvider.GetRequiredService<IRepositoryManager>();
 
@@ -51,7 +52,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     public async Task WhenAnOperatorClonesTheFixtureRepositoryUnderANewName()
     {
         await EnsureFactoryAsync();
-        _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
+        _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
 
         // The clone runs in the background (CloneAsync returns as soon as it's accepted) - poll
         // briefly for the terminal history row rather than assuming it's already there.
@@ -76,7 +77,7 @@ public sealed class RepositoryManagementSteps : IDisposable
 
         Assert.NotNull(run);
         Assert.Equal(RunKind.RepositoryClone, run.Kind);
-        Assert.Equal(SourceRepoPath, run.SourceUrl);
+        Assert.Equal(SourceRepositoryPath, run.SourceUrl);
         Assert.Equal(RunOutcome.Completed, run.Outcome);
     }
 
@@ -89,7 +90,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"an operator attempts to clone into that same name")]
-    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
+    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
 
     [Then(@"the clone is rejected as already existing")]
     public void ThenTheCloneIsRejectedAsAlreadyExisting()
@@ -108,7 +109,7 @@ public sealed class RepositoryManagementSteps : IDisposable
 
         // Deterministic rather than racing a real (near-instant, tiny) local clone to completion:
         // pre-acquires the exact lock CloneAsync itself would, via the same shared RunRegistry - a
-        // real "second caller sees this repo as busy" state, without depending on process timing.
+        // real "second caller sees this repository as busy" state, without depending on process timing.
         _inFlightTargetPath = Path.Combine(_gitFixture!.RootDirectory, TargetName);
         _inFlightRunId = Guid.NewGuid();
         _inFlightCts = new CancellationTokenSource();
@@ -118,15 +119,15 @@ public sealed class RepositoryManagementSteps : IDisposable
         {
             Id = _inFlightRunId,
             Kind = RunKind.RepositoryClone,
-            RepoPath = _inFlightTargetPath,
-            SourceUrl = SourceRepoPath,
+            RepositoryPath = _inFlightTargetPath,
+            SourceUrl = SourceRepositoryPath,
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
     }
 
     [When(@"a second clone into that same name is requested before the first finishes")]
-    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
+    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
 
     [Then(@"the second clone is rejected as a conflict identifying the in-flight run")]
     public void ThenTheSecondCloneIsRejectedAsAConflictIdentifyingTheInFlightRun()
@@ -152,7 +153,7 @@ public sealed class RepositoryManagementSteps : IDisposable
         _events = result.Events;
     }
 
-    [Then(@"the command is rejected as a repo conflict")]
+    [Then(@"the command is rejected as a repository conflict")]
     public void ThenTheCommandIsRejectedAsARepoConflict()
     {
         var errorEvent = Assert.Single(_events, e => e.Name == "error");
@@ -164,7 +165,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     {
         await EnsureFactoryAsync();
         Directory.CreateDirectory(Path.Combine(_gitFixture!.RootDirectory, TargetName));
-        await File.WriteAllTextAsync(Path.Combine(_gitFixture.RootDirectory, TargetName, "marker.txt"), "idle repo");
+        await File.WriteAllTextAsync(Path.Combine(_gitFixture.RootDirectory, TargetName, "marker.txt"), "idle repository");
     }
 
     [When(@"an operator deletes that repository")]
@@ -190,6 +191,38 @@ public sealed class RepositoryManagementSteps : IDisposable
         Assert.Equal(RunOutcome.Completed, run.Outcome);
     }
 
+    [Given(@"a file inside that repository is locked open")]
+    public void GivenAFileInsideThatRepositoryIsLockedOpen()
+    {
+        var markerPath = Path.Combine(_gitFixture!.RootDirectory, TargetName, "marker.txt");
+
+        // FileShare.Read (no Delete flag) - matches how a real locking process would hold a file
+        // open (e.g. still loaded, or mid-scan) - Directory.Delete's own attempt to remove this
+        // file then fails with the classic "being used by another process" IOException, the exact
+        // real-machine scenario that surfaced RepositoryManager.DeleteAsync's missing catch.
+        _lockedFile = new FileStream(markerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+    }
+
+    [Then(@"the deletion is accepted but the run records a failed outcome")]
+    public async Task ThenTheDeletionIsAcceptedButTheRunRecordsAFailedOutcome()
+    {
+        var accepted = Assert.IsType<RepositoryActionResult.Accepted>(_deleteResult);
+        var run = await RunRepository.FindByIdAsync(accepted.RunId, CancellationToken.None);
+
+        Assert.NotNull(run);
+        Assert.Equal(RunOutcome.Failed, run.Outcome);
+
+        // The exact bug this scenario guards against: CompletedAt getting set by the method's own
+        // `finally` block while Outcome silently stayed at Running, because nothing caught the
+        // exception Directory.Delete threw - a contradictory persisted state (in flight, but with
+        // a completion timestamp) that's now impossible since the catch fixes the exact cause.
+        Assert.NotNull(run.CompletedAt);
+    }
+
+    [Then(@"the repository still exists on disk")]
+    public void ThenTheRepositoryStillExistsOnDisk() =>
+        Assert.True(Directory.Exists(Path.Combine(_gitFixture!.RootDirectory, TargetName)));
+
     [When(@"an operator attempts to delete a name that does not exist")]
     public async Task WhenAnOperatorAttemptsToDeleteANameThatDoesNotExist()
     {
@@ -210,7 +243,7 @@ public sealed class RepositoryManagementSteps : IDisposable
         await EnsureFactoryAsync();
 
         // Deterministic, same reasoning as "a clone into a given name is already in flight" - a
-        // real `git`/`dotnet` command against a tiny fixture repo finishes near-instantly, not
+        // real `git`/`dotnet` command against a tiny fixture repository finishes near-instantly, not
         // reliably still in flight by the time the delete attempt below runs. RunRegistry doesn't
         // care which kind holds a lock, only that something does, so this exercises the exact same
         // conflict path a real in-flight command would hit.
@@ -223,7 +256,7 @@ public sealed class RepositoryManagementSteps : IDisposable
         {
             Id = _inFlightRunId,
             Kind = RunKind.GitCommand,
-            RepoPath = _inFlightTargetPath,
+            RepositoryPath = _inFlightTargetPath,
             Arguments = ["status"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -306,6 +339,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     public void Dispose()
     {
         _httpResponse?.Dispose();
+        _lockedFile?.Dispose();
         _inFlightCts?.Dispose();
         _scope?.Dispose();
         _factory?.Dispose();

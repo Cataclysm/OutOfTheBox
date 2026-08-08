@@ -1,6 +1,6 @@
 Feature: Dotnet Command Execution
     Mirrors specs/dotnet-command-execution/spec.md, driven against a real running instance of the
-    service (Host, via WebApplicationFactory) pointed at the checked-in fixture repos, so real
+    service (Host, via WebApplicationFactory) pointed at the checked-in fixture repositories, so real
     dotnet.exe child processes are genuinely spawned - this is the behavior under test.
 
     Scenario: Successful test run round trip

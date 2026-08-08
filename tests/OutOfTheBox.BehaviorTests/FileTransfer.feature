@@ -1,6 +1,6 @@
-Feature: Artifact Transfer
-    Mirrors specs/artifact-transfer/spec.md, driven against a real running instance of the service
-    (Host, via WebApplicationFactory) pointed at the checked-in fixture repos.
+Feature: File Transfer
+    Mirrors specs/file-transfer/spec.md, driven against a real running instance of the service
+    (Host, via WebApplicationFactory) pointed at the checked-in fixture repositories.
 
     Scenario: Successful transfer of a file a build produced
         Given a dotnet test run has produced "TestResults/results.trx" in "PassingFixture"
@@ -20,7 +20,7 @@ Feature: Artifact Transfer
         When an authenticated caller transfers "does-not-exist.txt" from "PassingFixture"
         Then the transfer is rejected as not found
 
-    Scenario: A transfer proceeds while a command is in flight against the same repo
+    Scenario: A transfer proceeds while a command is in flight against the same repository
         Given a command run is in flight against "HangingFixture"
         When an authenticated caller transfers "SampleTests.cs" from "HangingFixture"
         Then the transfer's run id is returned

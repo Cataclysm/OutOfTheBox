@@ -40,7 +40,7 @@ public sealed class ProcessMonitorTests
         // Process.GetProcessById/Kill on the real, running test process.
         const int fakeRootProcessId = 999_999;
         var runId = Guid.NewGuid();
-        registry.TryAcquire(@"C:\repos\example", runId, cts, out _);
+        registry.TryAcquire(@"C:\repositories\example", runId, cts, out _);
         registry.SetProcessId(runId, fakeRootProcessId);
 
         var monitor = new ProcessMonitor(registry);

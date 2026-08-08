@@ -14,7 +14,7 @@ public static class VersionInfo
     /// <summary>
     /// The product's human-readable display name - "Out of the Box" (spaced, the way an operator
     /// would actually write it), distinct from the "OutOfTheBox" identifier used throughout the
-    /// codebase/repo/file names. Every dashboard page and <see cref="VersionEndpoints"/> reads the
+    /// codebase/repository/file names. Every dashboard page and <see cref="VersionEndpoints"/> reads the
     /// same constant, rather than each hardcoding its own copy of the string.
     /// </summary>
     public const string DisplayName = "Out of the Box";

@@ -1,4 +1,4 @@
-@page "/repos"
+@page "/repository-management"
 @attribute [Authorize]
 @using System.Globalization
 @using OutOfTheBox.Application.Concurrency
@@ -10,9 +10,9 @@
 @inject IRunEventBus RunEventBus
 @implements IDisposable
 
-<PageTitle>@VersionInfo.DisplayName - Repos</PageTitle>
+<PageTitle>@VersionInfo.DisplayName - Repositories</PageTitle>
 
-<h1>Repos</h1>
+<h1>Repositories</h1>
 
 <div class="history-filters">
     <label>
@@ -28,7 +28,7 @@
             <option value="">(any)</option>
             <option value="clean">Clean</option>
             <option value="dirty">Dirty</option>
-            <option value="no-git">Not a git repo</option>
+            <option value="no-git">Not a git repository</option>
         </select>
     </label>
     <button type="button" @onclick="ClearFilters">Clear filters</button>
@@ -40,11 +40,11 @@
     <div class="history-filters">
         <label>
             Source URL
-            <input type="text" @bind="_cloneUrl" placeholder="https://example.com/repo.git" />
+            <input type="text" @bind="_cloneUrl" placeholder="https://example.com/repository.git" />
         </label>
         <label>
             Name
-            <input type="text" @bind="_cloneName" placeholder="new-repo-name" />
+            <input type="text" @bind="_cloneName" placeholder="new-repository-name" />
         </label>
         <button type="button" class="btn-primary" @onclick="SubmitCloneAsync">Start clone</button>
         @if (_cloneError is not null)
@@ -68,21 +68,21 @@ else
     else
     {
         <ul class="run-list">
-            @foreach (var repo in filtered)
+            @foreach (var repository in filtered)
             {
                 <li class="run-row">
-                    <span class="kind-badge">@(repo.IsActive ? "Active" : "Idle")</span>
-                    <a href="@($"repos/{repo.Name}")">@repo.Name</a>
-                    <span>@(repo.StatsComputed ? FormatSize(repo.TotalSizeBytes) : "computing…")</span>
-                    <span>@GitStatusText(repo)</span>
-                    @if (_inFlightClonesByRepoName.TryGetValue(repo.Name, out var cloneRunId))
+                    <span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span>
+                    <a href="@($"repository-management/{repository.Name}")">@repository.Name</a>
+                    <span>@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "computing…")</span>
+                    <span>@GitStatusText(repository)</span>
+                    @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
                     {
                         <button type="button" @onclick="@(() => CancelCloneAsync(cloneRunId))">Cancel clone</button>
                     }
                     else
                     {
-                        <button type="button" class="@(_deleteConfirmName == repo.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repo.Name))">
-                            @(_deleteConfirmName == repo.Name ? "Confirm delete?" : "Delete")
+                        <button type="button" class="@(_deleteConfirmName == repository.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repository.Name))">
+                            @(_deleteConfirmName == repository.Name ? "Confirm delete?" : "Delete")
                         </button>
                     }
                 </li>
@@ -93,7 +93,7 @@ else
 
 @code {
     private IReadOnlyList<RepositorySummary>? _summaries;
-    private Dictionary<string, Guid> _inFlightClonesByRepoName = [];
+    private Dictionary<string, Guid> _inFlightClonesByRepositoryName = [];
     private IDisposable? _subscription;
     private bool _showCloneForm;
     private string _cloneUrl = string.Empty;
@@ -132,7 +132,7 @@ else
         var inFlightClones = await RunRepository.ListAsync(
             new RunQuery { Kinds = [RunKind.RepositoryClone], Outcomes = [RunOutcome.Running] },
             CancellationToken.None);
-        _inFlightClonesByRepoName = inFlightClones.ToDictionary(r => Path.GetFileName(r.RepoPath), r => r.Id);
+        _inFlightClonesByRepositoryName = inFlightClones.ToDictionary(r => Path.GetFileName(r.RepositoryPath), r => r.Id);
     }
 
     private IReadOnlyList<RepositorySummary> FilteredSummaries()
@@ -217,28 +217,28 @@ else
         _ => $"{bytes} B",
     };
 
-    private static string GitStatusText(RepositorySummary repo)
+    private static string GitStatusText(RepositorySummary repository)
     {
-        if (!repo.StatsComputed)
+        if (!repository.StatsComputed)
         {
             return "computing…";
         }
 
-        if (!repo.IsGitRepository)
+        if (!repository.IsGitRepository)
         {
-            return "not a git repo";
+            return "not a git repository";
         }
 
-        var status = $"{repo.Branch ?? "(no branch)"} ({(repo.IsDirty ? "dirty" : "clean")})";
+        var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";
 
-        if (repo.AheadCount is > 0)
+        if (repository.AheadCount is > 0)
         {
-            status += $", ahead {repo.AheadCount}";
+            status += $", ahead {repository.AheadCount}";
         }
 
-        if (repo.BehindCount is > 0)
+        if (repository.BehindCount is > 0)
         {
-            status += $", behind {repo.BehindCount}";
+            status += $", behind {repository.BehindCount}";
         }
 
         return status;

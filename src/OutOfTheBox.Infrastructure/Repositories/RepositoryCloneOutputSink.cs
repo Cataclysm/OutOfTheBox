@@ -14,7 +14,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// has no SSE consumer (it's started from Blazor, not an HTTP request), so this is the same
 /// accumulate-and-publish behavior without the SSE-writing half.
 /// </summary>
-public sealed class RepositoryCloneOutputSink(IRunEventBus runEventBus, Guid runId, string repoPath, long capBytes) : IProcessOutputSink
+public sealed class RepositoryCloneOutputSink(IRunEventBus runEventBus, Guid runId, string repositoryPath, long capBytes) : IProcessOutputSink
 {
     private readonly StringBuilder _stdout = new();
     private readonly StringBuilder _stderr = new();
@@ -53,7 +53,7 @@ public sealed class RepositoryCloneOutputSink(IRunEventBus runEventBus, Guid run
 
         _bytesWritten += lineBytes;
         accumulator.AppendLine(line);
-        runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryClone, RunEventType.OutputLine, repoPath) { OutputStream = stream, OutputLine = line });
+        runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryClone, RunEventType.OutputLine, repositoryPath) { OutputStream = stream, OutputLine = line });
 
         return Task.CompletedTask;
     }

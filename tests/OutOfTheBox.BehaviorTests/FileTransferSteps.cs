@@ -11,9 +11,9 @@ using Reqnroll;
 
 namespace OutOfTheBox.BehaviorTests;
 
-/// <summary>Step definitions backing <c>ArtifactTransfer.feature</c>.</summary>
+/// <summary>Step definitions backing <c>FileTransfer.feature</c>.</summary>
 [Binding]
-public sealed class ArtifactTransferSteps : IDisposable
+public sealed class FileTransferSteps : IDisposable
 {
     private CommandExecutionServiceFactory? _factory;
     private HttpClient? _client;
@@ -73,14 +73,14 @@ public sealed class ArtifactTransferSteps : IDisposable
     }
 
     [When(@"an authenticated caller transfers ""(.*)"" from ""(.*)""")]
-    public async Task WhenAnAuthenticatedCallerTransfers(string path, string repo)
+    public async Task WhenAnAuthenticatedCallerTransfers(string path, string repository)
     {
-        _sourceFilePath = Path.Combine(CommandExecutionServiceFactory.FindFixturesRoot(), repo, path);
+        _sourceFilePath = Path.Combine(CommandExecutionServiceFactory.FindFixturesRoot(), repository, path);
 
         using var client = Factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/artifacts")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/files")
         {
-            Content = JsonContent.Create(new { repo, path }),
+            Content = JsonContent.Create(new { repository, path }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
 
@@ -89,11 +89,11 @@ public sealed class ArtifactTransferSteps : IDisposable
     }
 
     [When(@"an authenticated caller starts transferring ""(.*)"" from ""(.*)""")]
-    public async Task WhenAnAuthenticatedCallerStartsTransferring(string path, string repo)
+    public async Task WhenAnAuthenticatedCallerStartsTransferring(string path, string repository)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/artifacts")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/files")
         {
-            Content = JsonContent.Create(new { repo, path }),
+            Content = JsonContent.Create(new { repository, path }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
 

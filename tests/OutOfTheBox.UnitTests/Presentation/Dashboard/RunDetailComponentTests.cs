@@ -36,7 +36,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test", "--filter", "Foo"],
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
@@ -63,7 +63,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.GitCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["fetch", "--all"],
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
@@ -82,14 +82,14 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
-    public async Task Renders_a_cancelled_artifact_transfer_without_a_stdout_panel()
+    public async Task Renders_a_cancelled_file_transfer_without_a_stdout_panel()
     {
         var run = await AddRunAsync(new Run
         {
             Id = Guid.NewGuid(),
-            Kind = RunKind.ArtifactTransfer,
-            RepoPath = @"C:\repos\example",
-            ArtifactPath = "bin/output.dll",
+            Kind = RunKind.FileTransfer,
+            RepositoryPath = @"C:\repositories\example",
+            FilePath = "bin/output.dll",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Cancelled,
@@ -112,20 +112,20 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.RepositoryClone,
-            RepoPath = @"C:\repos\new-repo",
-            SourceUrl = "https://example.com/repo.git",
+            RepositoryPath = @"C:\repositories\new-repository",
+            SourceUrl = "https://example.com/repository.git",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Completed,
             ExitCode = 0,
-            Stdout = "Cloning into 'new-repo'...",
+            Stdout = "Cloning into 'new-repository'...",
         });
 
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("https://example.com/repo.git", cut.Markup);
+            Assert.Contains("https://example.com/repository.git", cut.Markup);
             Assert.Contains("Cloning into", cut.Markup);
         });
     }
@@ -137,8 +137,8 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.RepositoryClone,
-            RepoPath = @"C:\repos\existing",
-            SourceUrl = "https://example.com/repo.git",
+            RepositoryPath = @"C:\repositories\existing",
+            SourceUrl = "https://example.com/repository.git",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.AlreadyExists,
@@ -156,7 +156,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.RepositoryDelete,
-            RepoPath = @"C:\repos\removed-repo",
+            RepositoryPath = @"C:\repositories\removed-repository",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Completed,
@@ -166,9 +166,9 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(@"C:\repos\removed-repo", cut.Markup);
+            Assert.Contains(@"C:\repositories\removed-repository", cut.Markup);
             Assert.Contains("Completed", cut.Markup);
-            // Delete has no command/exit-code/source-URL/artifact fields and no stdout/stderr panel.
+            // Delete has no command/exit-code/source-URL/file-path fields and no stdout/stderr panel.
             Assert.DoesNotContain("run-output", cut.Markup);
             Assert.DoesNotContain("Exit code", cut.Markup);
         });
@@ -181,7 +181,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.RepositoryDelete,
-            RepoPath = @"C:\repos\does-not-exist",
+            RepositoryPath = @"C:\repositories\does-not-exist",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.NotFound,
@@ -199,7 +199,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["build"],
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
@@ -222,7 +222,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-15),
             CompletedAt = DateTimeOffset.UtcNow,
@@ -253,9 +253,9 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         var run = await AddRunAsync(new Run
         {
             Id = Guid.NewGuid(),
-            Kind = RunKind.ArtifactTransfer,
-            RepoPath = @"C:\repos\example",
-            ArtifactPath = "bin/output.dll",
+            Kind = RunKind.FileTransfer,
+            RepositoryPath = @"C:\repositories\example",
+            FilePath = "bin/output.dll",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Completed,
@@ -278,7 +278,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.RepositoryDelete,
-            RepoPath = @"C:\repos\removed-repo",
+            RepositoryPath = @"C:\repositories\removed-repository",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Completed,
@@ -286,7 +286,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\removed-repo", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\removed-repository", cut.Markup));
         Assert.Empty(_chartInterop.CreatedCanvasIds);
     }
 
@@ -300,7 +300,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["build"],
             StartedAt = new DateTimeOffset(2026, 3, 4, 12, 30, 45, TimeSpan.Zero),
             CompletedAt = new DateTimeOffset(2026, 3, 4, 12, 31, 0, TimeSpan.Zero),

@@ -19,17 +19,17 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
     private static readonly TimeSpan GitInvocationTimeout = TimeSpan.FromSeconds(10);
 
     /// <inheritdoc />
-    public async Task<RepositoryStats> ComputeAsync(string repoPath, CancellationToken cancellationToken)
+    public async Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken)
     {
-        var totalSizeBytes = ComputeDirectorySize(repoPath);
+        var totalSizeBytes = ComputeDirectorySize(repositoryPath);
 
-        if (!Directory.Exists(Path.Combine(repoPath, ".git")))
+        if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
         {
             return new RepositoryStats(totalSizeBytes, IsGitRepository: false, Branch: null, IsDirty: false, AheadCount: null, BehindCount: null);
         }
 
-        var branch = (await RunGitCaptureAsync(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
-        var statusOutput = await RunGitCaptureAsync(repoPath, ["status", "--porcelain"], cancellationToken);
+        var branch = (await RunGitCaptureAsync(repositoryPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
+        var statusOutput = await RunGitCaptureAsync(repositoryPath, ["status", "--porcelain"], cancellationToken);
         var isDirty = !string.IsNullOrEmpty(statusOutput?.Trim());
 
         int? ahead = null;
@@ -38,7 +38,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
         // Fails (non-zero exit) when no upstream is configured - treated as "no upstream" rather
         // than an error, per specs/repository-management's "ahead/behind its upstream if one is
         // configured" wording.
-        var aheadBehind = await RunGitCaptureAsync(repoPath, ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], cancellationToken);
+        var aheadBehind = await RunGitCaptureAsync(repositoryPath, ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], cancellationToken);
         if (aheadBehind is not null)
         {
             var parts = aheadBehind.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);

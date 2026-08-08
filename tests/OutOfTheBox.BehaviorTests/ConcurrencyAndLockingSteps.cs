@@ -109,9 +109,9 @@ public sealed class ConcurrencyAndLockingSteps : IDisposable
 
     [When(@"a second authenticated git run is started against ""(.*)""")]
     public Task WhenASecondAuthenticatedGitRunIsStartedAgainst(string fixtureName) =>
-        // No real git repo exists at this path (HangingFixture is a plain dotnet fixture) - that's
+        // No real git repository exists at this path (HangingFixture is a plain dotnet fixture) - that's
         // fine, since the point of this scenario is that the request never gets far enough to
-        // invoke git.exe at all: it must be rejected by the repo lock first.
+        // invoke git.exe at all: it must be rejected by the repository lock first.
         StartSecondRunAsync(Client, "/run/git", ["status"], fixtureName, timeoutSeconds: null);
 
     [When(@"a second authenticated run is started against the git fixture")]
@@ -167,7 +167,7 @@ public sealed class ConcurrencyAndLockingSteps : IDisposable
         Assert.Equal(_inFlightRunId, payload.RootElement.GetProperty("runId").GetGuid());
     }
 
-    [Then(@"the second run is rejected as a repo conflict")]
+    [Then(@"the second run is rejected as a repository conflict")]
     public void ThenTheSecondRunIsRejectedAsARepoConflict()
     {
         var conflictRejection = _secondRunResult!.Events
@@ -175,22 +175,22 @@ public sealed class ConcurrencyAndLockingSteps : IDisposable
             .Select(e => JsonDocument.Parse(e.Data))
             .Any(payload => payload.RootElement.TryGetProperty("runId", out _));
 
-        Assert.True(conflictRejection, "Expected the second run to be rejected as a repo conflict.");
+        Assert.True(conflictRejection, "Expected the second run to be rejected as a repository conflict.");
     }
 
     [Then(@"the second run is accepted")]
     public void ThenTheSecondRunIsAccepted()
     {
-        // "Accepted" means the repo's lock was free - not that this second run necessarily
+        // "Accepted" means the repository's lock was free - not that this second run necessarily
         // completes successfully. Against HangingFixture it will time out on its own short
-        // timeout, same as the first run did; what must NOT happen is a busy-repo rejection
+        // timeout, same as the first run did; what must NOT happen is a busy-repository rejection
         // (an "error" event carrying a conflicting runId).
         var conflictRejection = _secondRunResult!.Events
             .Where(e => e.Name == "error")
             .Select(e => JsonDocument.Parse(e.Data))
             .Any(payload => payload.RootElement.TryGetProperty("runId", out _));
 
-        Assert.False(conflictRejection, "Expected the second run not to be rejected as a repo conflict.");
+        Assert.False(conflictRejection, "Expected the second run not to be rejected as a repository conflict.");
     }
 
     /// <inheritdoc />

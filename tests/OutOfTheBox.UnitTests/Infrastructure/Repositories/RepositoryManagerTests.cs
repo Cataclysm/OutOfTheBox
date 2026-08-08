@@ -56,7 +56,7 @@ public sealed class RepositoryManagerTests : IDisposable
     {
         var manager = CreateManager(new RunRegistry());
 
-        var result = await manager.CloneAsync("https://example.com/repo.git", @"..\evil", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", @"..\evil", CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
@@ -65,11 +65,11 @@ public sealed class RepositoryManagerTests : IDisposable
     [Fact]
     public async Task CloneAsync_rejects_a_name_that_already_exists_and_records_a_history_row()
     {
-        Directory.CreateDirectory(Path.Combine(_root, "existing-repo"));
+        Directory.CreateDirectory(Path.Combine(_root, "existing-repository"));
         var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
         var manager = CreateManager(new RunRegistry(), runRepository);
 
-        var result = await manager.CloneAsync("https://example.com/repo.git", "existing-repo", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", "existing-repository", CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.AlreadyExists, rejected.Reason);
@@ -77,7 +77,7 @@ public sealed class RepositoryManagerTests : IDisposable
         var recorded = await runRepository.ListAsync(new RunQuery { Kinds = [RunKind.RepositoryClone] }, CancellationToken.None);
         var row = Assert.Single(recorded);
         Assert.Equal(RunOutcome.AlreadyExists, row.Outcome);
-        Assert.Equal("https://example.com/repo.git", row.SourceUrl);
+        Assert.Equal("https://example.com/repository.git", row.SourceUrl);
     }
 
     [Fact]
@@ -86,11 +86,11 @@ public sealed class RepositoryManagerTests : IDisposable
         var registry = new RunRegistry();
         using var cts = new CancellationTokenSource();
         var conflictingRunId = Guid.NewGuid();
-        registry.TryAcquire(Path.Combine(_root, "target-repo"), conflictingRunId, cts, out _);
+        registry.TryAcquire(Path.Combine(_root, "target-repository"), conflictingRunId, cts, out _);
 
         var manager = CreateManager(registry);
 
-        var result = await manager.CloneAsync("https://example.com/repo.git", "target-repo", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", "target-repository", CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
@@ -127,44 +127,44 @@ public sealed class RepositoryManagerTests : IDisposable
     [Fact]
     public async Task DeleteAsync_is_rejected_as_busy_and_leaves_the_repository_untouched()
     {
-        var repoPath = Path.Combine(_root, "busy-repo");
-        Directory.CreateDirectory(repoPath);
-        File.WriteAllText(Path.Combine(repoPath, "file.txt"), "content");
+        var repositoryPath = Path.Combine(_root, "busy-repository");
+        Directory.CreateDirectory(repositoryPath);
+        File.WriteAllText(Path.Combine(repositoryPath, "file.txt"), "content");
 
         var registry = new RunRegistry();
         using var cts = new CancellationTokenSource();
         var conflictingRunId = Guid.NewGuid();
-        registry.TryAcquire(repoPath, conflictingRunId, cts, out _);
+        registry.TryAcquire(repositoryPath, conflictingRunId, cts, out _);
 
         var manager = CreateManager(registry);
 
-        var result = await manager.DeleteAsync("busy-repo", CancellationToken.None);
+        var result = await manager.DeleteAsync("busy-repository", CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
         Assert.Equal(conflictingRunId, rejected.ConflictingRunId);
-        Assert.True(Directory.Exists(repoPath));
-        Assert.True(File.Exists(Path.Combine(repoPath, "file.txt")));
+        Assert.True(Directory.Exists(repositoryPath));
+        Assert.True(File.Exists(Path.Combine(repositoryPath, "file.txt")));
     }
 
     [Fact]
     public async Task DeleteAsync_removes_an_idle_repository_and_records_a_completed_history_row()
     {
-        var repoPath = Path.Combine(_root, "idle-repo");
-        Directory.CreateDirectory(repoPath);
-        File.WriteAllText(Path.Combine(repoPath, "file.txt"), "content");
+        var repositoryPath = Path.Combine(_root, "idle-repository");
+        Directory.CreateDirectory(repositoryPath);
+        File.WriteAllText(Path.Combine(repositoryPath, "file.txt"), "content");
 
         var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
         var statsCache = new RepositoryStatsCache();
-        statsCache.Set("idle-repo", new RepositoryStats(1, false, null, false, null, null));
+        statsCache.Set("idle-repository", new RepositoryStats(1, false, null, false, null, null));
 
         var manager = CreateManager(new RunRegistry(), runRepository, statsCache);
 
-        var result = await manager.DeleteAsync("idle-repo", CancellationToken.None);
+        var result = await manager.DeleteAsync("idle-repository", CancellationToken.None);
 
         Assert.IsType<RepositoryActionResult.Accepted>(result);
-        Assert.False(Directory.Exists(repoPath));
-        Assert.Null(statsCache.TryGet("idle-repo"));
+        Assert.False(Directory.Exists(repositoryPath));
+        Assert.Null(statsCache.TryGet("idle-repository"));
 
         var recorded = await runRepository.ListAsync(new RunQuery { Kinds = [RunKind.RepositoryDelete] }, CancellationToken.None);
         var row = Assert.Single(recorded);
@@ -214,7 +214,7 @@ public sealed class RepositoryManagerTests : IDisposable
 
     private sealed class UnreachableStatsProvider : IRepositoryStatsProvider
     {
-        public Task<RepositoryStats> ComputeAsync(string repoPath, CancellationToken cancellationToken) =>
+        public Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A rejection-path test unexpectedly reached stats computation.");
     }
 }

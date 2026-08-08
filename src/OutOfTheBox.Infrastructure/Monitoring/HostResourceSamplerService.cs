@@ -17,7 +17,7 @@ namespace OutOfTheBox.Infrastructure.Monitoring;
 /// via <see cref="IResourceSampler"/>, updates the live <see cref="ResourceHistoryBuffer"/>,
 /// publishes to <see cref="IResourceEventBus"/>, and persists one <see cref="RunResourceSample"/>
 /// row per in-flight run. Distinct from, and runs at a faster cadence than, §13's repository-stats
-/// sampler. Per design.md's "Artifact transfers get a resource-sample series too" decision, each
+/// sampler. Per design.md's "File transfers get a resource-sample series too" decision, each
 /// tick also tags every in-flight transfer with that tick's host-level figures, since a transfer
 /// has no process tree of its own to sample.
 /// </summary>
@@ -100,7 +100,7 @@ public sealed class HostResourceSamplerService(
         }
 
         var inFlightTransfers = await runRepository.ListAsync(
-            new RunQuery { Kinds = [RunKind.ArtifactTransfer], Outcomes = [RunOutcome.Running] },
+            new RunQuery { Kinds = [RunKind.FileTransfer], Outcomes = [RunOutcome.Running] },
             cancellationToken);
 
         foreach (var transfer in inFlightTransfers)

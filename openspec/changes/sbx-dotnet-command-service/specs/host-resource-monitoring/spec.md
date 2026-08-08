@@ -1,6 +1,6 @@
 ## Purpose
 
-Gives the operator visibility into host and process resource usage while `dotnet`/`git` commands run, and a way to terminate a specific hung process (e.g. a `testhost.exe` that won't exit) without necessarily tearing down the whole run. Also backs the host-level resource series recorded for artifact transfers (per `artifact-transfer`), which spawn no process tree of their own.
+Gives the operator visibility into host and process resource usage while `dotnet`/`git` commands run, and a way to terminate a specific hung process (e.g. a `testhost.exe` that won't exit) without necessarily tearing down the whole run. Also backs the host-level resource series recorded for file transfers (per `file-transfer`), which spawn no process tree of their own.
 
 ## ADDED Requirements
 

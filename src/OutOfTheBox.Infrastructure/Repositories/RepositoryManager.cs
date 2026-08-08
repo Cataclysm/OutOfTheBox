@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.ComponentModel;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
@@ -88,7 +89,7 @@ public sealed class RepositoryManager(
             {
                 Id = Guid.NewGuid(),
                 Kind = RunKind.RepositoryClone,
-                RepoPath = targetPath,
+                RepositoryPath = targetPath,
                 SourceUrl = url,
                 StartedAt = now,
                 CompletedAt = now,
@@ -111,7 +112,7 @@ public sealed class RepositoryManager(
         {
             Id = runId,
             Kind = RunKind.RepositoryClone,
-            RepoPath = targetPath,
+            RepositoryPath = targetPath,
             SourceUrl = url,
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -146,7 +147,7 @@ public sealed class RepositoryManager(
             {
                 Id = Guid.NewGuid(),
                 Kind = RunKind.RepositoryDelete,
-                RepoPath = targetPath,
+                RepositoryPath = targetPath,
                 StartedAt = now,
                 CompletedAt = now,
                 Outcome = RunOutcome.NotFound,
@@ -170,7 +171,7 @@ public sealed class RepositoryManager(
         {
             Id = runId,
             Kind = RunKind.RepositoryDelete,
-            RepoPath = targetPath,
+            RepositoryPath = targetPath,
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         };
@@ -181,6 +182,16 @@ public sealed class RepositoryManager(
         {
             Directory.Delete(targetPath, recursive: true);
             run.Outcome = RunOutcome.Completed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A locked file (still open in another process) or a permission/read-only-attribute
+            // problem - found on real-machine use: without this catch, Directory.Delete's
+            // exception propagated straight out of this method (only a `finally` existed, no
+            // `catch`), which still ran and set CompletedAt but never reached the line above that
+            // sets Outcome, leaving the persisted row in the contradictory Running-but-completed
+            // state that surfaced the bug - and nothing was actually deleted, silently.
+            run.Outcome = RunOutcome.Failed;
         }
         finally
         {
@@ -228,6 +239,18 @@ public sealed class RepositoryManager(
                 run.Stderr = sink.Stderr;
                 run.Truncated = sink.Truncated;
                 run.Outcome = cancelRequestCts.IsCancellationRequested ? RunOutcome.Cancelled : RunOutcome.TimedOut;
+            }
+            catch (Win32Exception)
+            {
+                // git.exe failing to even start (missing/corrupted) - same class of "operation
+                // attempted but failed outside caller control" as RepositoryManager.DeleteAsync's
+                // IOException/UnauthorizedAccessException catch. Without this, the exception would
+                // propagate out of this background continuation entirely, skipping the
+                // UpdateAsync call below and leaving the run parked at Running forever - this
+                // method has no HTTP response to abort onto, so there's no other signal that
+                // would ever surface the failure.
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Failed;
             }
 
             // A fresh scope/DbContext, not the caller's - the Blazor circuit that started this

@@ -11,7 +11,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// <summary>
 /// Background sampler recomputing every repository's size/git status on a slow cadence (default
 /// 60s, per <see cref="ServiceOptions.RepositoryStatsSamplerIntervalSeconds"/>) plus immediately
-/// whenever a run against a specific repo reaches a terminal state - per design.md's "Repository
+/// whenever a run against a specific repository reaches a terminal state - per design.md's "Repository
 /// stats" decision. Distinct from, and runs at a different cadence than, the host/process resource
 /// sampler (Section 14).
 /// </summary>
@@ -53,9 +53,9 @@ public sealed class RepositoryStatsSampler(
             return;
         }
 
-        // Recompute just this one repo, not the whole set - the event-driven half of the "slow
+        // Recompute just this one repository, not the whole set - the event-driven half of the "slow
         // cadence plus event-driven recompute" decision.
-        _ = RecomputeOneAsync(runEvent.RepoPath, CancellationToken.None);
+        _ = RecomputeOneAsync(runEvent.RepositoryPath, CancellationToken.None);
     }
 
     private async Task RecomputeAllAsync(CancellationToken cancellationToken)
@@ -77,9 +77,9 @@ public sealed class RepositoryStatsSampler(
         }
     }
 
-    private async Task RecomputeOneAsync(string repoPath, CancellationToken cancellationToken)
+    private async Task RecomputeOneAsync(string repositoryPath, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(repoPath))
+        if (!Directory.Exists(repositoryPath))
         {
             // Deleted between being enumerated/referenced and this tick running - nothing to
             // compute; RepositoryManager.DeleteAsync already removes its cache entry directly.
@@ -88,8 +88,8 @@ public sealed class RepositoryStatsSampler(
 
         try
         {
-            var stats = await statsProvider.ComputeAsync(repoPath, cancellationToken);
-            statsCache.Set(Path.GetFileName(repoPath), stats);
+            var stats = await statsProvider.ComputeAsync(repositoryPath, cancellationToken);
+            statsCache.Set(Path.GetFileName(repositoryPath), stats);
         }
         catch (OperationCanceledException)
         {

@@ -1,28 +1,28 @@
 Feature: Concurrency and Locking
-    Mirrors specs/dotnet-command-execution's "Commands against different repos run in parallel"
-    and "One in-flight command per repo" requirements.
+    Mirrors specs/dotnet-command-execution's "Commands against different repositories run in parallel"
+    and "One in-flight command per repository" requirements.
 
-    Scenario: Commands against different repos run in parallel
+    Scenario: Commands against different repositories run in parallel
         When authenticated runs are started concurrently against "PassingFixture" and "FailingFixture"
         Then both concurrent runs complete independently
 
-    Scenario: A second request for a busy repo is rejected
+    Scenario: A second request for a busy repository is rejected
         Given an in-flight run against "HangingFixture"
         When a second authenticated run is started against "HangingFixture"
         Then the second run is rejected identifying the in-flight run's id
 
-    Scenario: The repo becomes available again once the in-flight run ends
+    Scenario: The repository becomes available again once the in-flight run ends
         Given an in-flight run against "HangingFixture" with a 3 second timeout
         When that run reaches a terminal state
         And a second authenticated run is started against "HangingFixture" with a 3 second timeout
         Then the second run is accepted
 
-    Scenario: A git run is rejected while a dotnet run is in flight for the same repo
+    Scenario: A git run is rejected while a dotnet run is in flight for the same repository
         Given an in-flight run against "HangingFixture"
         When a second authenticated git run is started against "HangingFixture"
         Then the second run is rejected identifying the in-flight run's id
 
-    Scenario: A dotnet run is rejected while a git run is in flight for the same repo
+    Scenario: A dotnet run is rejected while a git run is in flight for the same repository
         Given an in-flight git run against the git fixture
         When a second authenticated run is started against the git fixture
-        Then the second run is rejected as a repo conflict
+        Then the second run is rejected as a repository conflict

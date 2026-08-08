@@ -10,19 +10,19 @@ namespace OutOfTheBox.BehaviorTests.Support;
 /// </summary>
 /// <remarks>
 /// Unlike <c>PassingFixture</c>/<c>FailingFixture</c>/<c>HangingFixture</c>, this fixture is
-/// **not** checked into the repo as static content: a real git repository (a <c>.git</c>
+/// **not** checked into the repository as static content: a real git repository (a <c>.git</c>
 /// directory with real refs/objects) can't cleanly nest inside this project's own git history -
 /// it would either be ignored or treated as a submodule gitlink depending on how it was added,
-/// neither of which is what's wanted here. Generating a fresh repo per test run also sidesteps a
+/// neither of which is what's wanted here. Generating a fresh repository per test run also sidesteps a
 /// second problem: git commands genuinely mutate a working tree (<c>reset --hard</c>,
-/// <c>clean</c>, ...), so a single checked-in fixture repo would accumulate mutations across test
+/// <c>clean</c>, ...), so a single checked-in fixture repository would accumulate mutations across test
 /// runs and stop being deterministic. <see cref="CreateAsync"/> builds an isolated, disposable
-/// repo instead, the same way <c>WorkingDirectoryResolverTests</c> already builds disposable real
+/// repository instead, the same way <c>WorkingDirectoryResolverTests</c> already builds disposable real
 /// temp-directory trees for its own scenarios.
 /// </remarks>
 public sealed class GitFixture : IDisposable
 {
-    private const string RepoName = "GitFixture";
+    private const string RepositoryName = "GitFixture";
 
     private GitFixture(string rootDirectory) => RootDirectory = rootDirectory;
 
@@ -35,7 +35,7 @@ public sealed class GitFixture : IDisposable
 
     /// <summary>
     /// Creates a fresh temp directory, runs <c>git init</c>, configures a local commit identity
-    /// (a brand-new repo has none), commits one file, and - if <paramref name="withBlockingHook"/>
+    /// (a brand-new repository has none), commits one file, and - if <paramref name="withBlockingHook"/>
     /// is set - installs a <c>pre-commit</c> hook that blocks indefinitely (<c>ping -t</c>, killed
     /// only by process termination) so a scenario needing a genuinely long-running, cancellable
     /// git command has one: <c>git commit --allow-empty -m "..."</c> against a fixture built this
@@ -46,20 +46,20 @@ public sealed class GitFixture : IDisposable
     public static async Task<GitFixture> CreateAsync(bool withBlockingHook = false)
     {
         var root = Directory.CreateTempSubdirectory("OutOfTheBox.GitFixture.").FullName;
-        var repoPath = Path.Combine(root, RepoName);
-        Directory.CreateDirectory(repoPath);
+        var repositoryPath = Path.Combine(root, RepositoryName);
+        Directory.CreateDirectory(repositoryPath);
 
-        await RunGitAsync(repoPath, "init", "-q");
-        await RunGitAsync(repoPath, "config", "user.email", "fixture@example.com");
-        await RunGitAsync(repoPath, "config", "user.name", "OutOfTheBox Fixture");
+        await RunGitAsync(repositoryPath, "init", "-q");
+        await RunGitAsync(repositoryPath, "config", "user.email", "fixture@example.com");
+        await RunGitAsync(repositoryPath, "config", "user.name", "OutOfTheBox Fixture");
 
-        await File.WriteAllTextAsync(Path.Combine(repoPath, "README.md"), "GitFixture\n");
-        await RunGitAsync(repoPath, "add", "-A");
-        await RunGitAsync(repoPath, "commit", "-q", "-m", "initial commit");
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), "GitFixture\n");
+        await RunGitAsync(repositoryPath, "add", "-A");
+        await RunGitAsync(repositoryPath, "commit", "-q", "-m", "initial commit");
 
         if (withBlockingHook)
         {
-            var hooksDir = Path.Combine(repoPath, ".git", "hooks");
+            var hooksDir = Path.Combine(repositoryPath, ".git", "hooks");
             var hookPath = Path.Combine(hooksDir, "pre-commit");
             await File.WriteAllTextAsync(hookPath, "#!/bin/sh\nping -t 127.0.0.1 >/dev/null\n");
         }

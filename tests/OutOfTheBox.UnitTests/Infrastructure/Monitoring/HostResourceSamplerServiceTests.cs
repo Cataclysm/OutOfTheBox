@@ -86,9 +86,9 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         await runRepository.AddAsync(new Run
         {
             Id = transferId,
-            Kind = RunKind.ArtifactTransfer,
-            RepoPath = @"C:\repos\example",
-            ArtifactPath = "file.bin",
+            Kind = RunKind.FileTransfer,
+            RepositoryPath = @"C:\repositories\example",
+            FilePath = "file.bin",
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
@@ -120,7 +120,7 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         {
             Id = deleteId,
             Kind = RunKind.RepositoryDelete,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);

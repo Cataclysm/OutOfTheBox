@@ -1,11 +1,11 @@
 ## Purpose
 
-Prevents any network caller other than the trusted sbx sandbox from invoking any of the service's HTTP endpoints on the Windows host — `dotnet` command execution, `git` command execution, artifact transfer, and cancellation — since the service exposes all of them to a remote, network-reachable caller.
+Prevents any network caller other than the trusted sbx sandbox from invoking any of the service's HTTP endpoints on the Windows host — `dotnet` command execution, `git` command execution, file transfer, and cancellation — since the service exposes all of them to a remote, network-reachable caller.
 
 ## ADDED Requirements
 
 ### Requirement: Every execution request requires a valid credential
-The system SHALL require a bearer/API-key credential on every request to any of the service's authenticated endpoints (`dotnet` command execution, `git` command execution, artifact transfer, cancellation) and SHALL reject any request missing that credential before taking any other action.
+The system SHALL require a bearer/API-key credential on every request to any of the service's authenticated endpoints (`dotnet` command execution, `git` command execution, file transfer, cancellation) and SHALL reject any request missing that credential before taking any other action.
 
 #### Scenario: Missing credential
 - **WHEN** a request to any authenticated endpoint arrives without a credential

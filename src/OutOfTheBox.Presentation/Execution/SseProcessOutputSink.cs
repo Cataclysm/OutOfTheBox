@@ -18,7 +18,7 @@ namespace OutOfTheBox.Presentation.Execution;
 /// design.md's dashboard event-bus decision - truncated lines are dropped from the stream entirely,
 /// so they're not published either.
 /// </summary>
-public sealed class SseProcessOutputSink(SseWriter writer, long capBytes, IRunEventBus runEventBus, Guid runId, RunKind kind, string repoPath) : IProcessOutputSink
+public sealed class SseProcessOutputSink(SseWriter writer, long capBytes, IRunEventBus runEventBus, Guid runId, RunKind kind, string repositoryPath) : IProcessOutputSink
 {
     private readonly StringBuilder _stdout = new();
     private readonly StringBuilder _stderr = new();
@@ -59,6 +59,6 @@ public sealed class SseProcessOutputSink(SseWriter writer, long capBytes, IRunEv
         _bytesWritten += lineBytes;
         accumulator.AppendLine(line);
         await write(line, cancellationToken);
-        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.OutputLine, repoPath) { OutputStream = stream, OutputLine = line });
+        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.OutputLine, repositoryPath) { OutputStream = stream, OutputLine = line });
     }
 }

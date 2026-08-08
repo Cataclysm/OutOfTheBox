@@ -26,7 +26,7 @@ public static class PathConfinementPolicy
         }
 
         // Comparing with a trailing separator is what prevents a sibling directory that merely
-        // shares a name prefix (root "C:\repos" vs candidate "C:\repos-evil") from matching.
+        // shares a name prefix (root "C:\repositories" vs candidate "C:\repositories-evil") from matching.
         var rootWithSeparator = normalizedRoot + Path.DirectorySeparatorChar;
 
         return normalizedCandidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);

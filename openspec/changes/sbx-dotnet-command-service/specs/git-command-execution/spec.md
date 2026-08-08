@@ -1,6 +1,6 @@
 ## Purpose
 
-Lets a remote caller (an sbx sandbox running Claude Code) run `git` CLI commands (`pull`, `reset`, `fetch`, `checkout`, etc.) against a repository checked out on the Windows host, so it can manage the state of that checkout without a separate remote-shell mechanism. Mirrors `dotnet-command-execution`'s contract exactly (same auth, streaming, timeout, concurrency, and cancellation model) for a different underlying executable — the two capabilities share the same per-repo lock registry and the same cancellation endpoint, since a `git reset` and a `dotnet build` against the same repo directory must not be allowed to run concurrently either.
+Lets a remote caller (an sbx sandbox running Claude Code) run `git` CLI commands (`pull`, `reset`, `fetch`, `checkout`, etc.) against a repository checked out on the Windows host, so it can manage the state of that checkout without a separate remote-shell mechanism. Mirrors `dotnet-command-execution`'s contract exactly (same auth, streaming, timeout, concurrency, and cancellation model) for a different underlying executable — the two capabilities share the same per-repository lock registry and the same cancellation endpoint, since a `git reset` and a `dotnet build` against the same repository directory must not be allowed to run concurrently either.
 
 ## ADDED Requirements
 
@@ -8,8 +8,8 @@ Lets a remote caller (an sbx sandbox running Claude Code) run `git` CLI commands
 The system SHALL accept an authenticated HTTP request containing a `git` argument list and a target working directory, invoke `git.exe` with those arguments in that directory, assign the run a unique identifier delivered to the caller before output streaming begins, and deliver the result to the caller.
 
 #### Scenario: Successful pull command
-- **WHEN** an authenticated caller posts arguments `["pull"]` with working directory `myrepo`
-- **THEN** the system runs `git pull` in `myrepo`, delivers a run identifier, and delivers exit code, stdout, and stderr captured from the process
+- **WHEN** an authenticated caller posts arguments `["pull"]` with working directory `myrepository`
+- **THEN** the system runs `git pull` in `myrepository`, delivers a run identifier, and delivers exit code, stdout, and stderr captured from the process
 
 #### Scenario: Command with a non-zero exit code
 - **WHEN** an authenticated caller posts a `git` command that fails (for example a `merge` with conflicts)
@@ -33,19 +33,19 @@ The system SHALL accept an optional per-request timeout from the caller and SHAL
 - **WHEN** an authenticated caller starts a `git` command without specifying a timeout
 - **THEN** the system applies the configured default timeout
 
-### Requirement: Git commands share the same per-repo concurrency lock as dotnet commands
-The system SHALL treat a `git` run and a `dotnet` run against the same resolved repository root as contending for the same lock: at most one of either kind may be in flight for a given repo at a time, and a second request of either kind targeting a busy repo SHALL be rejected with the conflicting run's id rather than queued.
+### Requirement: Git commands share the same per-repository concurrency lock as dotnet commands
+The system SHALL treat a `git` run and a `dotnet` run against the same resolved repository root as contending for the same lock: at most one of either kind may be in flight for a given repository at a time, and a second request of either kind targeting a busy repository SHALL be rejected with the conflicting run's id rather than queued.
 
 #### Scenario: A git command is rejected while a dotnet command is in flight
-- **WHEN** a `dotnet test` run is in flight against `repo-a` and, before it finishes, an authenticated caller starts a `git pull` against `repo-a`
+- **WHEN** a `dotnet test` run is in flight against `repository-a` and, before it finishes, an authenticated caller starts a `git pull` against `repository-a`
 - **THEN** the system rejects the `git pull` request with a conflict error identifying the in-flight `dotnet test` run's id, and does not invoke `git.exe`
 
 #### Scenario: A dotnet command is rejected while a git command is in flight
-- **WHEN** a `git checkout` run is in flight against `repo-a` and, before it finishes, an authenticated caller starts a `dotnet build` against `repo-a`
+- **WHEN** a `git checkout` run is in flight against `repository-a` and, before it finishes, an authenticated caller starts a `dotnet build` against `repository-a`
 - **THEN** the system rejects the `dotnet build` request with a conflict error identifying the in-flight `git checkout` run's id, and does not invoke `dotnet.exe`
 
-#### Scenario: Commands against different repos still run in parallel
-- **WHEN** an authenticated caller starts a `git pull` against `repo-a` and, before it finishes, starts a `dotnet build` against `repo-b`
+#### Scenario: Commands against different repositories still run in parallel
+- **WHEN** an authenticated caller starts a `git pull` against `repository-a` and, before it finishes, starts a `dotnet build` against `repository-b`
 - **THEN** both commands execute concurrently and each completes independently of the other
 
 ### Requirement: Caller can cancel an in-flight git command
@@ -53,7 +53,7 @@ The system SHALL accept an authenticated cancellation request identifying a run 
 
 #### Scenario: Cancelling a running git command
 - **WHEN** an authenticated caller cancels the run id of a `git` command that is still in flight
-- **THEN** the system terminates the process, the run's output stream ends with a terminal signal distinct from normal completion and identifying the run as cancelled, and the repo's lock is released
+- **THEN** the system terminates the process, the run's output stream ends with a terminal signal distinct from normal completion and identifying the run as cancelled, and the repository's lock is released
 
 ### Requirement: Output is streamed incrementally
 The system SHALL deliver stdout and stderr to the caller as the `git` process produces them, rather than withholding all output until the process exits.
@@ -80,7 +80,7 @@ The system SHALL resolve the caller-supplied working directory against the same 
 The system SHALL deliver, for every executed `git` command, the process exit code and the stdout/stderr produced, distinguishing a completed process (any exit code) from a request that could not be executed at all, a run terminated by the execution timeout, and a run terminated by caller cancellation — using the same outcome vocabulary as `dotnet-command-execution`.
 
 #### Scenario: Execution never starts
-- **WHEN** a request fails validation (e.g. path escape, missing arguments) or targets a repo already locked by another in-flight run of either kind
+- **WHEN** a request fails validation (e.g. path escape, missing arguments) or targets a repository already locked by another in-flight run of either kind
 - **THEN** the system delivers an error signal that does not contain a process exit code, before any stdout/stderr data is delivered
 
 ### Requirement: Git runs are recorded in history like dotnet runs
@@ -88,4 +88,4 @@ The system SHALL record every `git` run in the same durable history store, at th
 
 #### Scenario: A git run appears in history
 - **WHEN** a `git pull` run reaches a terminal state
-- **THEN** a history record for that run exists with its repo, arguments, kind (`git`), timestamps, outcome, and captured output, retrievable the same way a `dotnet` run's record is
+- **THEN** a history record for that run exists with its repository, arguments, kind (`git`), timestamps, outcome, and captured output, retrievable the same way a `dotnet` run's record is

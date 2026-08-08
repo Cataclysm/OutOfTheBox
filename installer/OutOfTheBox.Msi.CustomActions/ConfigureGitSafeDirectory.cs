@@ -29,7 +29,7 @@ namespace OutOfTheBox.Msi.CustomActions
         /// Builds the safe.directory pattern for <paramref name="repositoryRootDirectory"/> - a
         /// trailing <c>/*</c> (git's own documented syntax for "trust every repository directly
         /// inside this directory", not recursively) matching this service's own flat
-        /// one-repo-per-subdirectory layout. Git expects forward slashes for this pattern even on
+        /// one-repository-per-subdirectory layout. Git expects forward slashes for this pattern even on
         /// Windows (its own dubious-ownership error message already renders paths that way).
         /// </summary>
         public static string BuildSafeDirectoryPattern(string repositoryRootDirectory) =>
@@ -93,7 +93,7 @@ namespace OutOfTheBox.Msi.CustomActions
 
         /// <summary>
         /// MSI custom action entry point - scheduled in <c>InstallExecuteSequence</c> only, same
-        /// reasoning as <see cref="CreateRepositoryRootDirectoryAction"/>: <c>REPOROOTDIR</c> only
+        /// reasoning as <see cref="CreateRepositoryRootDirectoryAction"/>: <c>REPOSITORYROOTDIR</c> only
         /// holds its final, operator-confirmed value once <c>ConfigDlg</c> has been through. Never
         /// fails the install - this fixes a real friction point, but the service installs and runs
         /// (dotnet commands, and git commands against a repository whose ownership already matches)
@@ -104,7 +104,7 @@ namespace OutOfTheBox.Msi.CustomActions
         {
             try
             {
-                var pattern = BuildSafeDirectoryPattern(session["REPOROOTDIR"]);
+                var pattern = BuildSafeDirectoryPattern(session["REPOSITORYROOTDIR"]);
                 EnsureSafeDirectory(pattern, "--system");
             }
             catch (Exception)

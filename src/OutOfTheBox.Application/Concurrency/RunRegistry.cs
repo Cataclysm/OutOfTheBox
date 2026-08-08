@@ -5,24 +5,24 @@ using System.Collections.Concurrent;
 namespace OutOfTheBox.Application.Concurrency;
 
 /// <summary>
-/// Tracks which repos currently have an in-flight run, enforcing at most one <c>dotnet</c> command
-/// per repo at a time while allowing distinct repos to run fully in parallel (per
-/// specs/dotnet-command-execution's "Commands against different repos run in parallel" and
-/// "One in-flight command per repo" requirements), and lets a run be looked up and cancelled by
+/// Tracks which repositories currently have an in-flight run, enforcing at most one <c>dotnet</c> command
+/// per repository at a time while allowing distinct repositories to run fully in parallel (per
+/// specs/dotnet-command-execution's "Commands against different repositories run in parallel" and
+/// "One in-flight command per repository" requirements), and lets a run be looked up and cancelled by
 /// its run id (per the "Caller can cancel an in-flight command" requirement). Registered as a
 /// singleton - this is process-wide, in-memory, and lost on restart by design (see design.md's Risks).
 /// </summary>
 public sealed class RunRegistry
 {
-    private readonly ConcurrentDictionary<string, RunHandle> _activeRunsByRepoRoot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, RunHandle> _activeRunsByRepositoryRoot = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<Guid, RunHandle> _activeRunsByRunId = new();
 
     /// <summary>
-    /// Attempts to acquire the lock for <paramref name="repoRoot"/> (the exact resolved working
+    /// Attempts to acquire the lock for <paramref name="repositoryRoot"/> (the exact resolved working
     /// directory of the request, not a higher-level grouping) on behalf of <paramref name="runId"/>.
-    /// Atomic: under concurrent callers targeting the same repo, exactly one succeeds.
+    /// Atomic: under concurrent callers targeting the same repository, exactly one succeeds.
     /// </summary>
-    /// <param name="repoRoot">The resolved working directory to lock.</param>
+    /// <param name="repositoryRoot">The resolved working directory to lock.</param>
     /// <param name="runId">The run id requesting the lock.</param>
     /// <param name="cancellationTokenSource">
     /// The source a later <see cref="TryCancel"/> call for this run id will cancel. Ownership
@@ -32,13 +32,13 @@ public sealed class RunRegistry
     /// When this method returns <see langword="false"/>, the run id already holding the lock;
     /// otherwise <see langword="default"/>.
     /// </param>
-    public bool TryAcquire(string repoRoot, Guid runId, CancellationTokenSource cancellationTokenSource, out Guid conflictingRunId)
+    public bool TryAcquire(string repositoryRoot, Guid runId, CancellationTokenSource cancellationTokenSource, out Guid conflictingRunId)
     {
         var handle = new RunHandle(runId, cancellationTokenSource);
 
-        if (!_activeRunsByRepoRoot.TryAdd(repoRoot, handle))
+        if (!_activeRunsByRepositoryRoot.TryAdd(repositoryRoot, handle))
         {
-            conflictingRunId = _activeRunsByRepoRoot[repoRoot].RunId;
+            conflictingRunId = _activeRunsByRepositoryRoot[repositoryRoot].RunId;
             return false;
         }
 
@@ -48,32 +48,32 @@ public sealed class RunRegistry
     }
 
     /// <summary>
-    /// Read-only check of whether <paramref name="repoRoot"/> currently holds the per-repo lock -
-    /// no side effect, unlike <see cref="TryAcquire"/>. Used for the Repos view's live active/idle
+    /// Read-only check of whether <paramref name="repositoryRoot"/> currently holds the per-repository lock -
+    /// no side effect, unlike <see cref="TryAcquire"/>. Used for the Repositories view's live active/idle
     /// indicator (per specs/repository-management's "active" definition: holds the command lock).
     /// </summary>
-    public bool IsHeld(string repoRoot) => _activeRunsByRepoRoot.ContainsKey(repoRoot);
+    public bool IsHeld(string repositoryRoot) => _activeRunsByRepositoryRoot.ContainsKey(repositoryRoot);
 
-    /// <summary>Releases the lock for <paramref name="repoRoot"/>, so a subsequent request for it can be accepted.</summary>
-    public void Release(string repoRoot)
+    /// <summary>Releases the lock for <paramref name="repositoryRoot"/>, so a subsequent request for it can be accepted.</summary>
+    public void Release(string repositoryRoot)
     {
-        if (_activeRunsByRepoRoot.TryRemove(repoRoot, out var handle))
+        if (_activeRunsByRepositoryRoot.TryRemove(repositoryRoot, out var handle))
         {
             _activeRunsByRunId.TryRemove(handle.RunId, out _);
         }
     }
 
     /// <summary>
-    /// Registers an in-flight artifact transfer under <paramref name="runId"/> so it can be looked
-    /// up by <see cref="TryCancel"/>, without acquiring any per-repo lock - per
-    /// specs/artifact-transfer's "Transfers do not contend for the per-repo command lock"
+    /// Registers an in-flight file transfer under <paramref name="runId"/> so it can be looked
+    /// up by <see cref="TryCancel"/>, without acquiring any per-repository lock - per
+    /// specs/file-transfer's "Transfers do not contend for the per-repository command lock"
     /// requirement, a transfer is a read of already-produced files, not a command execution, so it
-    /// never touches the repo-root-keyed index <see cref="TryAcquire"/>/<see cref="Release"/> use.
+    /// never touches the repository-root-keyed index <see cref="TryAcquire"/>/<see cref="Release"/> use.
     /// </summary>
     public void RegisterTransfer(Guid runId, CancellationTokenSource cancellationTokenSource) =>
         _activeRunsByRunId[runId] = new RunHandle(runId, cancellationTokenSource);
 
-    /// <summary>Removes an artifact transfer registered via <see cref="RegisterTransfer"/> once it reaches a terminal state.</summary>
+    /// <summary>Removes a file transfer registered via <see cref="RegisterTransfer"/> once it reaches a terminal state.</summary>
     public void ReleaseTransfer(Guid runId) => _activeRunsByRunId.TryRemove(runId, out _);
 
     /// <summary>

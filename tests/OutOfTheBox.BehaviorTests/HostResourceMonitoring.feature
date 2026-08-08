@@ -20,7 +20,7 @@ Feature: Host Resource Monitoring
         When the resource sampler ticks with nothing in flight
         Then no run has a process sublist
 
-    Scenario: An artifact transfer never gets a process sublist
+    Scenario: A file transfer never gets a process sublist
         Given a transfer is registered as in flight
         When the resource sampler ticks
         Then the transfer has no process sublist

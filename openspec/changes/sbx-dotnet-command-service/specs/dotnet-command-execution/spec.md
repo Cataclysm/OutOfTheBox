@@ -8,8 +8,8 @@ Lets a remote caller (an sbx sandbox running Claude Code) run `dotnet` CLI comma
 The system SHALL accept an authenticated HTTP request containing a `dotnet` argument list and a target working directory, invoke `dotnet.exe` with those arguments in that directory, assign the run a unique identifier delivered to the caller before output streaming begins, and deliver the result to the caller.
 
 #### Scenario: Successful build command
-- **WHEN** an authenticated caller posts arguments `["build"]` with working directory `myrepo/src`
-- **THEN** the system runs `dotnet build` in `myrepo/src`, delivers a run identifier, and delivers exit code, stdout, and stderr captured from the process
+- **WHEN** an authenticated caller posts arguments `["build"]` with working directory `myrepository/src`
+- **THEN** the system runs `dotnet build` in `myrepository/src`, delivers a run identifier, and delivers exit code, stdout, and stderr captured from the process
 
 #### Scenario: Failing test command
 - **WHEN** an authenticated caller posts arguments `["test"]` for a project with failing tests
@@ -30,34 +30,34 @@ The system SHALL accept an optional per-request timeout from the caller and SHAL
 - **WHEN** an authenticated caller specifies a timeout longer than the configured maximum
 - **THEN** the system applies the configured maximum instead, rather than honoring the caller's larger value
 
-### Requirement: Commands against different repos run in parallel
+### Requirement: Commands against different repositories run in parallel
 The system SHALL allow commands targeting different repositories (distinct resolved working-directory roots) to execute concurrently, with no serialization between them.
 
-#### Scenario: Two different repos run at the same time
-- **WHEN** an authenticated caller starts a command against `repo-a` and, before it finishes, starts a command against `repo-b`
+#### Scenario: Two different repositories run at the same time
+- **WHEN** an authenticated caller starts a command against `repository-a` and, before it finishes, starts a command against `repository-b`
 - **THEN** both commands execute concurrently and each completes independently of the other
 
-### Requirement: One in-flight command per repo, shared with git-command-execution
-The system SHALL allow at most one `dotnet` command to be in flight at a time for a given repository, SHALL treat a same-repo `git` run (per `git-command-execution`) as contending for that same lock, and SHALL reject a new request targeting a repo that already has an in-flight command of either kind rather than queuing it.
+### Requirement: One in-flight command per repository, shared with git-command-execution
+The system SHALL allow at most one `dotnet` command to be in flight at a time for a given repository, SHALL treat a same-repository `git` run (per `git-command-execution`) as contending for that same lock, and SHALL reject a new request targeting a repository that already has an in-flight command of either kind rather than queuing it.
 
-#### Scenario: Second dotnet command for a busy repo is rejected
-- **WHEN** an authenticated caller starts a command against `repo-a` and, while it is still running, another authenticated caller starts a second command against `repo-a`
-- **THEN** the system rejects the second request with a conflict error identifying the run id of the command already in flight for `repo-a`, and does not invoke a second `dotnet.exe` process for that repo
+#### Scenario: Second dotnet command for a busy repository is rejected
+- **WHEN** an authenticated caller starts a command against `repository-a` and, while it is still running, another authenticated caller starts a second command against `repository-a`
+- **THEN** the system rejects the second request with a conflict error identifying the run id of the command already in flight for `repository-a`, and does not invoke a second `dotnet.exe` process for that repository
 
-#### Scenario: A dotnet command is rejected while a git command is in flight for the same repo
-- **WHEN** a `git` run is in flight against `repo-a` and an authenticated caller starts a `dotnet` command against `repo-a`
+#### Scenario: A dotnet command is rejected while a git command is in flight for the same repository
+- **WHEN** a `git` run is in flight against `repository-a` and an authenticated caller starts a `dotnet` command against `repository-a`
 - **THEN** the system rejects the request with a conflict error identifying the in-flight `git` run's id, and does not invoke `dotnet.exe`
 
-#### Scenario: Repo becomes available after completion
-- **WHEN** the in-flight command for `repo-a` (of either kind) reaches any terminal state (completed, timed out, or cancelled)
-- **THEN** a subsequent request targeting `repo-a` is accepted and executed
+#### Scenario: Repository becomes available after completion
+- **WHEN** the in-flight command for `repository-a` (of either kind) reaches any terminal state (completed, timed out, or cancelled)
+- **THEN** a subsequent request targeting `repository-a` is accepted and executed
 
 ### Requirement: Caller can cancel an in-flight command
 The system SHALL accept an authenticated cancellation request identifying a run by its run id, and SHALL terminate that run's `dotnet.exe` process if it is still in flight.
 
 #### Scenario: Cancelling a running command
 - **WHEN** an authenticated caller cancels the run id of a command that is still in flight
-- **THEN** the system terminates the process, the run's output stream ends with a terminal signal distinct from normal completion and identifying the run as cancelled, and the repo's lock is released
+- **THEN** the system terminates the process, the run's output stream ends with a terminal signal distinct from normal completion and identifying the run as cancelled, and the repository's lock is released
 
 #### Scenario: Cancelling an unknown or finished run
 - **WHEN** an authenticated caller cancels a run id that does not exist or has already reached a terminal state
@@ -93,10 +93,10 @@ The system SHALL resolve the caller-supplied working directory against a single 
 - **THEN** the system runs the command with that directory as the process working directory
 
 ### Requirement: Outcome is reported unambiguously
-The system SHALL deliver, for every executed command, the process exit code and the stdout/stderr produced, distinguishing a completed process (any exit code) from a request that could not be executed at all (for example: invalid path, invalid arguments, `dotnet.exe` not found, repo already locked by another run), a run that was terminated before completion by the execution timeout, and a run that was terminated before completion by caller cancellation.
+The system SHALL deliver, for every executed command, the process exit code and the stdout/stderr produced, distinguishing a completed process (any exit code) from a request that could not be executed at all (for example: invalid path, invalid arguments, `dotnet.exe` not found, repository already locked by another run), a run that was terminated before completion by the execution timeout, and a run that was terminated before completion by caller cancellation.
 
 #### Scenario: Execution never starts
-- **WHEN** a request fails validation (e.g. path escape, missing arguments) or targets a repo already locked by another in-flight run
+- **WHEN** a request fails validation (e.g. path escape, missing arguments) or targets a repository already locked by another in-flight run
 - **THEN** the system delivers an error signal that does not contain a process exit code, before any stdout/stderr data is delivered, distinguishable from a completed run
 
 #### Scenario: Execution is terminated by timeout

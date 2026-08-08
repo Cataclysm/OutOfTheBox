@@ -25,14 +25,14 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
     public async Task Filtering_by_kind_shows_only_matching_runs()
     {
         var runRepository = Services.GetRequiredService<IRunRepository>();
-        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, "dotnet-repo"), CancellationToken.None);
-        await runRepository.AddAsync(Sample(RunKind.GitCommand, "git-repo"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, "dotnet-repository"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.GitCommand, "git-repository"), CancellationToken.None);
 
         var cut = Render<History>();
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("dotnet-repo", cut.Markup);
-            Assert.Contains("git-repo", cut.Markup);
+            Assert.Contains("dotnet-repository", cut.Markup);
+            Assert.Contains("git-repository", cut.Markup);
         });
 
         var gitCheckbox = cut.FindAll("input[type=checkbox]")
@@ -41,8 +41,8 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("git-repo", cut.Markup);
-            Assert.DoesNotContain("dotnet-repo", cut.Markup);
+            Assert.Contains("git-repository", cut.Markup);
+            Assert.DoesNotContain("dotnet-repository", cut.Markup);
         });
     }
 
@@ -50,18 +50,18 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
     public async Task Filtering_by_repository_shows_only_that_repos_runs()
     {
         var runRepository = Services.GetRequiredService<IRunRepository>();
-        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repos\alpha"), CancellationToken.None);
-        await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repos\beta"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repositories\alpha"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repositories\beta"), CancellationToken.None);
 
         var cut = Render<History>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\alpha", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
 
-        cut.Find("input[placeholder='repo path']").Input(@"C:\repos\alpha");
+        cut.Find("input[placeholder='repository path']").Input(@"C:\repositories\alpha");
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(@"C:\repos\alpha", cut.Markup);
-            Assert.DoesNotContain(@"C:\repos\beta", cut.Markup);
+            Assert.Contains(@"C:\repositories\alpha", cut.Markup);
+            Assert.DoesNotContain(@"C:\repositories\beta", cut.Markup);
         });
     }
 
@@ -69,8 +69,8 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
     public async Task Searching_narrows_the_list_after_the_debounce_delay()
     {
         var runRepository = Services.GetRequiredService<IRunRepository>();
-        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repos\needle-repo"), CancellationToken.None);
-        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repos\unrelated"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repositories\needle-repository"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repositories\unrelated"), CancellationToken.None);
 
         var cut = Render<History>();
         cut.WaitForAssertion(() => Assert.Contains("unrelated", cut.Markup));
@@ -81,7 +81,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         // window (bUnit's default) comfortably covers that.
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("needle-repo", cut.Markup);
+            Assert.Contains("needle-repository", cut.Markup);
             Assert.DoesNotContain("unrelated", cut.Markup);
         }, TimeSpan.FromSeconds(2));
     }
@@ -90,30 +90,30 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
     public async Task Clearing_filters_and_search_restores_the_full_list()
     {
         var runRepository = Services.GetRequiredService<IRunRepository>();
-        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repos\alpha"), CancellationToken.None);
-        await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repos\beta"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repositories\alpha"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repositories\beta"), CancellationToken.None);
 
         var cut = Render<History>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\alpha", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
 
-        cut.Find("input[placeholder='repo path']").Input(@"C:\repos\alpha");
-        cut.WaitForAssertion(() => Assert.DoesNotContain(@"C:\repos\beta", cut.Markup));
+        cut.Find("input[placeholder='repository path']").Input(@"C:\repositories\alpha");
+        cut.WaitForAssertion(() => Assert.DoesNotContain(@"C:\repositories\beta", cut.Markup));
 
         var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");
         clearFiltersButton.Click();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(@"C:\repos\alpha", cut.Markup);
-            Assert.Contains(@"C:\repos\beta", cut.Markup);
+            Assert.Contains(@"C:\repositories\alpha", cut.Markup);
+            Assert.Contains(@"C:\repositories\beta", cut.Markup);
         });
     }
 
-    private static Run Sample(RunKind kind, string repoPath) => new()
+    private static Run Sample(RunKind kind, string repositoryPath) => new()
     {
         Id = Guid.NewGuid(),
         Kind = kind,
-        RepoPath = repoPath,
+        RepositoryPath = repositoryPath,
         Arguments = kind is RunKind.DotnetCommand or RunKind.GitCommand ? ["build"] : null,
         StartedAt = DateTimeOffset.UtcNow,
         CompletedAt = DateTimeOffset.UtcNow,

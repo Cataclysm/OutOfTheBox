@@ -14,7 +14,7 @@ public enum RepositoryActionRejectionReason
     /// <summary>(Delete only) the named repository does not exist.</summary>
     NotFound,
 
-    /// <summary>The repository's per-repo lock is already held by another in-flight run.</summary>
+    /// <summary>The repository's per-repository lock is already held by another in-flight run.</summary>
     Busy,
 }
 

@@ -2,7 +2,7 @@ Feature: Cancellation API
     Mirrors specs/dotnet-command-execution's "Caller can cancel an in-flight command" and
     "Cancelling an unknown or finished run" scenarios.
 
-    Scenario: Cancelling an in-flight run kills it and frees the repo
+    Scenario: Cancelling an in-flight run kills it and frees the repository
         Given a cancellable in-flight run against "HangingFixture"
         When that run is cancelled
         Then the cancel request is accepted
@@ -26,8 +26,8 @@ Feature: Cancellation API
         When that run is cancelled again
         Then the cancel request is rejected as not found
 
-    Scenario: Cancelling an in-flight git run kills it and frees the repo
+    Scenario: Cancelling an in-flight git run kills it and frees the repository
         Given a cancellable in-flight git run against the git fixture
         When that git run is cancelled
         Then the cancel request is accepted
-        And the git fixture repo is accepted for a subsequent run
+        And the git fixture repository is accepted for a subsequent run

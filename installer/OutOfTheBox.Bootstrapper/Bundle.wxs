@@ -51,7 +51,7 @@
 
     <Chain>
       <!-- Permanent: this is a prerequisite for the service's own core feature (spawning `dotnet
-           build`/`test` against target repos needs the SDK on PATH regardless of Host's own
+           build`/`test` against target repositories needs the SDK on PATH regardless of Host's own
            self-contained packaging - see design.md's Packaging decision), not something
            OutOfTheBox itself owns; uninstalling OutOfTheBox must not remove it, since other things
            on the host may depend on it too. -->

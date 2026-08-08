@@ -24,7 +24,7 @@ Feature: Repository Management
     Scenario: Commands against a mid-clone target are rejected
         Given a clone into a given name is already in flight
         When a git command targets that same partially-cloned repository
-        Then the command is rejected as a repo conflict
+        Then the command is rejected as a repository conflict
 
     Scenario: Successful deletion
         Given an idle repository exists
@@ -35,6 +35,13 @@ Feature: Repository Management
     Scenario: Deleting a nonexistent repository
         When an operator attempts to delete a name that does not exist
         Then the deletion is rejected as not found
+
+    Scenario: Deletion fails cleanly when a file inside the repository is locked
+        Given an idle repository exists
+        And a file inside that repository is locked open
+        When an operator deletes that repository
+        Then the deletion is accepted but the run records a failed outcome
+        And the repository still exists on disk
 
     Scenario: Deletion of a busy repository is rejected
         Given a command run is in flight against a repository

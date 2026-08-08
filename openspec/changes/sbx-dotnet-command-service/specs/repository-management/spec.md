@@ -1,13 +1,13 @@
 ## Purpose
 
-Lets the human operator — not the sbx sandbox caller — manage the inventory of repositories the service operates on directly from the dashboard: see what's there and its current state at a glance, clone a new one in, and remove one that's no longer needed. Unlike `dotnet-command-execution`, `git-command-execution`, and `artifact-transfer`, this capability has no bearer-token REST surface: it's exposed only as authenticated in-process actions inside the Blazor dashboard, the same way process-kill (per `host-resource-monitoring`) is — the sbx caller has no way to clone or delete a repository.
+Lets the human operator — not the sbx sandbox caller — manage the inventory of repositories the service operates on directly from the dashboard: see what's there and its current state at a glance, clone a new one in, and remove one that's no longer needed. Unlike `dotnet-command-execution`, `git-command-execution`, and `file-transfer`, this capability has no bearer-token REST surface: it's exposed only as authenticated in-process actions inside the Blazor dashboard, the same way process-kill (per `host-resource-monitoring`) is — the sbx caller has no way to clone or delete a repository.
 
 A "repository" for the purposes of this capability is a top-level directory directly under the configured root.
 
 ## ADDED Requirements
 
 ### Requirement: Repositories are listed with identifying stats
-The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured — or an indication that it isn't a git repository at all), and whether it is currently active (holds the per-repo command lock per `dotnet-command-execution`/`git-command-execution`).
+The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured — or an indication that it isn't a git repository at all), and whether it is currently active (holds the per-repository command lock per `dotnet-command-execution`/`git-command-execution`).
 
 #### Scenario: Listing repositories
 - **WHEN** an operator views the repository list
@@ -43,8 +43,8 @@ The system SHALL let an operator clone a new repository by supplying a source UR
 - **WHEN** an operator supplies any git-reachable URL as the clone source
 - **THEN** the system attempts the clone without validating the URL against an allowlist — the same unrestricted trust model as `git-command-execution`
 
-### Requirement: Cloning a repository acquires its per-repo lock
-The system SHALL acquire the same per-repo command lock used by `dotnet-command-execution`/`git-command-execution`, keyed by the clone's target path, for the duration of the clone — preventing a concurrent duplicate clone into the same target name, and preventing any command from being accepted against that target until the clone finishes.
+### Requirement: Cloning a repository acquires its per-repository lock
+The system SHALL acquire the same per-repository command lock used by `dotnet-command-execution`/`git-command-execution`, keyed by the clone's target path, for the duration of the clone — preventing a concurrent duplicate clone into the same target name, and preventing any command from being accepted against that target until the clone finishes.
 
 #### Scenario: Duplicate concurrent clone is rejected
 - **WHEN** a clone into a given name is already in flight and a second clone into that same name is requested before the first finishes
@@ -55,7 +55,7 @@ The system SHALL acquire the same per-repo command lock used by `dotnet-command-
 - **THEN** the system rejects that command the same way it would reject one against any other busy repository
 
 ### Requirement: An existing repository can be deleted
-The system SHALL let an operator delete an existing repository, permanently and recursively removing its directory from disk, resolved and confined under the configured root the same way every other repo-targeting operation is. Deletion SHALL be recorded in history (per `run-history`) with a distinct kind.
+The system SHALL let an operator delete an existing repository, permanently and recursively removing its directory from disk, resolved and confined under the configured root the same way every other repository-targeting operation is. Deletion SHALL be recorded in history (per `run-history`) with a distinct kind.
 
 #### Scenario: Successful deletion
 - **WHEN** an operator deletes an existing, idle repository
@@ -66,17 +66,17 @@ The system SHALL let an operator delete an existing repository, permanently and 
 - **THEN** the system rejects the request with a not-found signal rather than silently succeeding
 
 ### Requirement: Deletion is rejected while the repository is active
-The system SHALL require a repository's per-repo command lock to be free before deleting it, and SHALL reject a deletion request for a repository that currently has an in-flight `dotnet`/`git` run (or clone) rather than deleting out from under it.
+The system SHALL require a repository's per-repository command lock to be free before deleting it, and SHALL reject a deletion request for a repository that currently has an in-flight `dotnet`/`git` run (or clone) rather than deleting out from under it.
 
 #### Scenario: Deletion of a busy repository is rejected
 - **WHEN** a `dotnet build` is in flight against a repository and an operator attempts to delete it
 - **THEN** the system rejects the deletion with a conflict identifying the in-flight run, and does not remove any files
 
 ### Requirement: An in-flight clone can be cancelled from the dashboard, not the REST cancel endpoint
-The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL NOT accept a repository-management run's id on the bearer-token `POST /run/{runId}/cancel` endpoint used by `dotnet-command-execution`/`git-command-execution`/`artifact-transfer` — cancelling a clone is an in-process dashboard action, consistent with clone/delete having no REST surface at all.
+The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL NOT accept a repository-management run's id on the bearer-token `POST /run/{runId}/cancel` endpoint used by `dotnet-command-execution`/`git-command-execution`/`file-transfer` — cancelling a clone is an in-process dashboard action, consistent with clone/delete having no REST surface at all.
 
 #### Scenario: Cancelling a clone from the dashboard
-- **WHEN** an operator cancels an in-flight clone from the Repos or Status view
+- **WHEN** an operator cancels an in-flight clone from the Repositories or Status view
 - **THEN** the system stops the clone, its history record reflects cancellation, and its lock is released
 
 #### Scenario: The REST cancel endpoint does not affect repository-management runs
@@ -87,5 +87,5 @@ The system SHALL let an operator cancel an in-flight repository clone from the d
 The system SHALL NOT expose repository listing, cloning, or deletion as a bearer-token REST endpoint reachable by the sbx sandbox caller — these actions are available only as authenticated in-process operations within the Blazor dashboard, gated by the same dashboard authentication as everything else in `service-dashboard`.
 
 #### Scenario: No REST endpoint exists for repository management
-- **WHEN** a caller presents a valid bearer credential to the service's command/artifact API surface
+- **WHEN** a caller presents a valid bearer credential to the service's command/file API surface
 - **THEN** no request against that API surface can list, clone, or delete a repository — those actions exist only inside the authenticated dashboard

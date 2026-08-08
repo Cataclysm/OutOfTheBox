@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.ComponentModel;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
@@ -23,7 +24,7 @@ public static class RunEndpoints
     /// <c>POST /run/{runId}/cancel</c> (shared by both), all requiring a valid bearer credential.
     /// The two run-starting endpoints share every code path except which executable is fixed -
     /// same request contract, same SSE framing, same <see cref="RunRegistry"/> lock (so a
-    /// <c>dotnet</c> run and a <c>git</c> run against the same repo contend for the same lock,
+    /// <c>dotnet</c> run and a <c>git</c> run against the same repository contend for the same lock,
     /// bidirectionally), same cancellation plumbing.
     /// </summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
@@ -82,14 +83,14 @@ public static class RunEndpoints
             return;
         }
 
-        var repoRoot = resolution.ResolvedPath!;
+        var repositoryRoot = resolution.ResolvedPath!;
 
         // Dedicated to explicit caller cancellation only - kept separate from the timeout source
         // below so that once a cancellation is observed, the code can tell *which* of the two
         // fired and report the correct SSE error reason instead of collapsing both into one.
         var cancelRequestCts = new CancellationTokenSource();
 
-        if (!runRegistry.TryAcquire(repoRoot, runId, cancelRequestCts, out var conflictingRunId))
+        if (!runRegistry.TryAcquire(repositoryRoot, runId, cancelRequestCts, out var conflictingRunId))
         {
             cancelRequestCts.Dispose();
             await writer.WriteErrorAsync("validation", httpContext.RequestAborted, conflictingRunId);
@@ -100,13 +101,13 @@ public static class RunEndpoints
         {
             Id = runId,
             Kind = kind,
-            RepoPath = repoRoot,
+            RepositoryPath = repositoryRoot,
             Arguments = body.Arguments,
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         };
         await runRepository.AddAsync(run, CancellationToken.None);
-        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Started, repoRoot));
+        runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Started, repositoryRoot));
 
         try
         {
@@ -119,12 +120,12 @@ public static class RunEndpoints
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 timeoutCts.Token, cancelRequestCts.Token, httpContext.RequestAborted);
 
-            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes, runEventBus, runId, kind, repoRoot);
+            var sink = new SseProcessOutputSink(writer, options.Value.OutputCapBytes, runEventBus, runId, kind, repositoryRoot);
 
             try
             {
                 var result = await processRunner.RunAsync(
-                    new ProcessRunRequest(body.Arguments, repoRoot, executable),
+                    new ProcessRunRequest(body.Arguments, repositoryRoot, executable),
                     sink,
                     linkedCts.Token,
                     onStarted: pid => runRegistry.SetProcessId(runId, pid));
@@ -183,13 +184,24 @@ public static class RunEndpoints
                 run.Truncated = sink.Truncated;
                 run.Outcome = RunOutcome.Cancelled;
             }
+            catch (Win32Exception)
+            {
+                // The executable failing to even start (missing/corrupted dotnet or git) - same
+                // class of "operation attempted but failed outside caller control" the other
+                // catches above handle for connection/cancellation reasons. Without this, the
+                // exception would propagate out of this handler entirely, past the UpdateAsync
+                // call below, leaving the run parked at Running forever.
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Failed;
+                await writer.WriteErrorAsync("failed", CancellationToken.None);
+            }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
-            runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal, repoRoot));
+            runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal, repositoryRoot));
         }
         finally
         {
-            runRegistry.Release(repoRoot);
+            runRegistry.Release(repositoryRoot);
             cancelRequestCts.Dispose();
         }
     }

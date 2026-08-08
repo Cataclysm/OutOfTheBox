@@ -10,6 +10,6 @@ namespace OutOfTheBox.Application.Repositories;
 /// </summary>
 public interface IRepositoryStatsProvider
 {
-    /// <summary>Computes current size/git-status for the repository at <paramref name="repoPath"/>.</summary>
-    Task<RepositoryStats> ComputeAsync(string repoPath, CancellationToken cancellationToken);
+    /// <summary>Computes current size/git-status for the repository at <paramref name="repositoryPath"/>.</summary>
+    Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken);
 }

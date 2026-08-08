@@ -42,19 +42,19 @@ public sealed class EfRunRepository(OutOfTheBoxDbContext dbContext) : IRunReposi
             runs = runs.Where(r => outcomes.Contains(r.Outcome));
         }
 
-        if (!string.IsNullOrEmpty(query.Repo))
+        if (!string.IsNullOrEmpty(query.RepositoryPath))
         {
-            runs = runs.Where(r => r.RepoPath == query.Repo);
+            runs = runs.Where(r => r.RepositoryPath == query.RepositoryPath);
         }
 
-        // Kind/Outcome/Repo filter server-side (plain, unconverted columns); SearchText and the
+        // Kind/Outcome/RepositoryPath filter server-side (plain, unconverted columns); SearchText and the
         // final ordering happen client-side below, after materializing this already-narrowed set.
         var matches = await runs.ToListAsync(cancellationToken);
 
         if (!string.IsNullOrEmpty(query.SearchText))
         {
-            // Per specs/run-history's "History supports free-text search" requirement: repo,
-            // arguments, artifact path, and clone source URL - not stdout/stderr, which isn't part
+            // Per specs/run-history's "History supports free-text search" requirement: repository,
+            // arguments, file path, and clone source URL - not stdout/stderr, which isn't part
             // of that requirement. Matched client-side rather than via EF.Functions.Like: Arguments
             // is mapped through a value converter (JSON-encoded list), and asking EF.Property<string>
             // for its converted (provider-side) representation to build a SQL LIKE clause causes
@@ -71,9 +71,9 @@ public sealed class EfRunRepository(OutOfTheBoxDbContext dbContext) : IRunReposi
     }
 
     private static bool Matches(Run run, string searchText) =>
-        run.RepoPath.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+        run.RepositoryPath.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
         (run.Arguments is not null && run.Arguments.Any(a => a.Contains(searchText, StringComparison.OrdinalIgnoreCase))) ||
-        (run.ArtifactPath is not null && run.ArtifactPath.Contains(searchText, StringComparison.OrdinalIgnoreCase)) ||
+        (run.FilePath is not null && run.FilePath.Contains(searchText, StringComparison.OrdinalIgnoreCase)) ||
         (run.SourceUrl is not null && run.SourceUrl.Contains(searchText, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />

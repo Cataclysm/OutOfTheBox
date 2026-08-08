@@ -12,7 +12,7 @@ public sealed class CliProcessRunnerTests
     [InlineData("git")]
     public void BuildStartInfo_never_uses_shell_execute(string executable)
     {
-        var request = new ProcessRunRequest(["build"], @"C:\repos\myrepo", executable);
+        var request = new ProcessRunRequest(["build"], @"C:\repositories\myrepo", executable);
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);
 
@@ -28,7 +28,7 @@ public sealed class CliProcessRunnerTests
         // single array element containing something like "; rm -rf /" must reach the process as
         // one literal argv entry, never concatenated into a string a shell could re-parse.
         const string maliciousLookingArgument = "; rm -rf / & echo INJECTED > pwned.txt";
-        var request = new ProcessRunRequest(["test", "--filter", maliciousLookingArgument], @"C:\repos\myrepo", executable);
+        var request = new ProcessRunRequest(["test", "--filter", maliciousLookingArgument], @"C:\repositories\myrepo", executable);
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);
 
@@ -41,12 +41,12 @@ public sealed class CliProcessRunnerTests
     [Fact]
     public void BuildStartInfo_sets_the_working_directory_and_dotnet_as_the_file_name()
     {
-        var request = new ProcessRunRequest(["--version"], @"C:\repos\myrepo\src", "dotnet");
+        var request = new ProcessRunRequest(["--version"], @"C:\repositories\myrepo\src", "dotnet");
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);
 
         Assert.Equal("dotnet", startInfo.FileName);
-        Assert.Equal(@"C:\repos\myrepo\src", startInfo.WorkingDirectory);
+        Assert.Equal(@"C:\repositories\myrepo\src", startInfo.WorkingDirectory);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class CliProcessRunnerTests
         // The executable is always fixed by the calling endpoint, never read from caller
         // arguments - this confirms the runner honors whatever Executable it's given rather than
         // hardcoding "dotnet" (a regression here would silently break POST /run/git).
-        var request = new ProcessRunRequest(["status"], @"C:\repos\myrepo", "git");
+        var request = new ProcessRunRequest(["status"], @"C:\repositories\myrepo", "git");
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);
 
@@ -65,7 +65,7 @@ public sealed class CliProcessRunnerTests
     [Fact]
     public void BuildStartInfo_redirects_both_output_streams()
     {
-        var request = new ProcessRunRequest(["build"], @"C:\repos\myrepo", "dotnet");
+        var request = new ProcessRunRequest(["build"], @"C:\repositories\myrepo", "dotnet");
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);
 

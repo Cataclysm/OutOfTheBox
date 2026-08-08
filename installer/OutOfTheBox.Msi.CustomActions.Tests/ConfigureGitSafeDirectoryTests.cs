@@ -18,9 +18,9 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
     public class ConfigureGitSafeDirectoryTests
     {
         [Theory]
-        [InlineData(@"C:\repos", "C:/repos/*")]
-        [InlineData(@"C:\repos\", "C:/repos/*")]
-        [InlineData("C:/repos", "C:/repos/*")]
+        [InlineData(@"C:\repositories", "C:/repositories/*")]
+        [InlineData(@"C:\repositories\", "C:/repositories/*")]
+        [InlineData("C:/repositories", "C:/repositories/*")]
         public void BuildSafeDirectoryPattern_normalizes_slashes_and_appends_wildcard(string repositoryRootDirectory, string expected) =>
             Assert.Equal(expected, ConfigureGitSafeDirectoryAction.BuildSafeDirectoryPattern(repositoryRootDirectory));
 

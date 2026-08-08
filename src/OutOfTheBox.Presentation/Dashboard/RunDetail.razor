@@ -14,8 +14,8 @@ else
 {
     <h1>@_run.Kind run</h1>
     <dl>
-        <dt>Repo</dt>
-        <dd>@_run.RepoPath</dd>
+        <dt>Repository</dt>
+        <dd>@_run.RepositoryPath</dd>
         <dt>Outcome</dt>
         <dd>@_run.Outcome</dd>
         <dt>Started</dt>
@@ -37,16 +37,16 @@ else
             <dt>Exit code</dt>
             <dd>@(_run.ExitCode is { } cloneExitCode ? cloneExitCode.ToString() : "-")</dd>
         }
-        else if (_run.Kind is RunKind.ArtifactTransfer)
+        else if (_run.Kind is RunKind.FileTransfer)
         {
             <dt>Requested file path</dt>
-            <dd>@_run.ArtifactPath</dd>
+            <dd>@_run.FilePath</dd>
             <dt>File size</dt>
-            <dd>@(_run.ArtifactSizeBytes is { } sizeBytes ? $"{sizeBytes:N0} bytes" : "-")</dd>
+            <dd>@(_run.FileSizeBytes is { } sizeBytes ? $"{sizeBytes:N0} bytes" : "-")</dd>
         }
     </dl>
 
-    <RunHistoryGraph RunId="@RunId" Note="@(_run.Kind == RunKind.ArtifactTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
+    <RunHistoryGraph RunId="@RunId" Note="@(_run.Kind == RunKind.FileTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
 
     @if (_run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
     {

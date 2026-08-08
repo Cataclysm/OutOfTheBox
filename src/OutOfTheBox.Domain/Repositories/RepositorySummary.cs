@@ -4,7 +4,7 @@ namespace OutOfTheBox.Domain.Repositories;
 
 /// <summary>
 /// The identifying stats shown for one repository (a top-level directory under the configured
-/// root) in the dashboard's Repos view, per specs/repository-management. A plain data holder -
+/// root) in the dashboard's Repositories view, per specs/repository-management. A plain data holder -
 /// computing these values (directory size, git status, active state) is Infrastructure's job.
 /// </summary>
 public sealed class RepositorySummary
@@ -37,6 +37,6 @@ public sealed class RepositorySummary
     /// <summary>Commits behind the configured upstream, if one exists; <see langword="null"/> if there is none.</summary>
     public int? BehindCount { get; init; }
 
-    /// <summary>Whether this repository currently holds the per-repo command lock (an in-flight <c>dotnet</c>/<c>git</c> run or clone). Sourced live, never cached.</summary>
+    /// <summary>Whether this repository currently holds the per-repository command lock (an in-flight <c>dotnet</c>/<c>git</c> run or clone). Sourced live, never cached.</summary>
     public required bool IsActive { get; init; }
 }

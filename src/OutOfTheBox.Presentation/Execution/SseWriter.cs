@@ -9,7 +9,7 @@ namespace OutOfTheBox.Presentation.Execution;
 /// Writes Server-Sent Events for the command-execution endpoint's response stream: <c>stdout</c>/
 /// <c>stderr</c> data events per output line, a terminal <c>done</c> event with the exit code and
 /// truncation flag, or a terminal <c>error</c> event with a reason of <c>validation</c>,
-/// <c>timeout</c>, or <c>cancelled</c> (a busy repo also carries the blocking run's id).
+/// <c>timeout</c>, <c>cancelled</c>, or <c>failed</c> (a busy repository also carries the blocking run's id).
 /// </summary>
 public sealed class SseWriter(HttpResponse response)
 {
@@ -30,8 +30,8 @@ public sealed class SseWriter(HttpResponse response)
 
     /// <summary>
     /// Writes the terminal <c>error</c> event for a run that never produced an exit code.
-    /// <paramref name="conflictingRunId"/> is included only for a busy-repo rejection, identifying
-    /// the run already holding that repo's lock.
+    /// <paramref name="conflictingRunId"/> is included only for a busy-repository rejection, identifying
+    /// the run already holding that repository's lock.
     /// </summary>
     public Task WriteErrorAsync(string reason, CancellationToken cancellationToken, Guid? conflictingRunId = null)
     {

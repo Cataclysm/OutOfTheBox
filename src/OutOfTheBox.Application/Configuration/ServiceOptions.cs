@@ -13,7 +13,7 @@ public sealed class ServiceOptions
     public const string SectionName = "OutOfTheBox";
 
     /// <summary>
-    /// Absolute path to the root directory under which all repo working directories must resolve.
+    /// Absolute path to the root directory under which all repository working directories must resolve.
     /// Requests whose resolved working directory falls outside this root are rejected.
     /// </summary>
     public string RootDirectory { get; set; } = string.Empty;
@@ -50,8 +50,8 @@ public sealed class ServiceOptions
     /// How often the background repository-stats sampler recomputes size/git status for every
     /// repository, in seconds. Deliberately slow (default 60s) relative to the resource sampler -
     /// per design.md, both size and git status are also recomputed immediately whenever a run
-    /// against that specific repo reaches a terminal state, so this interval only bounds the
-    /// worst-case staleness for a repo nothing has run against recently.
+    /// against that specific repository reaches a terminal state, so this interval only bounds the
+    /// worst-case staleness for a repository nothing has run against recently.
     /// </summary>
     public int RepositoryStatsSamplerIntervalSeconds { get; set; } = 60;
 

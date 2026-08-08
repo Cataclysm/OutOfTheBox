@@ -20,7 +20,7 @@ public sealed class EfRunRepositoryTests : IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = kind,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["build"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -50,15 +50,15 @@ public sealed class EfRunRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task A_transfer_is_Running_while_in_flight_then_updated_with_artifact_size_and_completed_outcome()
+    public async Task A_transfer_is_Running_while_in_flight_then_updated_with_file_size_and_completed_outcome()
     {
         var repository = CreateRepository();
         var run = new Run
         {
             Id = Guid.NewGuid(),
-            Kind = RunKind.ArtifactTransfer,
-            RepoPath = @"C:\repos\example",
-            ArtifactPath = "bin/output.dll",
+            Kind = RunKind.FileTransfer,
+            RepositoryPath = @"C:\repositories\example",
+            FilePath = "bin/output.dll",
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         };
@@ -68,17 +68,17 @@ public sealed class EfRunRepositoryTests : IDisposable
         var whileInFlight = await repository.FindByIdAsync(run.Id, CancellationToken.None);
         Assert.NotNull(whileInFlight);
         Assert.Equal(RunOutcome.Running, whileInFlight.Outcome);
-        Assert.Null(whileInFlight.ArtifactSizeBytes);
+        Assert.Null(whileInFlight.FileSizeBytes);
 
         run.CompletedAt = DateTimeOffset.UtcNow;
         run.Outcome = RunOutcome.Completed;
-        run.ArtifactSizeBytes = 12345;
+        run.FileSizeBytes = 12345;
         await repository.UpdateAsync(run, CancellationToken.None);
 
         var afterCompletion = await repository.FindByIdAsync(run.Id, CancellationToken.None);
         Assert.NotNull(afterCompletion);
         Assert.Equal(RunOutcome.Completed, afterCompletion.Outcome);
-        Assert.Equal(12345, afterCompletion.ArtifactSizeBytes);
+        Assert.Equal(12345, afterCompletion.FileSizeBytes);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class EfRunRepositoryTests : IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -116,7 +116,7 @@ public sealed class EfRunRepositoryTests : IDisposable
     [Theory]
     [InlineData(RunKind.DotnetCommand)]
     [InlineData(RunKind.GitCommand)]
-    [InlineData(RunKind.ArtifactTransfer)]
+    [InlineData(RunKind.FileTransfer)]
     public async Task A_row_left_Running_by_a_simulated_crash_is_reconciled_to_Interrupted_on_next_startup(RunKind kind)
     {
         var repository = CreateRepository();
@@ -124,7 +124,7 @@ public sealed class EfRunRepositoryTests : IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = kind,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         };
@@ -147,7 +147,7 @@ public sealed class EfRunRepositoryTests : IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             StartedAt = DateTimeOffset.UtcNow,
             CompletedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Completed,
@@ -165,7 +165,7 @@ public sealed class EfRunRepositoryTests : IDisposable
     public async Task ListAsync_filters_by_a_single_kind()
     {
         var repository = CreateRepository();
-        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.ArtifactTransfer));
+        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.FileTransfer));
 
         var results = await repository.ListAsync(new RunQuery { Kinds = [RunKind.GitCommand] }, CancellationToken.None);
 
@@ -177,9 +177,9 @@ public sealed class EfRunRepositoryTests : IDisposable
     public async Task ListAsync_filters_by_multiple_kinds()
     {
         var repository = CreateRepository();
-        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.ArtifactTransfer));
+        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.FileTransfer));
 
-        var results = await repository.ListAsync(new RunQuery { Kinds = [RunKind.GitCommand, RunKind.ArtifactTransfer] }, CancellationToken.None);
+        var results = await repository.ListAsync(new RunQuery { Kinds = [RunKind.GitCommand, RunKind.FileTransfer] }, CancellationToken.None);
 
         Assert.Equal(2, results.Count);
         Assert.All(results, r => Assert.NotEqual(RunKind.DotnetCommand, r.Kind));
@@ -201,30 +201,30 @@ public sealed class EfRunRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task ListAsync_filters_by_repo_alone()
+    public async Task ListAsync_filters_by_repository_alone()
     {
         var repository = CreateRepository();
         await SeedAsync(
             repository,
-            Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\a"),
-            Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\b"));
+            Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\a"),
+            Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\b"));
 
-        var results = await repository.ListAsync(new RunQuery { Repo = @"C:\repos\a" }, CancellationToken.None);
+        var results = await repository.ListAsync(new RunQuery { RepositoryPath = @"C:\repositories\a" }, CancellationToken.None);
 
         Assert.Single(results);
-        Assert.Equal(@"C:\repos\a", results[0].RepoPath);
+        Assert.Equal(@"C:\repositories\a", results[0].RepositoryPath);
     }
 
     [Fact]
-    public async Task ListAsync_free_text_search_matches_repo_arguments_artifact_path_and_source_url()
+    public async Task ListAsync_free_text_search_matches_repository_arguments_file_path_and_source_url()
     {
         var repository = CreateRepository();
-        var byRepo = Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\needle-repo");
+        var byRepository = Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\needle-repository");
         var byArguments = Sample(RunKind.DotnetCommand, arguments: ["build", "needle-arg"]);
-        var byArtifactPath = Sample(RunKind.ArtifactTransfer, artifactPath: "bin/needle-artifact.dll");
-        var bySourceUrl = Sample(RunKind.RepositoryClone, sourceUrl: "https://example.com/needle-repo.git");
-        var nonMatching = Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\unrelated");
-        await SeedAsync(repository, byRepo, byArguments, byArtifactPath, bySourceUrl, nonMatching);
+        var byFilePath = Sample(RunKind.FileTransfer, filePath: "bin/needle-file.dll");
+        var bySourceUrl = Sample(RunKind.RepositoryClone, sourceUrl: "https://example.com/needle-repository.git");
+        var nonMatching = Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\unrelated");
+        await SeedAsync(repository, byRepository, byArguments, byFilePath, bySourceUrl, nonMatching);
 
         var results = await repository.ListAsync(new RunQuery { SearchText = "needle" }, CancellationToken.None);
 
@@ -255,9 +255,9 @@ public sealed class EfRunRepositoryTests : IDisposable
     public async Task ListAsync_combines_search_with_a_filter()
     {
         var repository = CreateRepository();
-        var matching = Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\needle-repo");
-        var wrongKind = Sample(RunKind.GitCommand, repoPath: @"C:\repos\needle-repo");
-        var wrongText = Sample(RunKind.DotnetCommand, repoPath: @"C:\repos\unrelated");
+        var matching = Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\needle-repository");
+        var wrongKind = Sample(RunKind.GitCommand, repositoryPath: @"C:\repositories\needle-repository");
+        var wrongText = Sample(RunKind.DotnetCommand, repositoryPath: @"C:\repositories\unrelated");
         await SeedAsync(repository, matching, wrongKind, wrongText);
 
         var results = await repository.ListAsync(
@@ -272,7 +272,7 @@ public sealed class EfRunRepositoryTests : IDisposable
     public async Task ListAsync_with_no_filters_returns_everything()
     {
         var repository = CreateRepository();
-        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.ArtifactTransfer));
+        await SeedAsync(repository, Sample(RunKind.DotnetCommand), Sample(RunKind.GitCommand), Sample(RunKind.FileTransfer));
 
         var results = await repository.ListAsync(new RunQuery(), CancellationToken.None);
 
@@ -292,17 +292,17 @@ public sealed class EfRunRepositoryTests : IDisposable
     private static Run Sample(
         RunKind kind,
         RunOutcome outcome = RunOutcome.Completed,
-        string repoPath = @"C:\repos\example",
+        string repositoryPath = @"C:\repositories\example",
         IReadOnlyList<string>? arguments = null,
-        string? artifactPath = null,
+        string? filePath = null,
         string? sourceUrl = null) =>
         new()
         {
             Id = Guid.NewGuid(),
             Kind = kind,
-            RepoPath = repoPath,
+            RepositoryPath = repositoryPath,
             Arguments = arguments,
-            ArtifactPath = artifactPath,
+            FilePath = filePath,
             SourceUrl = sourceUrl,
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = outcome,

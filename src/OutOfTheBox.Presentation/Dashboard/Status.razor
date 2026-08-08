@@ -60,7 +60,7 @@ else
             <li class="status-run">
                 <div class="run-row">
                     <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
-                    <span class="run-repo">@run.RepoPath</span>
+                    <span class="run-repository">@run.RepositoryPath</span>
                     <span class="run-id">@run.Id</span>
                     <span class="run-detail">@DetailFor(run)</span>
                     <span class="run-elapsed">@Elapsed(run)</span>
@@ -84,7 +84,7 @@ else
 
                 @if (_expandedRunIds.Contains(run.Id))
                 {
-                    <LiveResourceGraph SeriesKey="@run.Id.ToString()" Note="@(run.Kind == RunKind.ArtifactTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
+                    <LiveResourceGraph SeriesKey="@run.Id.ToString()" Note="@(run.Kind == RunKind.FileTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
                 }
             </li>
         }
@@ -119,7 +119,7 @@ else
     {
         if (runEvent.Type is RunEventType.OutputLine)
         {
-            // The Status list shows summary fields only (repo, kind, elapsed time, ...), not a
+            // The Status list shows summary fields only (repository, kind, elapsed time, ...), not a
             // live output preview - re-rendering the whole list per stdout/stderr line would be
             // both wasteful and not what task 12.7 scopes this view to.
             return;
@@ -167,7 +167,7 @@ else
     private static string DetailFor(Run run) => run.Kind switch
     {
         RunKind.DotnetCommand or RunKind.GitCommand => run.Arguments is null ? string.Empty : string.Join(' ', run.Arguments),
-        RunKind.ArtifactTransfer => run.ArtifactPath ?? string.Empty,
+        RunKind.FileTransfer => run.FilePath ?? string.Empty,
         RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
         _ => string.Empty,
     };

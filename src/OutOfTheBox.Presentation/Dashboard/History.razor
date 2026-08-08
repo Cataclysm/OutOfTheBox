@@ -32,12 +32,12 @@
 
     <label>
         Repository
-        <input type="text" @bind="_repoFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="repo path" />
+        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="repository path" />
     </label>
 
     <label>
         Search
-        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="search repo, arguments, artifact path, source url" />
+        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="search repository, arguments, file path, source url" />
     </label>
 
     <button type="button" @onclick="ClearFiltersAsync">Clear filters</button>
@@ -59,7 +59,7 @@ else
             <li class="run-row">
                 <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
                 <span class="run-outcome">@run.Outcome</span>
-                <span class="run-repo">@run.RepoPath</span>
+                <span class="run-repository">@run.RepositoryPath</span>
                 <span class="run-started">@FormatDateTime(run.StartedAt)</span>
                 <a href="@($"history/{run.Id}")">View</a>
             </li>
@@ -73,7 +73,7 @@ else
 
     private readonly HashSet<RunKind> _selectedKinds = [];
     private string _selectedOutcome = string.Empty;
-    private string _repoFilter = string.Empty;
+    private string _repositoryFilter = string.Empty;
     private string _searchText = string.Empty;
     private IReadOnlyList<Run>? _runs;
     private CancellationTokenSource? _debounceCts;
@@ -123,7 +123,7 @@ else
     {
         _selectedKinds.Clear();
         _selectedOutcome = string.Empty;
-        _repoFilter = string.Empty;
+        _repositoryFilter = string.Empty;
         _searchText = string.Empty;
         return RefreshAsync();
     }
@@ -134,7 +134,7 @@ else
         {
             Kinds = _selectedKinds.Count > 0 ? _selectedKinds : null,
             Outcomes = Enum.TryParse<RunOutcome>(_selectedOutcome, out var outcome) ? [outcome] : null,
-            Repo = string.IsNullOrWhiteSpace(_repoFilter) ? null : _repoFilter,
+            RepositoryPath = string.IsNullOrWhiteSpace(_repositoryFilter) ? null : _repositoryFilter,
             SearchText = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
         };
 

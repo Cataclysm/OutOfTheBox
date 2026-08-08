@@ -20,4 +20,4 @@ Feature: Run History Persistence
         When a transfer of "SampleTests.cs" from "PassingFixture" completes
         And the service is restarted
         Then the persisted history record for that run shows outcome "Completed"
-        And it has a recorded artifact size
+        And it has a recorded file size

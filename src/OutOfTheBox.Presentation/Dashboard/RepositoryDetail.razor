@@ -1,4 +1,4 @@
-@page "/repos/{Name}"
+@page "/repository-management/{Name}"
 @attribute [Authorize]
 @using System.Globalization
 @using OutOfTheBox.Application.Execution
@@ -57,7 +57,7 @@ else
 }
 
 @code {
-    /// <summary>The repository name from the route (<c>/repos/{Name}</c>).</summary>
+    /// <summary>The repository name from the route (<c>/repository-management/{Name}</c>).</summary>
     [Parameter]
     public string Name { get; set; } = string.Empty;
 
@@ -71,36 +71,36 @@ else
         _summary = summaries.FirstOrDefault(r => string.Equals(r.Name, Name, StringComparison.OrdinalIgnoreCase));
 
         // Reuses the same RunQuery/IRunRepository.ListAsync mechanism the History view's list uses
-        // (per task 13.14), pre-filtered to this repo's resolved path - the route only carries the
-        // repo's name, so it's resolved the same way any repo-relative path is before querying.
+        // (per task 13.14), pre-filtered to this repository's resolved path - the route only carries the
+        // repository's name, so it's resolved the same way any repository-relative path is before querying.
         var resolution = WorkingDirectoryResolver.Resolve(Name);
         _runs = resolution.IsAllowed
-            ? await RunRepository.ListAsync(new RunQuery { Repo = resolution.ResolvedPath }, CancellationToken.None)
+            ? await RunRepository.ListAsync(new RunQuery { RepositoryPath = resolution.ResolvedPath }, CancellationToken.None)
             : [];
     }
 
-    private static string GitStatusText(RepositorySummary repo)
+    private static string GitStatusText(RepositorySummary repository)
     {
-        if (!repo.StatsComputed)
+        if (!repository.StatsComputed)
         {
             return "computing…";
         }
 
-        if (!repo.IsGitRepository)
+        if (!repository.IsGitRepository)
         {
-            return "not a git repo";
+            return "not a git repository";
         }
 
-        var status = $"{repo.Branch ?? "(no branch)"} ({(repo.IsDirty ? "dirty" : "clean")})";
+        var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";
 
-        if (repo.AheadCount is > 0)
+        if (repository.AheadCount is > 0)
         {
-            status += $", ahead {repo.AheadCount}";
+            status += $", ahead {repository.AheadCount}";
         }
 
-        if (repo.BehindCount is > 0)
+        if (repository.BehindCount is > 0)
         {
-            status += $", behind {repo.BehindCount}";
+            status += $", behind {repository.BehindCount}";
         }
 
         return status;

@@ -110,7 +110,7 @@ public sealed class CancellationSteps : IDisposable
             await Task.Delay(100);
         }
 
-        throw new InvalidOperationException("The git run's repo lock was never observed as held.");
+        throw new InvalidOperationException("The git run's repository lock was never observed as held.");
     }
 
     [When(@"that run is cancelled")]
@@ -185,10 +185,10 @@ public sealed class CancellationSteps : IDisposable
             .Select(e => JsonDocument.Parse(e.Data))
             .Any(payload => payload.RootElement.TryGetProperty("runId", out _));
 
-        Assert.False(conflictRejection, "Expected the repo to be free after cancellation, not still locked.");
+        Assert.False(conflictRejection, "Expected the repository to be free after cancellation, not still locked.");
     }
 
-    [Then(@"the git fixture repo is accepted for a subsequent run")]
+    [Then(@"the git fixture repository is accepted for a subsequent run")]
     public async Task ThenTheGitFixtureRepoIsAcceptedForASubsequentRun()
     {
         using var pollingClient = _gitFactory!.CreateClient();
@@ -223,7 +223,7 @@ public sealed class CancellationSteps : IDisposable
             await Task.Delay(100);
         }
 
-        Assert.Fail("Expected the repo to become free after cancellation, not remain locked.");
+        Assert.Fail("Expected the repository to become free after cancellation, not remain locked.");
     }
 
     /// <inheritdoc />

@@ -80,7 +80,7 @@ h2 {
 }
 
 /* Every page heading gets the same small brand-gradient underline accent - a cheap, consistent
-   "this is OutOfTheBox" signal repeated across Status/History/Repos/detail pages, without needing
+   "this is OutOfTheBox" signal repeated across Status/History/Repositories/detail pages, without needing
    a logo on every page. */
 .dashboard-content h1 {
     position: relative;
@@ -177,7 +177,7 @@ input[type="checkbox"] {
     filter: brightness(0.95);
 }
 
-/* Reserved for the single truly irreversible action (confirming a repo delete) - filled red rather
+/* Reserved for the single truly irreversible action (confirming a repository delete) - filled red rather
    than the quieter outlined danger style process-row's Kill button uses, since this one has no undo. */
 .btn-danger {
     background: rgba(255, 92, 92, 0.16);
@@ -549,7 +549,7 @@ input[type="checkbox"] {
     color: #fdba74;
 }
 
-.kind-artifacttransfer {
+.kind-filetransfer {
     background: rgba(56, 189, 248, 0.16);
     color: #7dd3fc;
 }
@@ -666,7 +666,7 @@ input[type="checkbox"] {
     background: var(--border-strong);
 }
 
-/* Key/value stat blocks (repo detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
+/* Key/value stat blocks (repository detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
 dl {
     display: grid;
     grid-template-columns: max-content 1fr;

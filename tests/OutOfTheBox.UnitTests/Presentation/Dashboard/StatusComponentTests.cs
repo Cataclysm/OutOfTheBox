@@ -58,7 +58,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         {
             Id = Guid.NewGuid(),
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["build"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -66,7 +66,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         var cut = Render<Status>();
 
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
         Assert.DoesNotContain("Idle - no runs in flight.", cut.Markup);
     }
 
@@ -78,12 +78,12 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         cut.WaitForAssertion(() => Assert.Contains("Idle - no runs in flight.", cut.Markup));
 
         var runId = Guid.NewGuid();
-        var repoPath = @"C:\repos\live-example";
+        var repositoryPath = @"C:\repositories\live-example";
         await runRepository.AddAsync(new Run
         {
             Id = runId,
             Kind = RunKind.GitCommand,
-            RepoPath = repoPath,
+            RepositoryPath = repositoryPath,
             Arguments = ["pull"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -91,9 +91,9 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         // The component never sees this DB write directly - only the published event, exactly like
         // a second HTTP client's POST /run/git would trigger via RunEndpoints in production.
-        _runEventBus.Publish(new RunEvent(runId, RunKind.GitCommand, RunEventType.Started, repoPath));
+        _runEventBus.Publish(new RunEvent(runId, RunKind.GitCommand, RunEventType.Started, repositoryPath));
 
-        cut.WaitForAssertion(() => Assert.Contains(repoPath, cut.Markup), TimeSpan.FromSeconds(2));
+        cut.WaitForAssertion(() => Assert.Contains(repositoryPath, cut.Markup), TimeSpan.FromSeconds(2));
     }
 
     [Fact]
@@ -101,12 +101,12 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
     {
         var runRepository = Services.GetRequiredService<IRunRepository>();
         var runId = Guid.NewGuid();
-        var repoPath = @"C:\repos\finishing-example";
+        var repositoryPath = @"C:\repositories\finishing-example";
         var run = new Run
         {
             Id = runId,
             Kind = RunKind.DotnetCommand,
-            RepoPath = repoPath,
+            RepositoryPath = repositoryPath,
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
@@ -114,14 +114,14 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         await runRepository.AddAsync(run, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(repoPath, cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(repositoryPath, cut.Markup));
 
         run.Outcome = RunOutcome.Completed;
         run.CompletedAt = DateTimeOffset.UtcNow;
         run.ExitCode = 0;
         await runRepository.UpdateAsync(run, CancellationToken.None);
 
-        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repoPath));
+        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repositoryPath));
 
         cut.WaitForAssertion(() => Assert.Contains("Idle - no runs in flight.", cut.Markup), TimeSpan.FromSeconds(2));
     }
@@ -139,7 +139,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         // test pass for the wrong reason. Asserting markup is unchanged, not just "still idle",
         // demonstrates OutputLine specifically doesn't re-render.
         var before = cut.Markup;
-        _runEventBus.Publish(new RunEvent(Guid.NewGuid(), RunKind.DotnetCommand, RunEventType.OutputLine, @"C:\repos\x") { OutputStream = "stdout", OutputLine = "hello" });
+        _runEventBus.Publish(new RunEvent(Guid.NewGuid(), RunKind.DotnetCommand, RunEventType.OutputLine, @"C:\repositories\x") { OutputStream = "stdout", OutputLine = "hello" });
 
         await Task.Delay(TimeSpan.FromMilliseconds(200));
         Assert.Equal(before, cut.Markup);
@@ -208,14 +208,14 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         {
             Id = runId,
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
         Assert.DoesNotContain("process-row", cut.Markup);
 
         var process = new ProcessResourceSample(1234, "dotnet", DateTime.UtcNow, 12.5, 4096);
@@ -238,14 +238,14 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         {
             Id = runId,
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
 
         var startTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         var process = new ProcessResourceSample(4321, "testhost", startTime, 5, 2048);
@@ -297,14 +297,14 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         {
             Id = runId,
             Kind = RunKind.DotnetCommand,
-            RepoPath = @"C:\repos\example",
+            RepositoryPath = @"C:\repositories\example",
             Arguments = ["test"],
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
 
         var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
         Assert.Equal(4, createdBeforeExpand); // host graph only - nothing for the collapsed run card
@@ -340,15 +340,15 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         await runRepository.AddAsync(new Run
         {
             Id = transferId,
-            Kind = RunKind.ArtifactTransfer,
-            RepoPath = @"C:\repos\example",
-            ArtifactPath = "bin/output.dll",
+            Kind = RunKind.FileTransfer,
+            RepositoryPath = @"C:\repositories\example",
+            FilePath = "bin/output.dll",
             StartedAt = DateTimeOffset.UtcNow,
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
 
         cut.Find("button.run-graph-toggle").Click();
 

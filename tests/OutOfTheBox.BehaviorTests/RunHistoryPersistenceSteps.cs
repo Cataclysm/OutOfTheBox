@@ -62,15 +62,15 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
     }
 
     [When(@"a transfer of ""(.*)"" from ""(.*)"" completes")]
-    public async Task WhenATransferOfFromCompletes(string path, string repo)
+    public async Task WhenATransferOfFromCompletes(string path, string repository)
     {
         _factory = new CommandExecutionServiceFactory();
         _sqliteFilePath = _factory.SqliteFilePath;
         using var client = _factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/artifacts")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/files")
         {
-            Content = JsonContent.Create(new { repo, path }),
+            Content = JsonContent.Create(new { repository, path }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
 
@@ -104,12 +104,12 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
         Assert.Equal(expectedOutcome, _reloadedRun.Outcome.ToString());
     }
 
-    [Then(@"it has a recorded artifact size")]
-    public void ThenItHasARecordedArtifactSize()
+    [Then(@"it has a recorded file size")]
+    public void ThenItHasARecordedFileSize()
     {
         Assert.NotNull(_reloadedRun);
-        Assert.NotNull(_reloadedRun.ArtifactSizeBytes);
-        Assert.True(_reloadedRun.ArtifactSizeBytes > 0);
+        Assert.NotNull(_reloadedRun.FileSizeBytes);
+        Assert.True(_reloadedRun.FileSizeBytes > 0);
     }
 
     /// <inheritdoc />

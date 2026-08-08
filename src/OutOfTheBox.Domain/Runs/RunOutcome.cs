@@ -24,7 +24,7 @@ public enum RunOutcome
     Interrupted,
 
     /// <summary>
-    /// The requested resource didn't exist (an artifact-transfer file, or a repository-delete
+    /// The requested resource didn't exist (a file-transfer target, or a repository-delete
     /// target) — distinct from <see cref="ValidationFailed"/>, which covers a malformed or
     /// confinement-escaping request rather than a well-formed one naming something absent.
     /// </summary>
@@ -32,4 +32,13 @@ public enum RunOutcome
 
     /// <summary>A repository-clone target name already named an existing repository.</summary>
     AlreadyExists,
+
+    /// <summary>
+    /// The operation was attempted but failed for a reason outside caller control - a filesystem
+    /// error (locked/permission-denied file or directory) or a process failing to even start
+    /// (missing/corrupted executable) - distinct from <see cref="Cancelled"/>/<see cref="TimedOut"/>
+    /// (which mean the run was deliberately ended) and from <see cref="ValidationFailed"/> (which
+    /// means nothing was ever attempted).
+    /// </summary>
+    Failed,
 }

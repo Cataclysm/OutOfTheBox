@@ -67,7 +67,7 @@ builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolve
 builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 builder.Services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
 
-// Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repo lock
+// Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repository lock
 // would be meaningless (each request would get its own empty registry).
 builder.Services.AddSingleton<RunRegistry>();
 
@@ -154,11 +154,12 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapCommandExecutionEndpoints();
-app.MapArtifactTransferEndpoints();
+app.MapFileTransferEndpoints();
+app.MapRepositoryEndpoints();
 app.MapLoginEndpoints();
 app.MapVersionEndpoint();
 
-// RequireAuthorization() applies only to this Razor Components route group - the four
+// RequireAuthorization() applies only to this Razor Components route group - the six
 // bearer-token-protected API endpoints above (and /login, /logout, /version) have no
 // authorization metadata attached at all, so they're completely unaffected; the dashboard's own
 // Login page opts back out via its [AllowAnonymous] attribute.
@@ -166,7 +167,7 @@ app.MapVersionEndpoint();
 // AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
 // so its @Assets[...] references resolve against the actual hosting app's manifest, per Section
 // 15's Chart.js work) - MapRazorComponents<App>() only scans App's own assembly for @page
-// components by default, and every routable page (Status, Repos, History, Login, ...) still lives
+// components by default, and every routable page (Status, Repositories, History, Login, ...) still lives
 // in Presentation.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()

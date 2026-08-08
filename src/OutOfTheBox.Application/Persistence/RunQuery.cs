@@ -18,11 +18,11 @@ public sealed record RunQuery
     /// <summary>Restrict to runs with any of these outcomes, if supplied.</summary>
     public IReadOnlyCollection<RunOutcome>? Outcomes { get; init; }
 
-    /// <summary>Restrict to runs against exactly this repo path, if supplied.</summary>
-    public string? Repo { get; init; }
+    /// <summary>Restrict to runs against exactly this repository path, if supplied.</summary>
+    public string? RepositoryPath { get; init; }
 
     /// <summary>
-    /// Free-text query matched against a run's repo, arguments, artifact path, and clone source
+    /// Free-text query matched against a run's repository, arguments, file path, and clone source
     /// URL (whichever apply to that run's kind), if supplied.
     /// </summary>
     public string? SearchText { get; init; }

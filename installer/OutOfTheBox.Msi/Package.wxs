@@ -4,7 +4,7 @@
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <!-- Name is "Out of the Box" (spaced, human-written), not the "OutOfTheBox" identifier used
-       throughout the codebase/repo/file names - this is what Programs and Features, the Services
+       throughout the codebase/repository/file names - this is what Programs and Features, the Services
        console, dialog titles, and every stock WixUI_Minimal dialog (via the built-in [ProductName]
        substitution, already proven with [ProductVersion] below) actually show an operator. Most
        user-visible text in this file references [ProductName] rather than repeating the literal
@@ -77,7 +77,7 @@
          block below rather than a hand-written appsettings.json - Program.cs already reads
          standard ASP.NET Core environment-variable configuration overrides, so this reuses that
          existing mechanism instead of introducing a custom action to render JSON. -->
-    <Property Id="REPOROOTDIR" Value="C:\repos" />
+    <Property Id="REPOSITORYROOTDIR" Value="C:\repositories" />
     <Property Id="BEARERTOKEN" Hidden="yes" Secure="yes" />
     <Property Id="PORTNUMBER" Value="5443" />
 
@@ -136,13 +136,13 @@
     <InstallExecuteSequence>
       <Custom Action="ResolveSecrets" After="AppSearch" />
       <!-- InstallExecuteSequence only, deliberately not InstallUISequence too (unlike
-           ResolveSecrets above): REPOROOTDIR only holds its final, operator-confirmed value once
+           ResolveSecrets above): REPOSITORYROOTDIR only holds its final, operator-confirmed value once
            ConfigDlg has been through - scheduling this during the UI sequence's own early AppSearch
-           pass would create the property's still-default value (C:\repos) before the operator ever
+           pass would create the property's still-default value (C:\repositories) before the operator ever
            got a chance to type a different path. -->
       <Custom Action="CreateRepositoryRootDirectory" After="AppSearch" />
       <!-- Same InstallExecuteSequence-only reasoning as CreateRepositoryRootDirectory just above -
-           needs REPOROOTDIR's final value, and doesn't need to run before it (the system-wide git
+           needs REPOSITORYROOTDIR's final value, and doesn't need to run before it (the system-wide git
            config write doesn't care whether the directory exists yet, only CreateRepositoryRootDirectory does). -->
       <Custom Action="ConfigureGitSafeDirectory" After="CreateRepositoryRootDirectory" />
     </InstallExecuteSequence>
@@ -287,7 +287,7 @@
                       Name="Environment"
                       Type="multiString">
         <MultiString Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]" />
-        <MultiString Value="OutOfTheBox__RootDirectory=[REPOROOTDIR]" />
+        <MultiString Value="OutOfTheBox__RootDirectory=[REPOSITORYROOTDIR]" />
         <MultiString Value="OutOfTheBox__BearerToken=[BEARERTOKEN]" />
         <MultiString Value="OutOfTheBox__SqliteFilePath=[DATADIRFOLDER]outofthebox.db" />
         <MultiString Value="Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
@@ -315,7 +315,7 @@
     <!-- Minimal (Welcome/Progress/Exit only) rather than InstallDir - this installer's own
          install location isn't something an operator needs to choose (per design.md, it's
          disposable/upgrade-replaced), so a directory-chooser page for THAT would be a confusing
-         second "pick a folder" step alongside ConfigDlg's own repo-root field below.
+         second "pick a folder" step alongside ConfigDlg's own repository-root field below.
 
          This UI content lives directly under <Package> (not a separate Fragment in its own file)
          deliberately: a Fragment elsewhere is only pulled into the linked output if something
@@ -326,7 +326,7 @@
          cover UI tables either - a real "build succeeded, feature entirely absent" trap). -->
     <ui:WixUI Id="WixUI_Minimal" />
 
-    <!-- Config-collection page (tasks.md 17.9) - repo root directory, bearer token, and port,
+    <!-- Config-collection page (tasks.md 17.9) - repository root directory, bearer token, and port,
          written into the service's Environment registry value by ServiceComponent above. Spliced
          into WixUI_Minimal's sequence as the fresh-install entry point (see the InstallUISequence
          override below) via overriding Publish entries - the standard WiX pattern for adding a
@@ -387,8 +387,8 @@
         <!-- Y=100 - a deliberate 5px-larger gap after the title/description block above (whose own
              top position now matches VerifyReadyDlg's), separating it from the interactive fields
              below; every field after this one is positioned relative to this same anchor. -->
-        <Control Id="RepoRootLabel" Type="Text" X="25" Y="100" Width="320" Height="15" NoPrefix="yes" Text="Repository root directory:" />
-        <Control Id="RepoRootEdit" Type="Edit" X="25" Y="115" Width="320" Height="18" Property="REPOROOTDIR" Text="{80}" />
+        <Control Id="RepositoryRootLabel" Type="Text" X="25" Y="100" Width="320" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepositoryRootEdit" Type="Edit" X="25" Y="115" Width="320" Height="18" Property="REPOSITORYROOTDIR" Text="{80}" />
 
         <Control Id="BearerTokenLabel" Type="Text" X="25" Y="140" Width="320" Height="15" NoPrefix="yes" Text="Bearer token (sbx caller and web interface):" />
         <Control Id="BearerTokenEdit" Type="Edit" X="25" Y="155" Width="320" Height="18" Property="BEARERTOKEN" Text="{80}" />
@@ -400,14 +400,14 @@
           <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
         </Control>
         <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next">
-          <!-- Refuse to proceed without a repo root and a non-trivial bearer token - an installer
+          <!-- Refuse to proceed without a repository root and a non-trivial bearer token - an installer
                that silently accepted blank/weak values here would produce a service that's either
                broken (no root configured) or authenticated by an empty credential. Port left
                unvalidated beyond "not blank" - msiexec/Kestrel will fail loudly enough on a
                genuinely invalid one, and duplicating full numeric-range validation here isn't
                worth the extra dialog complexity for a v1 config page. -->
-          <Publish Event="SpawnDialog" Value="InvalidConfigDlg" Order="1" Condition="REPOROOTDIR = &quot;&quot; OR BEARERTOKEN = &quot;&quot; OR PORTNUMBER = &quot;&quot;" />
-          <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="2" Condition="REPOROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
+          <Publish Event="SpawnDialog" Value="InvalidConfigDlg" Order="1" Condition="REPOSITORYROOTDIR = &quot;&quot; OR BEARERTOKEN = &quot;&quot; OR PORTNUMBER = &quot;&quot;" />
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="2" Condition="REPOSITORYROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
           <Publish Event="SpawnDialog" Value="CancelDlg" Order="1" />
