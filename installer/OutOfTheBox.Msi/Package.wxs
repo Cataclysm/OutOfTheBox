@@ -321,24 +321,29 @@
         <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="373" Height="0" />
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="373" Height="0" />
 
-        <Control Id="Title" Type="Text" X="15" Y="52" Width="340" Height="15" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure [ProductName] v[ProductVersion]" />
+        <!-- Positioned at X=15 Y=15, on the banner itself - matches the exact placement/style
+             stock WixUI_Minimal dialogs use for their own title (e.g. VerifyReadyDlg's
+             InstallTitle), which this dialog's title previously didn't (it sat below the banner
+             instead), reading as "no title" by comparison since it wasn't where an operator's eye
+             goes first on every other dialog in the sequence. -->
+        <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure [ProductName] v[ProductVersion]" />
         <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
              RegistryValue from a prior install's PersistedSecretsComponent was found during
              AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
              line. -->
-        <Control Id="UpgradeNotice" Type="Text" X="15" Y="67" Width="340" Height="15" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
+        <Control Id="UpgradeNotice" Type="Text" X="15" Y="58" Width="340" Height="15" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
                  HideCondition="EXISTINGVERSION = &quot;&quot;" ShowCondition="EXISTINGVERSION &lt;&gt; &quot;&quot;" />
-        <Control Id="Description" Type="Text" X="15" Y="84" Width="340" Height="20" NoPrefix="yes"
+        <Control Id="Description" Type="Text" X="15" Y="75" Width="340" Height="20" NoPrefix="yes"
                  Text="These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
 
-        <Control Id="RepoRootLabel" Type="Text" X="15" Y="112" Width="340" Height="15" NoPrefix="yes" Text="Repository root directory:" />
-        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="127" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
+        <Control Id="RepoRootLabel" Type="Text" X="15" Y="100" Width="340" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="115" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="152" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (sbx caller and web interface):" />
-        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="167" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="140" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (sbx caller and web interface):" />
+        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="155" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
-        <Control Id="PortLabel" Type="Text" X="15" Y="192" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
-        <Control Id="PortEdit" Type="Edit" X="15" Y="207" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
+        <Control Id="PortLabel" Type="Text" X="15" Y="180" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
+        <Control Id="PortEdit" Type="Edit" X="15" Y="195" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
 
         <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
           <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
