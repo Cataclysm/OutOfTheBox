@@ -13,9 +13,21 @@
 
     <!-- ShowVersion puts "Version $(ProductVersion)" in the bootstrapper's own welcome text
          automatically - the brand mark shown alongside it is the same logo used everywhere else
-         (installer icon, MSI dialogs, dashboard favicon/header). -->
+         (installer icon, MSI dialogs, dashboard favicon/header).
+
+         ThemeFile/LocalizationFile (rather than Theme="hyperlinkLicense" + LicenseUrl="") point at
+         Theme.xml/Theme.wxl, a local copy of WixStdBA's stock hyperlinkLicense theme with the
+         EulaHyperlink/EulaAcceptCheckbox controls removed - there's no real license agreement here,
+         and LicenseUrl="" does not suppress those controls despite being the documented way to
+         (confirmed by an actual install showing "I agree to the license terms and conditions
+         [license terms]" boilerplate regardless). See Theme.xml's own comment for the full story. -->
     <BootstrapperApplication>
+      <!-- Theme/LicenseUrl are still required by WiX's own schema validation even when ThemeFile/
+           LocalizationFile override the actual rendered content - Theme selects which base engine
+           behavior to use, LicenseUrl="" (empty, not omitted) is the minimum needed to satisfy
+           "exactly one of LicenseFile or LicenseUrl must have a value." -->
       <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
+                                               ThemeFile="Theme.xml" LocalizationFile="Theme.wxl"
                                                ShowVersion="yes" SuppressOptionsUI="yes"
                                                LogoFile="$(var.BrandAssetsPath)logo-96.png" />
     </BootstrapperApplication>

@@ -173,9 +173,19 @@
     </ComponentGroup>
 
     <!-- Dedicated least-privilege service account (design.md's generic-passthrough risk
-         mitigation) - not local admin, not a pre-existing/shared account. Log-on-as-a-service is
-         granted automatically once the service below is installed to run as this account; no
-         separate rights-assignment step is needed for that specific right. Removed on uninstall. -->
+         mitigation) - not local admin, not a pre-existing/shared account. Removed on uninstall.
+
+         LogonAsService="yes" is required and was missing until a real install on Windows Server
+         2025 Datacenter failed to start the service at all (SCM Event Viewer entry: "Logon
+         failure: the user has not been granted the requested logon type at this computer" /
+         "This service account does not have the required user right 'Log on as a service.'").
+         The comment this replaced claimed the right was "granted automatically once the service
+         below is installed to run as this account" - that is FALSE: CreateService/ServiceInstall
+         never grants SeServiceLogonRight programmatically, only the interactive Services (
+         services.msc) GUI does that as an implicit side effect, which is irrelevant to an
+         unattended MSI install. LogonAsService="yes" makes util:User's own account-creation action
+         call LsaAddAccountRights directly, independent of and not racing against ServiceInstall's
+         own sequencing. -->
     <Component Id="ServiceAccountComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a01">
       <util:User Id="ServiceAccount"
                  Name="[SERVICEACCOUNTNAME]"
@@ -184,7 +194,8 @@
                  CanNotChangePassword="yes"
                  CreateUser="yes"
                  RemoveOnUninstall="yes"
-                 UpdateIfExists="yes">
+                 UpdateIfExists="yes"
+                 LogonAsService="yes">
         <!-- Required for PerformanceCounter access to the Processor category (design.md's resource-
              monitoring risk) - the account wouldn't have this by default otherwise. -->
         <util:GroupRef Id="PerformanceMonitorUsersGroup" />
