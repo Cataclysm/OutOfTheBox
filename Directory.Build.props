@@ -5,6 +5,11 @@
          development, per explicit instruction - every project's AssemblyVersion/FileVersion/
          InformationalVersion derive from this one property automatically, no per-project override. -->
     <Version>1.0.0</Version>
+    <!-- Since .NET 8, the SDK appends "+<git commit sha>" to AssemblyInformationalVersionAttribute
+         by default (Source Link's SourceRevisionId) - VersionInfo.cs reads that attribute verbatim
+         for every version display on the dashboard (header/footer, login page, /version endpoint),
+         so left alone every one of those showed "1.0.0+4343d1a..." instead of a plain version. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- Centralized build output: every project's bin/obj lands under artifacts/ at the repo
          root (artifacts/bin/<project>/, artifacts/obj/<project>/, ...) instead of scattering a
          bin/ and obj/ folder inside every project directory. ArtifactsPath is pinned explicitly

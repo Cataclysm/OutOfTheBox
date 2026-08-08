@@ -111,6 +111,7 @@
 
     <Binary Id="ResolveSecretsCA" SourceFile="$(var.ResolveSecretsCaDllPath)" />
     <CustomAction Id="ResolveSecrets" BinaryRef="ResolveSecretsCA" DllEntry="ResolveSecrets" Execute="immediate" Return="check" />
+    <CustomAction Id="CreateRepositoryRootDirectory" BinaryRef="ResolveSecretsCA" DllEntry="CreateRepositoryRootDirectory" Execute="immediate" Return="check" />
 
     <!-- Scheduled in both sequences: InstallUISequence so ConfigDlg's fields already show the
          resolved (generated-or-preserved) values by the time the operator sees the page, and
@@ -122,6 +123,12 @@
     </InstallUISequence>
     <InstallExecuteSequence>
       <Custom Action="ResolveSecrets" After="AppSearch" />
+      <!-- InstallExecuteSequence only, deliberately not InstallUISequence too (unlike
+           ResolveSecrets above): REPOROOTDIR only holds its final, operator-confirmed value once
+           ConfigDlg has been through - scheduling this during the UI sequence's own early AppSearch
+           pass would create the property's still-default value (C:\repos) before the operator ever
+           got a chance to type a different path. -->
+      <Custom Action="CreateRepositoryRootDirectory" After="AppSearch" />
     </InstallExecuteSequence>
 
     <Feature Id="MainFeature" Title="Out of the Box Service" Level="1">
