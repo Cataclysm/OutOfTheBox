@@ -65,6 +65,7 @@ builder.Services
 // other directly.
 builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
 builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
+builder.Services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
 
 // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repo lock
 // would be meaningless (each request would get its own empty registry).

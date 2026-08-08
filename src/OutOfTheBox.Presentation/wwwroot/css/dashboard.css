@@ -408,6 +408,7 @@ input[type="checkbox"] {
 
 .resource-tiles {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     margin-bottom: 1.25rem;
 }
@@ -420,6 +421,7 @@ input[type="checkbox"] {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 0.85rem 1rem;
+    flex: 1 1 140px;
     min-width: 140px;
     box-shadow: var(--shadow-card);
     position: relative;

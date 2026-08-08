@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Events;
+using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
@@ -38,6 +39,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         Services.AddSingleton<IProcessMonitor>(_processMonitor);
         Services.AddSingleton<IChartInterop>(_chartInterop);
         Services.AddSingleton(new ResourceHistoryBuffer(new SystemClock()));
+        Services.AddSingleton<IInstalledToolVersionsProvider>(new StubInstalledToolVersionsProvider(new InstalledToolVersions("10.0.100", "2.43.0")));
     }
 
     [Fact]
@@ -141,6 +143,18 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         await Task.Delay(TimeSpan.FromMilliseconds(200));
         Assert.Equal(before, cut.Markup);
+    }
+
+    [Fact]
+    public void Installed_tool_version_tiles_show_the_providers_reported_versions()
+    {
+        var cut = Render<Status>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("resource-tile-value\">10.0.100", cut.Markup);
+            Assert.Contains("resource-tile-value\">2.43.0", cut.Markup);
+        });
     }
 
     [Fact]
@@ -316,6 +330,11 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
     {
         _dbContextFactory.Dispose();
         base.Dispose();
+    }
+
+    private sealed class StubInstalledToolVersionsProvider(InstalledToolVersions versions) : IInstalledToolVersionsProvider
+    {
+        public Task<InstalledToolVersions> GetVersionsAsync(CancellationToken cancellationToken) => Task.FromResult(versions);
     }
 
     private sealed class SpyProcessMonitor : IProcessMonitor

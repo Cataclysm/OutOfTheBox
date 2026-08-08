@@ -1,12 +1,14 @@
 @page "/"
 @attribute [Authorize]
 @using System.Globalization
+@using OutOfTheBox.Application.Execution
 @using OutOfTheBox.Application.Monitoring
 @using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 @inject IRunEventBus RunEventBus
 @inject IResourceEventBus ResourceEventBus
 @inject IProcessMonitor ProcessMonitor
+@inject IInstalledToolVersionsProvider InstalledToolVersionsProvider
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Status</PageTitle>
@@ -25,6 +27,14 @@
     <div class="resource-tile">
         <span class="resource-tile-label">Service RAM</span>
         <span class="resource-tile-value">@FormatBytes(_host.ServiceRamBytes)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Git Version</span>
+        <span class="resource-tile-value">@(_toolVersions.GitVersion ?? "not detected")</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">.NET Version</span>
+        <span class="resource-tile-value">@(_toolVersions.DotnetVersion ?? "not detected")</span>
     </div>
 </div>
 
@@ -86,11 +96,13 @@ else
     private HostResourceSample _host = new(0, [], 0, 0, 0, 0, 0);
     private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
     private readonly HashSet<Guid> _expandedRunIds = [];
+    private InstalledToolVersions _toolVersions = new(null, null);
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
     {
         await RefreshAsync();
+        _toolVersions = await InstalledToolVersionsProvider.GetVersionsAsync(CancellationToken.None);
         _runSubscription = RunEventBus.Subscribe(OnRunEvent);
         _resourceSubscription = ResourceEventBus.Subscribe(OnResourceSnapshot);
 
