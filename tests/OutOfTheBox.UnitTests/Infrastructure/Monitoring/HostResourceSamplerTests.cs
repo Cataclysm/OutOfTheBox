@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Concurrency;
-using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Infrastructure.Monitoring;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Monitoring;
@@ -18,10 +17,7 @@ public sealed class HostResourceSamplerTests : IDisposable
 {
     private readonly HostResourceSampler _sampler;
 
-    public HostResourceSamplerTests()
-    {
-        _sampler = new HostResourceSampler(new RunRegistry(), new SystemClock());
-    }
+    public HostResourceSamplerTests() => _sampler = new HostResourceSampler(new RunRegistry(), new SystemClock());
 
     [Fact]
     public async Task SampleAsync_returns_plausible_host_figures()

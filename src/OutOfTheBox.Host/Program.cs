@@ -18,7 +18,6 @@ using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.Presentation.Execution;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
 using System.Security.Authentication;
 

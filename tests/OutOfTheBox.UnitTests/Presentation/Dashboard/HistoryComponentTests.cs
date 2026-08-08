@@ -19,10 +19,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
 
-    public HistoryComponentTests()
-    {
-        Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
-    }
+    public HistoryComponentTests() => Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
 
     [Fact]
     public async Task Filtering_by_kind_shows_only_matching_runs()

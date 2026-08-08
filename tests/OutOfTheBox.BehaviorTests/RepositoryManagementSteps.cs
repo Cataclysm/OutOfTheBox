@@ -89,10 +89,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"an operator attempts to clone into that same name")]
-    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName()
-    {
-        _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
-    }
+    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
 
     [Then(@"the clone is rejected as already existing")]
     public void ThenTheCloneIsRejectedAsAlreadyExisting()
@@ -102,10 +99,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [Then(@"the existing repository's contents are untouched")]
-    public void ThenTheExistingRepositorySContentsAreUntouched()
-    {
-        Assert.True(File.Exists(Path.Combine(_gitFixture!.RootDirectory, TargetName, "marker.txt")));
-    }
+    public void ThenTheExistingRepositorySContentsAreUntouched() => Assert.True(File.Exists(Path.Combine(_gitFixture!.RootDirectory, TargetName, "marker.txt")));
 
     [Given(@"a clone into a given name is already in flight")]
     public async Task GivenACloneIntoAGivenNameIsAlreadyInFlight()
@@ -132,10 +126,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"a second clone into that same name is requested before the first finishes")]
-    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes()
-    {
-        _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
-    }
+    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepoPath, TargetName, CancellationToken.None);
 
     [Then(@"the second clone is rejected as a conflict identifying the in-flight run")]
     public void ThenTheSecondCloneIsRejectedAsAConflictIdentifyingTheInFlightRun()
@@ -177,10 +168,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"an operator deletes that repository")]
-    public async Task WhenAnOperatorDeletesThatRepository()
-    {
-        _deleteResult = await RepositoryManager.DeleteAsync(TargetName, CancellationToken.None);
-    }
+    public async Task WhenAnOperatorDeletesThatRepository() => _deleteResult = await RepositoryManager.DeleteAsync(TargetName, CancellationToken.None);
 
     [Then(@"the repository no longer exists on disk or in the repository list")]
     public async Task ThenTheRepositoryNoLongerExistsOnDiskOrInTheRepositoryList()
@@ -243,10 +231,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"an operator attempts to delete that repository")]
-    public async Task WhenAnOperatorAttemptsToDeleteThatRepository()
-    {
-        _deleteResult = await RepositoryManager.DeleteAsync("GitFixture", CancellationToken.None);
-    }
+    public async Task WhenAnOperatorAttemptsToDeleteThatRepository() => _deleteResult = await RepositoryManager.DeleteAsync("GitFixture", CancellationToken.None);
 
     [Then(@"the deletion is rejected as a conflict identifying the in-flight run")]
     public void ThenTheDeletionIsRejectedAsAConflictIdentifyingTheInFlightRun()
@@ -282,16 +267,12 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [Then(@"the system responds as if the run id were unknown")]
-    public void ThenTheSystemRespondsAsIfTheRunIdWereUnknown()
-    {
-        Assert.Equal(HttpStatusCode.NotFound, _httpResponse!.StatusCode);
-    }
+    public void ThenTheSystemRespondsAsIfTheRunIdWereUnknown() => Assert.Equal(HttpStatusCode.NotFound, _httpResponse!.StatusCode);
 
     private bool _cancelAccepted;
 
     [When(@"an operator cancels that clone from the dashboard")]
-    public void WhenAnOperatorCancelsThatCloneFromTheDashboard()
-    {
+    public void WhenAnOperatorCancelsThatCloneFromTheDashboard() =>
         // The same in-process call a Blazor "Cancel clone" button makes - RunRegistry.TryCancel
         // directly, never the REST cancel endpoint (per specs/repository-management). This
         // scenario's Given pre-acquires the lock directly (see the note there) rather than driving
@@ -299,13 +280,9 @@ public sealed class RepositoryManagementSteps : IDisposable
         // signal itself being accepted for an in-flight repository-management run id - the same
         // contract RunEndpoints' cancel handler already relies on for dotnet/git runs (§8/§9).
         _cancelAccepted = RunRegistry.TryCancel(_inFlightRunId);
-    }
 
     [Then(@"the cancellation is accepted")]
-    public void ThenTheCancellationIsAccepted()
-    {
-        Assert.True(_cancelAccepted);
-    }
+    public void ThenTheCancellationIsAccepted() => Assert.True(_cancelAccepted);
 
     private async Task WaitForTerminalCloneAsync(string name)
     {

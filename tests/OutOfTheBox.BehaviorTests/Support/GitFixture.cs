@@ -24,10 +24,7 @@ public sealed class GitFixture : IDisposable
 {
     private const string RepoName = "GitFixture";
 
-    private GitFixture(string rootDirectory)
-    {
-        RootDirectory = rootDirectory;
-    }
+    private GitFixture(string rootDirectory) => RootDirectory = rootDirectory;
 
     /// <summary>
     /// The directory to point <c>OutOfTheBox:RootDirectory</c> at - it contains one subdirectory,

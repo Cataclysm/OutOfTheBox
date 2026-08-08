@@ -16,6 +16,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Without this, .editorconfig's csharp_style_*/dotnet_style_* rules are IDE-only hints that
+         never appear in `dotnet build` output, no matter their configured severity. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- CS1591: missing XML doc comment on a publicly visible member. Treated as an error so
          undocumented public API fails the build instead of just warning. -->
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>

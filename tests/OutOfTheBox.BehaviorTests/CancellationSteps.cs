@@ -136,16 +136,10 @@ public sealed class CancellationSteps : IDisposable
     }
 
     [Then(@"the cancel request is accepted")]
-    public void ThenTheCancelRequestIsAccepted()
-    {
-        Assert.Equal(HttpStatusCode.Accepted, _cancelResponse!.StatusCode);
-    }
+    public void ThenTheCancelRequestIsAccepted() => Assert.Equal(HttpStatusCode.Accepted, _cancelResponse!.StatusCode);
 
     [Then(@"the cancel request is rejected as not found")]
-    public void ThenTheCancelRequestIsRejectedAsNotFound()
-    {
-        Assert.Equal(HttpStatusCode.NotFound, _cancelResponse!.StatusCode);
-    }
+    public void ThenTheCancelRequestIsRejectedAsNotFound() => Assert.Equal(HttpStatusCode.NotFound, _cancelResponse!.StatusCode);
 
     [Then(@"the run's stream ends with reason ""(.*)""")]
     public async Task ThenTheRunSStreamEndsWithReason(string expectedReason)

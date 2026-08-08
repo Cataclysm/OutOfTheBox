@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System;
-using OutOfTheBox.Msi.CustomActions;
 using Xunit;
 
 namespace OutOfTheBox.Msi.CustomActions.Tests

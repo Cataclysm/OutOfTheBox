@@ -18,28 +18,16 @@ public sealed class ServiceAuthenticationSteps
     private IResult? _result;
 
     [Given(@"the configured bearer token is ""(.*)""")]
-    public void GivenTheConfiguredBearerTokenIs(string token)
-    {
-        _serviceOptions = new ServiceOptions { BearerToken = token };
-    }
+    public void GivenTheConfiguredBearerTokenIs(string token) => _serviceOptions = new ServiceOptions { BearerToken = token };
 
     [Given(@"the request has no Authorization header")]
-    public void GivenTheRequestHasNoAuthorizationHeader()
-    {
-        _providedCredential = null;
-    }
+    public void GivenTheRequestHasNoAuthorizationHeader() => _providedCredential = null;
 
     [StepDefinition(@"the request includes the bearer credential ""(.*)""")]
-    public void GivenTheRequestIncludesTheBearerCredential(string credential)
-    {
-        _providedCredential = credential;
-    }
+    public void GivenTheRequestIncludesTheBearerCredential(string credential) => _providedCredential = credential;
 
     [When(@"the configured bearer token is changed to ""(.*)""")]
-    public void WhenTheConfiguredBearerTokenIsChangedTo(string token)
-    {
-        _serviceOptions = new ServiceOptions { BearerToken = token };
-    }
+    public void WhenTheConfiguredBearerTokenIsChangedTo(string token) => _serviceOptions = new ServiceOptions { BearerToken = token };
 
     [When(@"the request passes through the bearer authentication filter")]
     public async Task WhenTheRequestPassesThroughTheBearerAuthenticationFilter()
@@ -65,20 +53,11 @@ public sealed class ServiceAuthenticationSteps
     }
 
     [Then(@"the request is rejected with an authentication error")]
-    public void ThenTheRequestIsRejectedWithAnAuthenticationError()
-    {
-        Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.UnauthorizedHttpResult>(_result);
-    }
+    public void ThenTheRequestIsRejectedWithAnAuthenticationError() => Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.UnauthorizedHttpResult>(_result);
 
     [Then(@"the request proceeds to the protected handler")]
-    public void ThenTheRequestProceedsToTheProtectedHandler()
-    {
-        Assert.True(_handlerWasInvoked);
-    }
+    public void ThenTheRequestProceedsToTheProtectedHandler() => Assert.True(_handlerWasInvoked);
 
     [Then(@"the protected handler is not invoked")]
-    public void ThenTheProtectedHandlerIsNotInvoked()
-    {
-        Assert.False(_handlerWasInvoked);
-    }
+    public void ThenTheProtectedHandlerIsNotInvoked() => Assert.False(_handlerWasInvoked);
 }

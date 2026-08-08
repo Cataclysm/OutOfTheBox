@@ -28,11 +28,10 @@ public sealed class CommandExecutionServiceFactory(
     // scenario instead passes sqliteFilePathOverride so a second factory instance points at the
     // same file the first one wrote to, simulating the service restarting against its existing
     // database rather than a fresh one.
-    private readonly string _sqliteFilePath = sqliteFilePathOverride ?? Path.Combine(Path.GetTempPath(), $"OutOfTheBox-BehaviorTests-{Guid.NewGuid():N}.db");
     private readonly bool _ownsSqliteFile = sqliteFilePathOverride is null;
 
     /// <summary>The SQLite file path this instance is configured against - for a restart scenario's second factory.</summary>
-    public string SqliteFilePath => _sqliteFilePath;
+    public string SqliteFilePath { get; } = sqliteFilePathOverride ?? Path.Combine(Path.GetTempPath(), $"OutOfTheBox-BehaviorTests-{Guid.NewGuid():N}.db");
 
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -44,18 +43,15 @@ public sealed class CommandExecutionServiceFactory(
         // dotnet fixture can.
         var fixturesRoot = rootDirectoryOverride ?? FindFixturesRoot();
 
-        builder.ConfigureAppConfiguration((_, config) =>
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["OutOfTheBox:RootDirectory"] = fixturesRoot,
-                ["OutOfTheBox:BearerToken"] = TestBearerToken,
-                ["OutOfTheBox:DefaultExecutionTimeoutSeconds"] = defaultExecutionTimeoutSeconds.ToString(),
-                ["OutOfTheBox:MaximumExecutionTimeoutSeconds"] = maximumExecutionTimeoutSeconds.ToString(),
-                ["OutOfTheBox:OutputCapBytes"] = "5242880",
-                ["OutOfTheBox:SqliteFilePath"] = _sqliteFilePath,
-            });
-        });
+            ["OutOfTheBox:RootDirectory"] = fixturesRoot,
+            ["OutOfTheBox:BearerToken"] = TestBearerToken,
+            ["OutOfTheBox:DefaultExecutionTimeoutSeconds"] = defaultExecutionTimeoutSeconds.ToString(),
+            ["OutOfTheBox:MaximumExecutionTimeoutSeconds"] = maximumExecutionTimeoutSeconds.ToString(),
+            ["OutOfTheBox:OutputCapBytes"] = "5242880",
+            ["OutOfTheBox:SqliteFilePath"] = SqliteFilePath,
+        }));
     }
 
     /// <inheritdoc />
@@ -68,7 +64,7 @@ public sealed class CommandExecutionServiceFactory(
             // WAL mode leaves -wal/-shm sidecar files alongside the main one; delete all three,
             // ignoring failures (a lingering handle from a just-stopped Kestrel instance) since
             // this is best-effort temp-file cleanup, not a correctness requirement.
-            foreach (var path in new[] { _sqliteFilePath, _sqliteFilePath + "-wal", _sqliteFilePath + "-shm" })
+            foreach (var path in new[] { SqliteFilePath, SqliteFilePath + "-wal", SqliteFilePath + "-shm" })
             {
                 try
                 {

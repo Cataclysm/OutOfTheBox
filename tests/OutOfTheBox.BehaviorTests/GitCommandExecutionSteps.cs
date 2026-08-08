@@ -37,10 +37,7 @@ public sealed class GitCommandExecutionSteps : IDisposable
     }
 
     [Then(@"a git run id is returned")]
-    public void ThenAGitRunIdIsReturned()
-    {
-        Assert.True(_response!.Headers.Contains("X-Run-Id"));
-    }
+    public void ThenAGitRunIdIsReturned() => Assert.True(_response!.Headers.Contains("X-Run-Id"));
 
     [Then(@"the git run completes with exit code (\d+)")]
     public void ThenTheGitRunCompletesWithExitCode(int expectedExitCode)

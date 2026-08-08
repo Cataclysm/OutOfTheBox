@@ -16,10 +16,7 @@ public sealed class DotnetCommandExecutionSteps : IDisposable
     private IReadOnlyList<SseEvent> _events = [];
 
     [Given(@"the configured default execution timeout is (\d+) seconds")]
-    public void GivenTheConfiguredDefaultExecutionTimeoutIsSeconds(int seconds)
-    {
-        _defaultTimeoutSecondsOverride = seconds;
-    }
+    public void GivenTheConfiguredDefaultExecutionTimeoutIsSeconds(int seconds) => _defaultTimeoutSecondsOverride = seconds;
 
     [When(@"an authenticated caller starts ""(.*)"" against ""(.*)""")]
     public Task WhenAnAuthenticatedCallerStarts(string subcommand, string fixtureName) =>
@@ -55,10 +52,7 @@ public sealed class DotnetCommandExecutionSteps : IDisposable
     }
 
     [Then(@"a run id is returned")]
-    public void ThenARunIdIsReturned()
-    {
-        Assert.True(_response!.Headers.Contains("X-Run-Id"));
-    }
+    public void ThenARunIdIsReturned() => Assert.True(_response!.Headers.Contains("X-Run-Id"));
 
     [Then(@"the run completes with exit code (\d+)")]
     public void ThenTheRunCompletesWithExitCode(int expectedExitCode)

@@ -31,9 +31,7 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         _clock = clock;
 
         _totalCpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        _perCoreCpuCounters = Enumerable.Range(0, Environment.ProcessorCount)
-            .Select(core => new PerformanceCounter("Processor", "% Processor Time", core.ToString()))
-            .ToArray();
+        _perCoreCpuCounters = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => new PerformanceCounter("Processor", "% Processor Time", core.ToString()))];
 
         // A freshly-constructed PerformanceCounter's first NextValue() call always returns 0 (no
         // prior sample to diff against) - discard it here so every call from SampleAsync onward

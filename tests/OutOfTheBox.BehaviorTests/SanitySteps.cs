@@ -26,14 +26,8 @@ public sealed class SanitySteps
     }
 
     [When(@"I add them together")]
-    public void WhenIAddThemTogether()
-    {
-        _result = _a + _b;
-    }
+    public void WhenIAddThemTogether() => _result = _a + _b;
 
     [Then(@"the result should be (\d+)")]
-    public void ThenTheResultShouldBe(int expected)
-    {
-        Assert.Equal(expected, _result);
-    }
+    public void ThenTheResultShouldBe(int expected) => Assert.Equal(expected, _result);
 }

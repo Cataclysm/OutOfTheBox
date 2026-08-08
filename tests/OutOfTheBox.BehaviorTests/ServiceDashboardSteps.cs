@@ -86,10 +86,7 @@ public sealed class ServiceDashboardSteps : IDisposable
     }
 
     [When(@"the operator opens the Status view")]
-    public async Task WhenTheOperatorOpensTheStatusView()
-    {
-        _response = await GetWithSessionAsync("/");
-    }
+    public async Task WhenTheOperatorOpensTheStatusView() => _response = await GetWithSessionAsync("/");
 
     [Then(@"the rendered page shows the service name and running version")]
     public async Task ThenTheRenderedPageShowsTheServiceNameAndRunningVersion()

@@ -125,10 +125,7 @@ public sealed class ArtifactTransferSteps : IDisposable
     }
 
     [Then(@"the transfer's run id is returned")]
-    public void ThenTheTransferSRunIdIsReturned()
-    {
-        Assert.True(_response!.Headers.Contains("X-Run-Id"));
-    }
+    public void ThenTheTransferSRunIdIsReturned() => Assert.True(_response!.Headers.Contains("X-Run-Id"));
 
     [Then(@"the transferred bytes match the source file exactly")]
     public void ThenTheTransferredBytesMatchTheSourceFileExactly()
@@ -138,22 +135,13 @@ public sealed class ArtifactTransferSteps : IDisposable
     }
 
     [Then(@"the transfer is rejected as a confinement violation")]
-    public void ThenTheTransferIsRejectedAsAConfinementViolation()
-    {
-        Assert.Equal(HttpStatusCode.BadRequest, _response!.StatusCode);
-    }
+    public void ThenTheTransferIsRejectedAsAConfinementViolation() => Assert.Equal(HttpStatusCode.BadRequest, _response!.StatusCode);
 
     [Then(@"the transfer is rejected as not found")]
-    public void ThenTheTransferIsRejectedAsNotFound()
-    {
-        Assert.Equal(HttpStatusCode.NotFound, _response!.StatusCode);
-    }
+    public void ThenTheTransferIsRejectedAsNotFound() => Assert.Equal(HttpStatusCode.NotFound, _response!.StatusCode);
 
     [Then(@"the transfer cancel request is accepted")]
-    public void ThenTheTransferCancelRequestIsAccepted()
-    {
-        Assert.Equal(HttpStatusCode.Accepted, _cancelResponse!.StatusCode);
-    }
+    public void ThenTheTransferCancelRequestIsAccepted() => Assert.Equal(HttpStatusCode.Accepted, _cancelResponse!.StatusCode);
 
     [Then(@"fewer bytes were received than the file's full size")]
     public void ThenFewerBytesWereReceivedThanTheFileSFullSize()

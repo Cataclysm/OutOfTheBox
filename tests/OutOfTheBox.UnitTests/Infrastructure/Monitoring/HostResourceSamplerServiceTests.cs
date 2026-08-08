@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
