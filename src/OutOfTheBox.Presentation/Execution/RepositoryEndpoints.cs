@@ -15,11 +15,14 @@ namespace OutOfTheBox.Presentation.Execution;
 /// delete access is a real risk this service's design has always deliberately avoided). Both reuse
 /// <see cref="IRepositoryManager"/> directly - the exact same list/clone logic the dashboard's
 /// <c>Repositories.razor</c> already calls in-process, so this is a REST facade over existing behavior,
-/// not a second implementation of it. Deliberately spelled out as <c>/repositories</c>, not
-/// <c>/repositories</c>: the dashboard already owns the bare <c>/repositories</c>/<c>/repositories/{Name}</c> Blazor
-/// page routes, and <c>MapRazorComponents</c> registers a page route against every HTTP method (a
-/// real collision found on first attempt - the exact same class of bug tasks.md 12.3 already
-/// documented for <c>/login</c>, fixed there by moving under <c>/account/...</c> instead).
+/// not a second implementation of it. The dashboard's own browsing page lives at
+/// <c>/repository-management</c>/<c>/repository-management/{Name}</c>, not the more obvious
+/// <c>/repositories</c>/<c>/repositories/{Name}</c>: <c>MapRazorComponents</c> registers a page route
+/// against every HTTP method, so a Blazor page at <c>/repositories</c> would collide with this REST
+/// endpoint (a real collision found on first attempt - the exact same class of bug tasks.md 12.3
+/// already documented for <c>/login</c>, fixed there by moving under <c>/account/...</c> instead) -
+/// here it's the dashboard page that moved, since these REST routes are the more natural home for
+/// the plain resource name.
 /// </summary>
 public static class RepositoryEndpoints
 {
