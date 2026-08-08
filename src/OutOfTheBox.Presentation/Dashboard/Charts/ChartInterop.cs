@@ -13,7 +13,12 @@ public sealed class ChartInterop(IJSRuntime jsRuntime) : IChartInterop
             "outOfTheBoxCharts.createLineChart",
             canvasId,
             datasetLabels,
-            yAxisFormat == ChartValueFormat.Bytes ? "bytes" : null);
+            yAxisFormat switch
+            {
+                ChartValueFormat.Bytes => "bytes",
+                ChartValueFormat.BytesPerSecond => "bytesPerSecond",
+                _ => null,
+            });
 
     /// <inheritdoc />
     public ValueTask PushPointAsync(string canvasId, int datasetIndex, DateTimeOffset timestamp, double value) =>

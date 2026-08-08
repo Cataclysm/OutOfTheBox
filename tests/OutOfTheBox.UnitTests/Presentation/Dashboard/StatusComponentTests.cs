@@ -149,7 +149,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         var cut = Render<Status>();
         cut.WaitForAssertion(() => Assert.Contains("resource-tile-value\">0.0%", cut.Markup));
 
-        var host = new HostResourceSample(TotalCpuPercent: 37.5, PerCoreCpuPercent: [37.5], TotalRamBytes: 1000, AvailableRamBytes: 400, ServiceRamBytes: 55);
+        var host = new HostResourceSample(TotalCpuPercent: 37.5, PerCoreCpuPercent: [37.5], TotalRamBytes: 1000, AvailableRamBytes: 400, ServiceRamBytes: 55, NetworkBytesSentPerSecond: 0, NetworkBytesReceivedPerSecond: 0);
         _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, host, []));
 
         cut.WaitForAssertion(() => Assert.Contains("resource-tile-value\">37.5%", cut.Markup), TimeSpan.FromSeconds(2));
@@ -176,7 +176,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         var process = new ProcessResourceSample(1234, "dotnet", DateTime.UtcNow, 12.5, 4096);
         var runAggregate = new RunResourceAggregate(runId, 12.5, 4096, [process]);
-        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0), [runAggregate]));
+        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [runAggregate]));
 
         cut.WaitForAssertion(() =>
         {
@@ -205,7 +205,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         var startTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         var process = new ProcessResourceSample(4321, "testhost", startTime, 5, 2048);
-        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0), [new RunResourceAggregate(runId, 5, 2048, [process])]));
+        _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [new RunResourceAggregate(runId, 5, 2048, [process])]));
         cut.WaitForAssertion(() => Assert.Contains("process-row", cut.Markup), TimeSpan.FromSeconds(2));
 
         cut.Find(".process-row button").Click();
@@ -223,16 +223,16 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         // the right data, via SpyChartInterop standing in for the JS engine.
         var cut = Render<Status>();
 
-        // Host graphs are always live (never lazily mounted) - two canvases (CPU, RAM) exist
-        // immediately, with no run cards involved.
-        cut.WaitForAssertion(() => Assert.Equal(2, _chartInterop.CreatedCanvasIds.Count));
+        // Host graphs are always live (never lazily mounted) - four canvases (CPU, RAM, per-core
+        // CPU, network) exist immediately, with no run cards involved.
+        cut.WaitForAssertion(() => Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count));
 
         var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
         var timestamp = DateTimeOffset.UtcNow;
         // Mirrors HostResourceSamplerService.TickAsync's own ordering: the buffer is updated before
         // the snapshot is published, which is what LiveResourceGraph's tick handler relies on.
         historyBuffer.Add(ResourceHistoryBuffer.HostSeriesKey, timestamp, 42, 800);
-        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(42, [42], 1000, 200, 50), []));
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(42, [42], 1000, 200, 50, 0, 0), []));
 
         cut.WaitForAssertion(
             () => Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 42),
@@ -263,7 +263,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         cut.WaitForAssertion(() => Assert.Contains(@"C:\repos\example", cut.Markup));
 
         var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
-        Assert.Equal(2, createdBeforeExpand); // host graph only - nothing for the collapsed run card
+        Assert.Equal(4, createdBeforeExpand); // host graph only - nothing for the collapsed run card
 
         cut.Find("button.run-graph-toggle").Click();
 
@@ -272,7 +272,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
         var timestamp = DateTimeOffset.UtcNow;
         historyBuffer.Add(runId.ToString(), timestamp, 17, 4096);
-        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(0, [], 0, 0, 0), [new RunResourceAggregate(runId, 17, 4096, [])]));
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [new RunResourceAggregate(runId, 17, 4096, [])]));
 
         // Task 15.7: the run's own graph continues updating live once expanded.
         cut.WaitForAssertion(

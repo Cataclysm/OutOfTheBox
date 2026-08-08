@@ -4,8 +4,18 @@ using System.Collections.Concurrent;
 
 namespace OutOfTheBox.Application.Monitoring;
 
-/// <summary>One live sample point in a <see cref="ResourceHistoryBuffer"/> series.</summary>
-public sealed record ResourceHistoryPoint(DateTimeOffset Timestamp, double CpuPercent, long RamBytes);
+/// <summary>
+/// One live sample point in a <see cref="ResourceHistoryBuffer"/> series. The last three fields are
+/// only ever populated for the host series (<see cref="ResourceHistoryBuffer.HostSeriesKey"/>) -
+/// a run/transfer has no per-core breakdown or network interface of its own to report.
+/// </summary>
+public sealed record ResourceHistoryPoint(
+    DateTimeOffset Timestamp,
+    double CpuPercent,
+    long RamBytes,
+    IReadOnlyList<double>? PerCoreCpuPercent = null,
+    double? NetworkBytesSentPerSecond = null,
+    double? NetworkBytesReceivedPerSecond = null);
 
 /// <summary>
 /// An in-memory 10-minute circular buffer per live series (the host, and each in-flight run) -
@@ -26,13 +36,20 @@ public sealed class ResourceHistoryBuffer(IClock clock)
     private readonly ConcurrentDictionary<string, List<ResourceHistoryPoint>> _series = new();
 
     /// <summary>Appends a point to <paramref name="seriesKey"/>'s buffer, evicting points older than the 10-minute window.</summary>
-    public void Add(string seriesKey, DateTimeOffset timestamp, double cpuPercent, long ramBytes)
+    public void Add(
+        string seriesKey,
+        DateTimeOffset timestamp,
+        double cpuPercent,
+        long ramBytes,
+        IReadOnlyList<double>? perCoreCpuPercent = null,
+        double? networkBytesSentPerSecond = null,
+        double? networkBytesReceivedPerSecond = null)
     {
         var points = _series.GetOrAdd(seriesKey, static _ => []);
 
         lock (points)
         {
-            points.Add(new ResourceHistoryPoint(timestamp, cpuPercent, ramBytes));
+            points.Add(new ResourceHistoryPoint(timestamp, cpuPercent, ramBytes, perCoreCpuPercent, networkBytesSentPerSecond, networkBytesReceivedPerSecond));
             points.RemoveAll(p => p.Timestamp < clock.UtcNow - WindowDuration);
         }
     }

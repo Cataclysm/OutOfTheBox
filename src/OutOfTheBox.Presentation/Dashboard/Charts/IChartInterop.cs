@@ -10,6 +10,9 @@ public enum ChartValueFormat
 
     /// <summary>Ticks rendered as human-readable byte units (B/KB/MB/GB).</summary>
     Bytes,
+
+    /// <summary>Ticks rendered as human-readable byte-per-second rates (B/s, KB/s, MB/s, GB/s).</summary>
+    BytesPerSecond,
 }
 
 /// <summary>

@@ -17,6 +17,17 @@
         <span class="resource-graph-label">RAM</span>
         <canvas id="@_ramCanvasId"></canvas>
     </div>
+    @if (IsHost)
+    {
+        <div class="resource-graph">
+            <span class="resource-graph-label">CPU per core</span>
+            <canvas id="@_perCoreCanvasId"></canvas>
+        </div>
+        <div class="resource-graph">
+            <span class="resource-graph-label">Network</span>
+            <canvas id="@_networkCanvasId"></canvas>
+        </div>
+    }
 </div>
 
 @code {
@@ -28,8 +39,18 @@
     [Parameter]
     public string? Note { get; set; }
 
+    // Per-core CPU and network figures only ever exist for the host tick (see
+    // ResourceHistoryPoint's own doc comment) - a run/transfer has no interface or per-core
+    // breakdown of its own, so those two extra charts only make sense for the host series.
+    private bool IsHost => SeriesKey == ResourceHistoryBuffer.HostSeriesKey;
+
+    private static readonly IReadOnlyList<string> CoreLabels = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => $"Core {core}")];
+    private static readonly IReadOnlyList<string> NetworkLabels = ["Sent", "Received"];
+
     private readonly string _cpuCanvasId = $"live-cpu-{Guid.NewGuid():N}";
     private readonly string _ramCanvasId = $"live-ram-{Guid.NewGuid():N}";
+    private readonly string _perCoreCanvasId = $"live-per-core-{Guid.NewGuid():N}";
+    private readonly string _networkCanvasId = $"live-network-{Guid.NewGuid():N}";
     private IDisposable? _subscription;
     private DateTimeOffset? _lastPushedTimestamp;
 
@@ -47,10 +68,29 @@
         var initial = HistoryBuffer.Get(SeriesKey);
         await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, initial.Select(p => (p.Timestamp, p.CpuPercent)));
         await ChartInterop.SetSeriesAsync(_ramCanvasId, 0, initial.Select(p => (p.Timestamp, (double)p.RamBytes)));
+
+        if (IsHost)
+        {
+            await ChartInterop.CreateLineChartAsync(_perCoreCanvasId, CoreLabels);
+            await ChartInterop.CreateLineChartAsync(_networkCanvasId, NetworkLabels, ChartValueFormat.BytesPerSecond);
+
+            for (var core = 0; core < CoreLabels.Count; core++)
+            {
+                var coreIndex = core;
+                await ChartInterop.SetSeriesAsync(_perCoreCanvasId, coreIndex, initial.Select(p => (p.Timestamp, CoreValue(p, coreIndex))));
+            }
+
+            await ChartInterop.SetSeriesAsync(_networkCanvasId, 0, initial.Select(p => (p.Timestamp, p.NetworkBytesSentPerSecond ?? 0)));
+            await ChartInterop.SetSeriesAsync(_networkCanvasId, 1, initial.Select(p => (p.Timestamp, p.NetworkBytesReceivedPerSecond ?? 0)));
+        }
+
         _lastPushedTimestamp = initial.Count > 0 ? initial[^1].Timestamp : null;
 
         _subscription = ResourceEventBus.Subscribe(OnTick);
     }
+
+    private static double CoreValue(ResourceHistoryPoint point, int coreIndex) =>
+        point.PerCoreCpuPercent is { } cores && coreIndex < cores.Count ? cores[coreIndex] : 0;
 
     private void OnTick(ResourceSnapshot snapshot) => _ = InvokeAsync(async () =>
     {
@@ -74,6 +114,17 @@
         _lastPushedTimestamp = latest.Timestamp;
         await ChartInterop.PushPointAsync(_cpuCanvasId, 0, latest.Timestamp, latest.CpuPercent);
         await ChartInterop.PushPointAsync(_ramCanvasId, 0, latest.Timestamp, latest.RamBytes);
+
+        if (IsHost)
+        {
+            for (var core = 0; core < CoreLabels.Count; core++)
+            {
+                await ChartInterop.PushPointAsync(_perCoreCanvasId, core, latest.Timestamp, CoreValue(latest, core));
+            }
+
+            await ChartInterop.PushPointAsync(_networkCanvasId, 0, latest.Timestamp, latest.NetworkBytesSentPerSecond ?? 0);
+            await ChartInterop.PushPointAsync(_networkCanvasId, 1, latest.Timestamp, latest.NetworkBytesReceivedPerSecond ?? 0);
+        }
     });
 
     /// <inheritdoc />
@@ -82,5 +133,11 @@
         _subscription?.Dispose();
         await ChartInterop.DestroyAsync(_cpuCanvasId);
         await ChartInterop.DestroyAsync(_ramCanvasId);
+
+        if (IsHost)
+        {
+            await ChartInterop.DestroyAsync(_perCoreCanvasId);
+            await ChartInterop.DestroyAsync(_networkCanvasId);
+        }
     }
 }

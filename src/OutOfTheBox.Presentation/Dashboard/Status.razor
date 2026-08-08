@@ -83,7 +83,7 @@ else
     private IDisposable? _resourceSubscription;
     private Timer? _elapsedTimer;
 
-    private HostResourceSample _host = new(0, [], 0, 0, 0);
+    private HostResourceSample _host = new(0, [], 0, 0, 0, 0, 0);
     private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
     private readonly HashSet<Guid> _expandedRunIds = [];
 

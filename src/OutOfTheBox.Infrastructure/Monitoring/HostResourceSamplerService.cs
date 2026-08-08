@@ -75,7 +75,14 @@ public sealed class HostResourceSamplerService(
         // meaningless (a flat line at total RAM forever), not "how busy is the host."
         var hostRamUsedBytes = snapshot.Host.TotalRamBytes - snapshot.Host.AvailableRamBytes;
 
-        historyBuffer.Add(ResourceHistoryBuffer.HostSeriesKey, snapshot.Timestamp, snapshot.Host.TotalCpuPercent, hostRamUsedBytes);
+        historyBuffer.Add(
+            ResourceHistoryBuffer.HostSeriesKey,
+            snapshot.Timestamp,
+            snapshot.Host.TotalCpuPercent,
+            hostRamUsedBytes,
+            snapshot.Host.PerCoreCpuPercent,
+            snapshot.Host.NetworkBytesSentPerSecond,
+            snapshot.Host.NetworkBytesReceivedPerSecond);
         foreach (var run in snapshot.Runs)
         {
             historyBuffer.Add(run.RunId.ToString(), snapshot.Timestamp, run.CpuPercent, run.RamBytes);

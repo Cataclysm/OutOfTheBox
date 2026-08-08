@@ -43,7 +43,7 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         var runId = Guid.NewGuid();
         var snapshot = new ResourceSnapshot(
             DateTimeOffset.UtcNow,
-            new HostResourceSample(10, [10], 1000, 500, 100),
+            new HostResourceSample(10, [10], 1000, 500, 100, 0, 0),
             [new RunResourceAggregate(runId, 25, 2000, [])]);
 
         var service = CreateService(new FakeResourceSampler(snapshot));
@@ -63,7 +63,7 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         var runId = Guid.NewGuid();
         var fakeSampler = new FakeResourceSampler(new ResourceSnapshot(
             DateTimeOffset.UtcNow,
-            new HostResourceSample(10, [10], 1000, 500, 100),
+            new HostResourceSample(10, [10], 1000, 500, 100, 0, 0),
             [new RunResourceAggregate(runId, 25, 2000, [])]));
 
         var service = CreateService(fakeSampler);
@@ -95,7 +95,7 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
 
         // TotalRamBytes=1000, AvailableRamBytes=200 -> used RAM 800, per the "used, not total"
         // fix - a transfer has no process tree of its own, so it's tagged with this host figure.
-        var hostSample = new HostResourceSample(42, [42], 1000, 200, 50);
+        var hostSample = new HostResourceSample(42, [42], 1000, 200, 50, 0, 0);
         var service = CreateService(new FakeResourceSampler(new ResourceSnapshot(DateTimeOffset.UtcNow, hostSample, [])));
 
         await service.TickAsync(CancellationToken.None);
@@ -125,7 +125,7 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
             Outcome = RunOutcome.Running,
         }, CancellationToken.None);
 
-        var service = CreateService(new FakeResourceSampler(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(10, [10], 1000, 500, 100), [])));
+        var service = CreateService(new FakeResourceSampler(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(10, [10], 1000, 500, 100, 0, 0), [])));
         await service.TickAsync(CancellationToken.None);
 
         var sampleRepository = new EfRunResourceSampleRepository(_dbContextFactory.CreateContext());

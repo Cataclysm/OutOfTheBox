@@ -65,6 +65,26 @@ public sealed class ResourceHistoryBufferTests
     }
 
     [Fact]
+    public void Add_round_trips_the_host_only_per_core_and_network_figures()
+    {
+        var clock = new FakeClock(DateTimeOffset.UtcNow);
+        var buffer = new ResourceHistoryBuffer(clock);
+
+        buffer.Add(ResourceHistoryBuffer.HostSeriesKey, clock.UtcNow, 10, 100, [10.0, 20.0], 500, 1500);
+        buffer.Add("run-a", clock.UtcNow, 5, 50);
+
+        var hostPoint = Assert.Single(buffer.Get(ResourceHistoryBuffer.HostSeriesKey));
+        Assert.Equal([10.0, 20.0], hostPoint.PerCoreCpuPercent);
+        Assert.Equal(500, hostPoint.NetworkBytesSentPerSecond);
+        Assert.Equal(1500, hostPoint.NetworkBytesReceivedPerSecond);
+
+        var runPoint = Assert.Single(buffer.Get("run-a"));
+        Assert.Null(runPoint.PerCoreCpuPercent);
+        Assert.Null(runPoint.NetworkBytesSentPerSecond);
+        Assert.Null(runPoint.NetworkBytesReceivedPerSecond);
+    }
+
+    [Fact]
     public void Remove_clears_a_runs_series()
     {
         var clock = new FakeClock(DateTimeOffset.UtcNow);

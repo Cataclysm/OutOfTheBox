@@ -22,6 +22,8 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
     private readonly IClock _clock;
     private readonly PerformanceCounter _totalCpuCounter;
     private readonly PerformanceCounter[] _perCoreCpuCounters;
+    private readonly PerformanceCounter[] _networkSentCounters;
+    private readonly PerformanceCounter[] _networkReceivedCounters;
     private readonly ConcurrentDictionary<int, (TimeSpan ProcessorTime, DateTimeOffset Timestamp)> _lastProcessSample = new();
 
     /// <summary>Constructs the counters and primes them (see the discarded-first-reading remark above).</summary>
@@ -33,11 +35,27 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         _totalCpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
         _perCoreCpuCounters = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => new PerformanceCounter("Processor", "% Processor Time", core.ToString()))];
 
+        // One pair of counters per network interface instance (there's no "_Total" instance for
+        // this category, unlike Processor) - summed across all of them in SampleAsync, since this
+        // is host-wide network activity, not a specific-adapter figure.
+        var networkInstanceNames = new PerformanceCounterCategory("Network Interface").GetInstanceNames();
+        _networkSentCounters = [.. networkInstanceNames.Select(name => new PerformanceCounter("Network Interface", "Bytes Sent/sec", name))];
+        _networkReceivedCounters = [.. networkInstanceNames.Select(name => new PerformanceCounter("Network Interface", "Bytes Received/sec", name))];
+
         // A freshly-constructed PerformanceCounter's first NextValue() call always returns 0 (no
         // prior sample to diff against) - discard it here so every call from SampleAsync onward
-        // returns a real reading.
+        // returns a real reading. "Bytes Sent/Received per sec" counters have the same
+        // needs-a-baseline-reading behavior as "% Processor Time" does.
         _totalCpuCounter.NextValue();
         foreach (var counter in _perCoreCpuCounters)
+        {
+            counter.NextValue();
+        }
+        foreach (var counter in _networkSentCounters)
+        {
+            counter.NextValue();
+        }
+        foreach (var counter in _networkReceivedCounters)
         {
             counter.NextValue();
         }
@@ -52,8 +70,12 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         var perCoreCpuPercent = _perCoreCpuCounters.Select(counter => (double)counter.NextValue()).ToList();
         var (totalRamBytes, availableRamBytes) = Win32MemoryStatus.GetMemoryStatus();
         var serviceRamBytes = Process.GetCurrentProcess().WorkingSet64;
+        var networkBytesSentPerSecond = _networkSentCounters.Sum(counter => (double)counter.NextValue());
+        var networkBytesReceivedPerSecond = _networkReceivedCounters.Sum(counter => (double)counter.NextValue());
 
-        var host = new HostResourceSample(totalCpuPercent, perCoreCpuPercent, totalRamBytes, availableRamBytes, serviceRamBytes);
+        var host = new HostResourceSample(
+            totalCpuPercent, perCoreCpuPercent, totalRamBytes, availableRamBytes, serviceRamBytes,
+            networkBytesSentPerSecond, networkBytesReceivedPerSecond);
         var runs = await SampleTrackedRunsAsync(timestamp, cancellationToken);
 
         return new ResourceSnapshot(timestamp, host, runs);
@@ -125,6 +147,14 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         _totalCpuCounter.Dispose();
 
         foreach (var counter in _perCoreCpuCounters)
+        {
+            counter.Dispose();
+        }
+        foreach (var counter in _networkSentCounters)
+        {
+            counter.Dispose();
+        }
+        foreach (var counter in _networkReceivedCounters)
         {
             counter.Dispose();
         }
