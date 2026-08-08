@@ -1,17 +1,35 @@
 /* Single dark theme, no light-mode alternative and no prefers-color-scheme branching - per
-   design.md's "Dashboard theme: dark-only, no toggle" decision. */
+   design.md's "Dashboard theme: dark-only, no toggle" decision. Brand palette below is sampled
+   directly from the product logo (installer/Assets, wwwroot/img/logo.png): a warm orange-to-pink
+   chevron over a cool indigo-to-violet field - the same two tones are threaded through the whole
+   UI (buttons, nav, badges, headings) so the dashboard reads as the same product as the installer. */
 
 :root {
     --bg: #14161a;
     --bg-raised: #1c1f26;
+    --bg-sunken: #0e1013;
     --border: #2c313a;
+    --border-strong: #3a4150;
     --text: #e6e8eb;
     --text-muted: #9aa2af;
-    /* Brand accent - the warm end of the logo mark's orange-to-pink gradient, against the
-       logo's own indigo-to-violet as a secondary tone (used for the header bar). */
+    /* Warm end of the logo's chevron gradient - the single accent used for interactive/primary
+       elements throughout (links, active nav, primary buttons, focus rings). */
     --accent: #ec4899;
+    --accent-2: #fb923c;
+    /* Cool half of the logo's own background gradient - used sparingly, for the header bar and the
+       login page's hero glow, so it reads as a secondary brand tone rather than competing with
+       --accent for the user's attention. */
     --brand-indigo: #4c1d95;
+    --brand-violet: #6d28d9;
     --danger: #ff5c5c;
+    --gradient-brand: linear-gradient(135deg, var(--accent-2), var(--accent));
+    --gradient-header: linear-gradient(120deg, var(--brand-indigo), var(--bg-raised) 70%);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 26px -16px rgba(0, 0, 0, 0.55);
+    /* rgba below is --brand-violet's own RGB (109, 40, 217) - CSS custom properties can't be
+       composed inside rgba(), so the value is spelled out literally here instead. */
+    --shadow-glow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 20px 45px -20px rgba(109, 40, 217, 0.45);
 }
 
 * {
@@ -21,13 +39,156 @@
 html, body {
     margin: 0;
     padding: 0;
-    background: var(--bg);
+    min-height: 100%;
     color: var(--text);
     font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
+body {
+    /* A very low-opacity wash of the logo's own indigo/pink at the top of the viewport - reads as
+       intentional brand ambience, not a competing background, since the flat --bg dominates within
+       a few hundred pixels. */
+    background:
+        radial-gradient(1100px 550px at 12% -10%, rgba(109, 40, 217, 0.14), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(236, 72, 153, 0.08), transparent 55%),
+        var(--bg);
+    background-attachment: fixed;
+}
+
 a {
     color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--accent-2);
+    text-decoration: underline;
+}
+
+h1 {
+    margin: 0 0 1rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+h2 {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Every page heading gets the same small brand-gradient underline accent - a cheap, consistent
+   "this is OutOfTheBox" signal repeated across Status/History/Repos/detail pages, without needing
+   a logo on every page. */
+.dashboard-content h1 {
+    position: relative;
+    padding-bottom: 0.6rem;
+}
+
+.dashboard-content h1::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 44px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--gradient-brand);
+}
+
+button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    padding: 0.5rem 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+button:hover {
+    border-color: var(--border-strong);
+    background: #232733;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px rgba(236, 72, 153, 0.55);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input, select {
+    font-family: inherit;
+}
+
+input[type="text"], input[type="password"], select {
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]:focus, input[type="password"]:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.18);
+}
+
+input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Primary call-to-action buttons (log in, start a clone) - the one warm, filled, gradient button
+   style in the whole UI, reserved for the single deliberate action on a given screen so it doesn't
+   compete with itself. Everything else (Cancel, View, Clear filters, ...) stays a neutral ghost
+   button via the base `button` rule above. */
+.login-card button, .btn-primary {
+    background: var(--gradient-brand);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4px 14px -4px rgba(236, 72, 153, 0.5);
+}
+
+.login-card button:hover, .btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 6px 18px -4px rgba(236, 72, 153, 0.6);
+}
+
+.login-card button:active, .btn-primary:active {
+    transform: translateY(1px);
+    filter: brightness(0.95);
+}
+
+/* Reserved for the single truly irreversible action (confirming a repo delete) - filled red rather
+   than the quieter outlined danger style process-row's Kill button uses, since this one has no undo. */
+.btn-danger {
+    background: rgba(255, 92, 92, 0.16);
+    border-color: var(--danger);
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.btn-danger:hover {
+    background: rgba(255, 92, 92, 0.26);
+    border-color: var(--danger);
 }
 
 .dashboard-shell {
@@ -39,54 +200,92 @@ a {
 .dashboard-header {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding: 0.75rem 1.5rem;
-    background: linear-gradient(90deg, var(--brand-indigo), var(--bg-raised) 60%);
+    gap: 1.75rem;
+    padding: 0.85rem 2rem;
+    background: var(--gradient-header);
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    box-shadow: 0 4px 20px -10px rgba(0, 0, 0, 0.6);
 }
 
 .dashboard-brand {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
+    gap: 0.6rem;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.01em;
 }
 
 .dashboard-brand-logo {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.5);
 }
 
 .dashboard-nav {
     display: flex;
-    gap: 1rem;
+    gap: 1.5rem;
     flex: 1;
 }
 
 .dashboard-nav a {
     color: var(--text-muted);
     text-decoration: none;
-    padding: 0.25rem 0;
+    font-weight: 500;
+    padding: 0.4rem 0.1rem;
+    position: relative;
+    transition: color 0.15s ease;
+}
+
+.dashboard-nav a::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--gradient-brand);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.18s ease;
+}
+
+.dashboard-nav a:hover {
+    color: var(--text);
+}
+
+.dashboard-nav a:hover::after, .dashboard-nav a.active::after {
+    transform: scaleX(1);
 }
 
 .dashboard-nav a.active {
     color: var(--text);
-    border-bottom: 2px solid var(--accent);
 }
 
 .dashboard-logout button {
-    background: none;
-    border: 1px solid var(--border);
+    background: transparent;
+    border-color: var(--border);
     color: var(--text-muted);
-    padding: 0.35rem 0.75rem;
-    border-radius: 4px;
-    cursor: pointer;
+    padding: 0.4rem 0.8rem;
+}
+
+.dashboard-logout button:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: transparent;
 }
 
 .dashboard-content {
-    padding: 1.5rem;
+    padding: 1.75rem 2rem;
     flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .login-shell {
@@ -94,57 +293,83 @@ a {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: radial-gradient(600px 420px at 50% 40%, rgba(109, 40, 217, 0.2), transparent 70%);
 }
 
 .login-card {
     background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 2rem;
-    width: 320px;
+    border-radius: 14px;
+    padding: 2.25rem 2rem;
+    width: 340px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
+    box-shadow: var(--shadow-glow);
+    position: relative;
+    overflow: hidden;
+}
+
+.login-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-brand);
 }
 
 .login-logo {
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px -8px rgba(236, 72, 153, 0.5);
+    margin-bottom: 0.25rem;
 }
 
 .login-card h1 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+    .login-card h1 {
+        background: var(--gradient-brand);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+    }
 }
 
 .login-card form {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-}
-
-.login-card input, .login-card button {
-    padding: 0.5rem;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-}
-
-.login-card button {
-    background: var(--accent);
-    border: none;
-    cursor: pointer;
+    gap: 0.6rem;
+    width: 100%;
 }
 
 .login-error {
     color: var(--danger);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.login-error::before {
+    content: "⚠";
 }
 
 .empty-state {
     color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 1.5rem 0;
 }
 
 .run-list {
@@ -161,8 +386,14 @@ a {
     gap: 1rem;
     background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    padding: 0.65rem 0.9rem;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.15s ease;
+}
+
+.run-row:hover {
+    border-color: var(--border-strong);
 }
 
 .status-run {
@@ -187,20 +418,36 @@ a {
     gap: 0.25rem;
     background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
     min-width: 140px;
+    box-shadow: var(--shadow-card);
+    position: relative;
+    overflow: hidden;
+}
+
+.resource-tile::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--gradient-brand);
+    opacity: 0.85;
 }
 
 .resource-tile-label {
     font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .resource-tile-value {
     font-size: 1.25rem;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
 .process-list {
@@ -221,12 +468,17 @@ a {
 }
 
 .process-row button {
-    background: none;
-    border: 1px solid var(--danger);
+    background: transparent;
+    border: 1px solid rgba(255, 92, 92, 0.4);
     color: var(--danger);
-    border-radius: 4px;
-    padding: 0.1rem 0.5rem;
-    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: 0.15rem 0.6rem;
+    font-size: 0.75rem;
+}
+
+.process-row button:hover {
+    background: rgba(255, 92, 92, 0.12);
+    border-color: var(--danger);
 }
 
 .resource-graphs {
@@ -241,8 +493,9 @@ a {
     min-width: 280px;
     background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     padding: 0.5rem 0.75rem;
+    box-shadow: var(--shadow-card);
 }
 
 .resource-graph-label {
@@ -250,6 +503,7 @@ a {
     font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.04em;
     margin-bottom: 0.25rem;
 }
 
@@ -264,14 +518,48 @@ a {
     margin: 0;
 }
 
+.run-graph-toggle {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.7rem;
+}
+
+/* One tinted pill color per run kind - purely for at-a-glance scanning of a mixed list, at low
+   enough saturation to stay well inside the dark theme's overall restraint. */
 .kind-badge {
     text-transform: uppercase;
     font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.15rem 0.5rem;
-    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
     background: var(--border);
     color: var(--text);
+    white-space: nowrap;
+}
+
+.kind-dotnetcommand {
+    background: rgba(139, 92, 246, 0.16);
+    color: #c4b5fd;
+}
+
+.kind-gitcommand {
+    background: rgba(251, 146, 60, 0.16);
+    color: #fdba74;
+}
+
+.kind-artifacttransfer {
+    background: rgba(56, 189, 248, 0.16);
+    color: #7dd3fc;
+}
+
+.kind-repositoryclone {
+    background: rgba(52, 211, 153, 0.16);
+    color: #6ee7b7;
+}
+
+.kind-repositorydelete {
+    background: rgba(255, 92, 92, 0.16);
+    color: #ffb3b3;
 }
 
 .history-filters {
@@ -280,51 +568,125 @@ a {
     align-items: flex-end;
     gap: 1.25rem;
     margin-bottom: 1.25rem;
-    padding: 1rem;
+    padding: 1rem 1.25rem;
     background: var(--bg-raised);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
 }
 
 .history-filters fieldset {
     border: none;
     padding: 0;
     margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 1rem;
 }
 
 .history-filters legend {
+    width: 100%;
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     padding: 0;
+    margin-bottom: 0.3rem;
 }
 
 .history-filters label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.8rem;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--text-muted);
 }
 
-.history-filters input, .history-filters select {
-    padding: 0.4rem;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--bg);
+/* Checkbox labels (kind filters, "Active only") read as a checkbox-then-text row, not a stacked
+   field label - the vertical layout above is only right for text/select inputs. */
+.history-filters label:has(input[type="checkbox"]) {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: normal;
     color: var(--text);
+}
+
+.history-filters input[type="text"], .history-filters select {
+    min-width: 160px;
 }
 
 .truncated-indicator {
     color: var(--danger);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.truncated-indicator::before {
+    content: "⚠";
 }
 
 .run-output {
-    background: var(--bg-raised);
+    background: var(--bg-sunken);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.75rem;
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 400px;
     overflow-y: auto;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.run-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.run-output::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.run-output::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.run-output::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+}
+
+/* Key/value stat blocks (repo detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
+dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.5rem 1.5rem;
+    margin: 0 0 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+}
+
+dt {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    align-self: center;
+}
+
+dd {
+    margin: 0;
+    align-self: center;
+    word-break: break-word;
 }

@@ -46,7 +46,7 @@
             Name
             <input type="text" @bind="_cloneName" placeholder="new-repo-name" />
         </label>
-        <button type="button" @onclick="SubmitCloneAsync">Start clone</button>
+        <button type="button" class="btn-primary" @onclick="SubmitCloneAsync">Start clone</button>
         @if (_cloneError is not null)
         {
             <span class="login-error">@_cloneError</span>
@@ -81,7 +81,7 @@ else
                     }
                     else
                     {
-                        <button type="button" @onclick="@(() => DeleteAsync(repo.Name))">
+                        <button type="button" class="@(_deleteConfirmName == repo.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repo.Name))">
                             @(_deleteConfirmName == repo.Name ? "Confirm delete?" : "Delete")
                         </button>
                     }
