@@ -16,14 +16,15 @@ OutOfTheBox__BearerToken=some-token dotnet run --project src/OutOfTheBox.Host
 
 At minimum you'll need to set:
 
-- `OutOfTheBox:RootDirectory` — the absolute path repos will be resolved under
+- `OutOfTheBox:RootDirectory` — the absolute path repositories will be resolved under
 - `OutOfTheBox:BearerToken` — the shared credential callers must present
 
 See `ServiceOptions` (`src/OutOfTheBox.Application/Configuration/ServiceOptions.cs`) for the full configuration surface (timeouts, output cap, SQLite path — some of these aren't wired up to real behavior yet; check `openspec/changes/sbx-dotnet-command-service/tasks.md` for current status).
 
 ## Network & transport
 
-The command API (`POST /run`, `POST /run/git`, `POST /artifacts`, `POST /run/{runId}/cancel`) and
+The command API (`POST /run`, `POST /run/git`, `POST /files`, `POST /run/{runId}/cancel`,
+`GET /repositories`, `POST /repositories/clone`) and
 the dashboard share the same Kestrel HTTPS endpoint and port (`5443` by default, per
 `appsettings.json`'s `Kestrel:Endpoints:Https:Url`). The bearer token, command arguments/output,
 and the dashboard's cookie session all cross this connection, so the service refuses to start if
@@ -88,7 +89,7 @@ validation outright.
 Restrict inbound connections on the configured port to exactly the two clients that need it:
 
 - The sbx sandbox's IP (or IP range), for the command API endpoints (`/run`, `/run/git`,
-  `/artifacts`, `/run/{runId}/cancel`) — these all live on the same port as the dashboard, so a
+  `/files`, `/run/{runId}/cancel`, `/repositories`, `/repositories/clone`) — these all live on the same port as the dashboard, so a
   port-level firewall rule can't separate "command API access" from "dashboard access" by itself.
 - The operator's own network/IP, for the dashboard.
 
@@ -117,17 +118,17 @@ as long as it doesn't buffer the full response before returning control to the c
   rather than awaiting `ReadAsStringAsync()`, which buffers the entire body first.
 - Any other client: equivalent "don't wait for EOF before consuming bytes" behavior is required.
 
-### Downloading artifacts (`/artifacts`)
+### Downloading files (`/files`)
 
-`POST /artifacts` is not SSE — the response body is the raw file bytes (with the resolved file's
+`POST /files` is not SSE — the response body is the raw file bytes (with the resolved file's
 actual content type), the same as any ordinary file download. The same non-buffering principle
-still applies for a large artifact: prefer streaming the response body to disk (e.g. `curl -o
+still applies for a large file: prefer streaming the response body to disk (e.g. `curl -o
 <file>`, or `HttpClient` + `content.CopyToAsync(fileStream)`) over loading the whole response into
-memory first. A request for a path outside the named repo's own directory (path traversal,
+memory first. A request for a path outside the named repository's own directory (path traversal,
 symlink escape, or an absolute path elsewhere on the host) is rejected before any file is opened —
 per the same two-level path-confinement policy the working-directory resolution already applies to
 `/run`/`/run/git` — with a distinct "confinement violation" outcome, separate from a plain
-"file not found" for a path that's legitimately inside the repo but doesn't exist yet.
+"file not found" for a path that's legitimately inside the repository but doesn't exist yet.
 
 ## Production install
 
@@ -158,7 +159,7 @@ Produces `installer/OutOfTheBox.Msi/bin/x64/Release/OutOfTheBox.Msi.msi` (~40 MB
 and `installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe` (the thing an
 operator actually runs — the bootstrapper project's own `OutputName` renames it from the project's
 `OutOfTheBox.Bootstrapper` assembly name to this operator-facing one). Both projects are
-deliberately outside `OutOfTheBox.slnx` and outside the repo's Central Package Management
+deliberately outside `OutOfTheBox.slnx` and outside the repository's Central Package Management
 (`installer/Directory.Packages.props` opts out) — WiX's own project/package conventions don't fit
 either cleanly, and this keeps `dotnet build`/`dotnet test` on
 the main solution unaffected by installer changes. `WixToolset.Sdk` requires accepting the WiX v7
@@ -171,7 +172,7 @@ annual revenue exceeds $10,000.
 
 Run `OutOfTheBoxSetup.exe` elevated. It shows its own welcome screen first (installing the .NET
 SDK/Git for Windows prerequisites if either is missing), then hands off to the MSI's own interactive
-config page (repo root directory, bearer token, port) - `bal:DisplayInternalUICondition` on the
+config page (repository root directory, bearer token, port) - `bal:DisplayInternalUICondition` on the
 chained `MsiPackage` (scoped to `WixBundleAction = 6`, i.e. only during an actual install/upgrade,
 never uninstall/modify/repair) is what makes that page reachable through the bootstrapper at all;
 without it, Burn's standard bootstrapper application runs a chained MSI silently by default. Verified
@@ -187,7 +188,7 @@ If you ever need to skip the interactive page (e.g. a fully unattended install),
 properties on the bootstrapper's own command line, which Burn forwards through to the chained MSI:
 
 ```
-OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" PORTNUMBER=5443
+OutOfTheBoxSetup.exe REPOSITORYROOTDIR="C:\repositories" PORTNUMBER=5443
 ```
 
 **The bearer token doesn't need to be supplied** — a cryptographically random one is generated
@@ -208,13 +209,13 @@ This:
   `util:User`) — **not** local admin, **not** a pre-existing/shared account — with log-on-as-a-service
   (granted automatically by service creation), and "Performance Monitor Users" membership (required
   for `PerformanceCounter` access to the `Processor` category — without it, host/process resource
-  monitoring silently fails), plus read/write on the data directory and the configured repo root.
+  monitoring silently fails), plus read/write on the data directory and the configured repository root.
 - Installs to `C:\Program Files\OutOfTheBox` (disposable, replaced wholesale by every upgrade) and
   creates `%ProgramData%\OutOfTheBox` (the data directory — config + the SQLite file, **never**
   touched by upgrade, uninstall, or reinstall, so history and configuration always survive all
   three) — the data directory has no file `Component` referencing it at all in the MSI, so this
   isn't just policy, it's structural.
-- Writes `REPOROOTDIR`/`BEARERTOKEN`/`PORTNUMBER` into the Windows Service's own `Environment`
+- Writes `REPOSITORYROOTDIR`/`BEARERTOKEN`/`PORTNUMBER` into the Windows Service's own `Environment`
   registry value alongside `OUTOFTHEBOX_DATA_DIR`, reusing the same environment-variable
   configuration override `Program.cs` already supports — no separate config file for the installer
   to write.
@@ -249,13 +250,13 @@ want a manual rollback point before upgrading, copy the data directory's `outoft
 
 ### After a restart
 
-The run registry (which run ids are cancellable, which repos are locked) is **in-memory only** —
+The run registry (which run ids are cancellable, which repositories are locked) is **in-memory only** —
 this applies uniformly to every run kind (`dotnet`/`git` commands, clones, deletes, transfers).
 After any restart (crash-recovery, an upgrade, or a manual restart):
 
 - A `POST /run/{runId}/cancel` for a run id from before the restart returns 404 — the registry
   entry that tracked it is gone.
-- Repos that were locked (a run in flight against them) before the restart become immediately
+- Repositories that were locked (a run in flight against them) before the restart become immediately
   available again — there is no persisted lock state to reconcile.
 - Any run still recorded as `Running` in SQLite from before the restart is reconciled to
   `Interrupted` at startup, since the in-memory state that would confirm it's still actually
