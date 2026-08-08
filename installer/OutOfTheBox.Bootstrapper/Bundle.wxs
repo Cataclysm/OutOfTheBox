@@ -5,10 +5,16 @@
   <Bundle Name="OutOfTheBox"
           Manufacturer="Dennis Freise"
           Version="$(ProductVersion)"
-          UpgradeCode="899fedcf-6b86-4c88-8a39-56a27874008d">
+          UpgradeCode="899fedcf-6b86-4c88-8a39-56a27874008d"
+          IconSourceFile="$(var.BrandAssetsPath)outofthebox.ico">
 
+    <!-- ShowVersion puts "Version $(ProductVersion)" in the bootstrapper's own welcome text
+         automatically - the brand mark shown alongside it is the same logo used everywhere else
+         (installer icon, MSI dialogs, dashboard favicon/header). -->
     <BootstrapperApplication>
-      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" ShowVersion="yes" SuppressOptionsUI="yes" />
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
+                                               ShowVersion="yes" SuppressOptionsUI="yes"
+                                               LogoFile="$(var.BrandAssetsPath)logo-96.png" />
     </BootstrapperApplication>
 
     <!-- Detection: "some .NET 10 SDK is present" is approximated as "this exact patch version's

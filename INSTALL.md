@@ -151,8 +151,13 @@ annual revenue exceeds $10,000.
 Run `OutOfTheBoxSetup.exe` elevated. The MSI has its own interactive config page (repo root
 directory, bearer token, port) verified working when the MSI is run directly
 (`msiexec /i OutOfTheBox.Msi.msi`, or double-clicking it) — inspected via the Windows Installer COM
-API directly (Dialog/ControlEvent tables), not just "the build succeeded". **Whether that same page
-is shown when installing through the bootstrapper is not yet verified on a real machine**: Burn's
+API directly (Dialog/ControlEvent tables), not just "the build succeeded". The config page's title
+shows the version being installed (`Configure OutOfTheBox vX.Y.Z`), and on an upgrade an additional
+"Upgrading from version X.Y.Z" line appears above it, read back from the prior install's own
+registry-persisted version. The bootstrapper, MSI Add/Remove Programs entry, and dashboard
+(favicon, header, login page) all share the same brand mark, so the product looks consistent
+end to end. **Whether that config page is shown when installing through the bootstrapper is not yet
+verified on a real machine**: Burn's
 standard bootstrapper application runs chained MSI packages at a reduced UI level by default, so it
 may run this MSI silently rather than showing its dialog. Until that's confirmed (or a bootstrapper-
 level UI is built instead), pass the same properties on the bootstrapper's own command line, which

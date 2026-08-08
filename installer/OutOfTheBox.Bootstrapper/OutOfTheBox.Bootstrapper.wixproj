@@ -9,7 +9,8 @@
          than compiling one itself. Same Configuration/Platform the MSI project itself used to
          build, so this always points at a matching build. -->
     <MsiSourcePath>$(MSBuildThisFileDirectory)..\OutOfTheBox.Msi\bin\$(Platform)\$(Configuration)\OutOfTheBox.Msi.msi</MsiSourcePath>
-    <DefineConstants>ProductVersion=$(Version);MsiSourcePath=$(MsiSourcePath)</DefineConstants>
+    <BrandAssetsPath>$(MSBuildThisFileDirectory)..\Assets\</BrandAssetsPath>
+    <DefineConstants>ProductVersion=$(Version);MsiSourcePath=$(MsiSourcePath);BrandAssetsPath=$(BrandAssetsPath)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

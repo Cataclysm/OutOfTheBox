@@ -16,7 +16,8 @@
          folder - $(Configuration) is lowercased there, matching the .NET SDK's artifacts-layout
          convention (e.g. "debug", not "Debug"). -->
     <ResolveSecretsCaDllPath>$(MSBuildThisFileDirectory)..\..\artifacts\bin\OutOfTheBox.Msi.CustomActions\$(Configuration.ToLowerInvariant())\OutOfTheBox.Msi.CustomActions.CA.dll</ResolveSecretsCaDllPath>
-    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath);ResolveSecretsCaDllPath=$(ResolveSecretsCaDllPath)</DefineConstants>
+    <BrandAssetsPath>$(MSBuildThisFileDirectory)..\Assets\</BrandAssetsPath>
+    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath);ResolveSecretsCaDllPath=$(ResolveSecretsCaDllPath);BrandAssetsPath=$(BrandAssetsPath)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

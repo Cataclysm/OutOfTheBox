@@ -16,6 +16,16 @@
          (one payload, not two files that must travel together) and to distribute standalone. -->
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
+    <!-- Brand: the same mark used everywhere else (bootstrapper exe icon, dashboard favicon/
+         header) - ARPPRODUCTICON is what Programs and Features shows; WixUIBannerBmp/
+         WixUIDialogBmp are the well-known variable ids the stock WixUI dialog set looks for to
+         replace its default placeholder banner/background images (493x58 and 493x312 px
+         respectively - WixUI's own fixed dimensions, not a choice made here). -->
+    <Icon Id="ProductIcon" SourceFile="$(var.BrandAssetsPath)outofthebox.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.BrandAssetsPath)banner-493x58.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.BrandAssetsPath)dialog-493x312.bmp" />
+
     <!-- Native upgrade sequencing (tasks.md 17.11) - supersedes the old upgrade.ps1's hand-rolled
          stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
          product's files are installed, which is what makes the Windows Service's file replacement
@@ -74,6 +84,13 @@
       <RegistrySearch Id="ExistingServiceAccountPasswordSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="raw" />
     </Property>
 
+    <!-- The version a prior install left behind, if any - same RegistrySearch-during-AppSearch
+         mechanism as the two secrets above, used by ConfigDlg to show "upgrading from vX.Y.Z"
+         rather than an operator having to guess whether this is a fresh install or an upgrade. -->
+    <Property Id="EXISTINGVERSION" Secure="yes">
+      <RegistrySearch Id="ExistingVersionSearch" Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="Version" Type="raw" />
+    </Property>
+
     <Binary Id="ResolveSecretsCA" SourceFile="$(var.ResolveSecretsCaDllPath)" />
     <CustomAction Id="ResolveSecrets" BinaryRef="ResolveSecretsCA" DllEntry="ResolveSecrets" Execute="immediate" Return="check" />
 
@@ -104,14 +121,18 @@
          what makes "upgrades don't change the bearer token, but the operator still can by editing
          ConfigDlg" true: whatever value ConfigDlg ends up showing (generated default, preserved
          prior value, or an operator's own edit) is what gets written here and carried forward.
-         Deliberately a plain Registry key (SOFTWARE\OutOfTheBox), not under the service's own
-         Services\OutOfTheBox key used for the Environment value in ServiceComponent - keeps "where
-         the running process reads its config from" and "where the installer stores its own
-         install-to-install bookkeeping" clearly separate, even though both currently hold the same
-         value. -->
+         Also persists the version just installed, read back by EXISTINGVERSION on the *next*
+         upgrade so ConfigDlg can show "upgrading from vX.Y.Z" - not resolved through
+         ResolveSecrets since it needs no generate-or-preserve logic, just "always the current
+         ProductVersion". Deliberately a plain Registry key (SOFTWARE\OutOfTheBox), not under the
+         service's own Services\OutOfTheBox key used for the Environment value in ServiceComponent
+         - keeps "where the running process reads its config from" and "where the installer stores
+         its own install-to-install bookkeeping" clearly separate, even though the first two values
+         currently also happen to be duplicated into that Environment value. -->
     <Component Id="PersistedSecretsComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a05">
       <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="BearerToken" Type="string" Value="[BEARERTOKEN]" KeyPath="yes" />
       <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="ServiceAccountPassword" Type="string" Value="[SERVICEACCOUNTPASSWORD]" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\OutOfTheBox" Name="Version" Type="string" Value="[ProductVersion]" />
     </Component>
 
     <!-- Wildcard file harvesting (WiX v4+'s built-in replacement for the old standalone heat.exe
@@ -228,26 +249,32 @@
          Publish entries (Order="2", higher than the extension's own default so it wins) - the
          standard WiX pattern for adding a custom page to a stock dialog set. -->
     <UI>
-      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Configure OutOfTheBox">
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Configure OutOfTheBox" />
-        <Control Id="Description" Type="Text" X="15" Y="20" Width="340" Height="20" Transparent="yes" NoPrefix="yes"
+      <Dialog Id="ConfigDlg" Width="370" Height="290" Title="Configure OutOfTheBox">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Configure OutOfTheBox v[ProductVersion]" />
+        <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
+             RegistryValue from a prior install's PersistedSecretsComponent was found during
+             AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
+             line. -->
+        <Control Id="UpgradeNotice" Type="Text" X="15" Y="21" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
+                 HideCondition="EXISTINGVERSION = &quot;&quot;" ShowCondition="EXISTINGVERSION &lt;&gt; &quot;&quot;" />
+        <Control Id="Description" Type="Text" X="15" Y="38" Width="340" Height="20" Transparent="yes" NoPrefix="yes"
                  Text="These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
-        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="62" Width="370" Height="0" />
 
-        <Control Id="RepoRootLabel" Type="Text" X="15" Y="55" Width="150" Height="15" NoPrefix="yes" Text="Repository root directory:" />
-        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="70" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
+        <Control Id="RepoRootLabel" Type="Text" X="15" Y="73" Width="150" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="88" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="95" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
-        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="110" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
+        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="113" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (the shared credential the sbx sandbox caller must present) - a random one is pre-filled below; change it if you want your own:" />
+        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="128" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
-        <Control Id="PortLabel" Type="Text" X="15" Y="135" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
-        <Control Id="PortEdit" Type="Edit" X="15" Y="150" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
+        <Control Id="PortLabel" Type="Text" X="15" Y="153" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
+        <Control Id="PortEdit" Type="Edit" X="15" Y="168" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
 
-        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
+        <Control Id="BottomLine" Type="Line" X="0" Y="254" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="263" Width="56" Height="17" Text="Back">
           <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
         </Control>
-        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next">
+        <Control Id="Next" Type="PushButton" X="236" Y="263" Width="56" Height="17" Text="Next">
           <!-- Refuse to proceed without a repo root and a non-trivial bearer token - an installer
                that silently accepted blank/weak values here would produce a service that's either
                broken (no root configured) or authenticated by an empty credential. Port left
@@ -257,7 +284,7 @@
           <Publish Event="SpawnDialog" Value="InvalidConfigDlg" Order="1" Condition="REPOROOTDIR = &quot;&quot; OR BEARERTOKEN = &quot;&quot; OR PORTNUMBER = &quot;&quot;" />
           <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="2" Condition="REPOROOTDIR &lt;&gt; &quot;&quot; AND BEARERTOKEN &lt;&gt; &quot;&quot; AND PORTNUMBER &lt;&gt; &quot;&quot;" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+        <Control Id="Cancel" Type="PushButton" X="304" Y="263" Width="56" Height="17" Cancel="yes" Text="Cancel">
           <Publish Event="SpawnDialog" Value="CancelDlg" Order="1" />
         </Control>
       </Dialog>
