@@ -49,14 +49,16 @@ public sealed class RepositoryManager(
         foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
         {
             var name = Path.GetFileName(directory);
+            var resolvedPath = Path.GetFullPath(directory);
             var stats = statsCache.TryGet(name);
-            var isActive = runRegistry.IsHeld(Path.GetFullPath(directory));
+            var isActive = runRegistry.IsHeld(resolvedPath);
 
             summaries.Add(stats is null
-                ? new RepositorySummary { Name = name, StatsComputed = false, IsActive = isActive }
+                ? new RepositorySummary { Name = name, Path = resolvedPath, StatsComputed = false, IsActive = isActive }
                 : new RepositorySummary
                 {
                     Name = name,
+                    Path = resolvedPath,
                     StatsComputed = true,
                     TotalSizeBytes = stats.TotalSizeBytes,
                     IsGitRepository = stats.IsGitRepository,

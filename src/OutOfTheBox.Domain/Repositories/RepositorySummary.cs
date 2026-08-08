@@ -13,6 +13,14 @@ public sealed class RepositorySummary
     public required string Name { get; init; }
 
     /// <summary>
+    /// The repository's resolved absolute path on the host - informational only, never required to
+    /// identify a repository in any request. Every endpoint/action that targets a repository does
+    /// so by <see cref="Name"/>; this exists so a caller (human or the sbx sandbox) that has a use
+    /// for the real on-disk location doesn't have to derive it itself.
+    /// </summary>
+    public required string Path { get; init; }
+
+    /// <summary>
     /// Whether size/git status have been computed at least once yet - <see langword="false"/> for
     /// a repository the background sampler hasn't reached its first tick for since service
     /// startup, so the dashboard can show "computing…" instead of a wrong/blank size of zero.

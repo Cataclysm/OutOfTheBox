@@ -1,7 +1,9 @@
 @page "/history"
 @attribute [Authorize]
 @using System.Globalization
+@using OutOfTheBox.Application.Execution
 @inject IRunRepository RunRepository
+@inject IWorkingDirectoryResolver WorkingDirectoryResolver
 @inject NavigationManager NavigationManager
 
 <PageTitle>@VersionInfo.DisplayName - History</PageTitle>
@@ -33,7 +35,7 @@
 
     <label>
         Repository
-        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="Repository path" />
+        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="Repository name" />
     </label>
 
     <label>
@@ -70,7 +72,7 @@ else
                 <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
                     <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
                     <td>@run.Outcome.Label()</td>
-                    <td class="ellipsis" title="@run.RepositoryPath">@run.RepositoryPath</td>
+                    <td class="ellipsis" title="@RunDisplay.RepositoryName(run)">@RunDisplay.RepositoryName(run)</td>
                     <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
                     <td>@FormatDateTime(run.StartedAt)</td>
                 </tr>
@@ -153,11 +155,21 @@ else
 
     private async Task RefreshAsync()
     {
+        // The filter is a repository name (what an operator actually thinks in), but Run.RepositoryPath
+        // stores the resolved absolute path - resolved the same way any other repository-relative
+        // reference is before it's used to query. An unresolvable name (e.g. one that would escape
+        // the configured root) matches nothing rather than silently falling back to "no filter."
+        var repositoryPathFilter = string.IsNullOrWhiteSpace(_repositoryFilter)
+            ? null
+            : WorkingDirectoryResolver.Resolve(_repositoryFilter) is { IsAllowed: true, ResolvedPath: { } resolvedPath }
+                ? resolvedPath
+                : Guid.NewGuid().ToString();
+
         var query = new RunQuery
         {
             Kinds = _selectedKinds.Count > 0 ? _selectedKinds : null,
             Outcomes = Enum.TryParse<RunOutcome>(_selectedOutcome, out var outcome) ? [outcome] : null,
-            RepositoryPath = string.IsNullOrWhiteSpace(_repositoryFilter) ? null : _repositoryFilter,
+            RepositoryPath = repositoryPathFilter,
             SearchText = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
         };
 
@@ -185,7 +197,7 @@ else
         {
             SortColumn.Kind => _runs!.OrderBy(r => r.Kind.ShortLabel(), StringComparer.OrdinalIgnoreCase),
             SortColumn.Outcome => _runs!.OrderBy(r => r.Outcome.Label(), StringComparer.OrdinalIgnoreCase),
-            SortColumn.Repository => _runs!.OrderBy(r => r.RepositoryPath, StringComparer.OrdinalIgnoreCase),
+            SortColumn.Repository => _runs!.OrderBy(RunDisplay.RepositoryName, StringComparer.OrdinalIgnoreCase),
             SortColumn.Detail => _runs!.OrderBy(RunDisplay.Detail, StringComparer.OrdinalIgnoreCase),
             _ => _runs!.OrderBy(r => r.StartedAt),
         };

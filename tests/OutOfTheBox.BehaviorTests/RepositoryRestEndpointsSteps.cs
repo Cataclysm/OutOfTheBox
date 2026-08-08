@@ -60,7 +60,7 @@ public sealed class RepositoryRestEndpointsSteps : IDisposable
         _response = await client.SendAsync(request, CancellationToken.None);
     }
 
-    [Then(@"the response includes ""(.*)"" with its size and git status")]
+    [Then(@"the response includes ""(.*)"" with its size, git status, and path")]
     public async Task ThenTheResponseIncludesWithItsSizeAndGitStatus(string name)
     {
         Assert.Equal(HttpStatusCode.OK, _response!.StatusCode);
@@ -69,6 +69,11 @@ public sealed class RepositoryRestEndpointsSteps : IDisposable
         var match = Assert.Single(summaries, s => s.Name == name);
         Assert.True(match.StatsComputed);
         Assert.True(match.TotalSizeBytes > 0);
+
+        // Path is informational only (per direct instruction: every endpoint that targets a
+        // repository does so by name, never by path) but must still be present - it's the one
+        // place a caller can get the real on-disk location without deriving it.
+        Assert.EndsWith(name, match.Path, StringComparison.OrdinalIgnoreCase);
     }
 
     [When(@"an unauthenticated request is made to clone a repository")]

@@ -24,6 +24,8 @@ else
     <dl>
         <dt>Status</dt>
         <dd>@(_summary.IsActive ? "Active" : "Idle")</dd>
+        <dt>Path</dt>
+        <dd>@_summary.Path</dd>
         <dt>Size</dt>
         <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "Computing…")</dd>
         <dt>Git status</dt>

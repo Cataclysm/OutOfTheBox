@@ -1,12 +1,16 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
+using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 
@@ -19,7 +23,16 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
 
-    public HistoryComponentTests() => Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
+    public HistoryComponentTests()
+    {
+        Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
+
+        // The repository filter resolves an operator-typed name against the configured root before
+        // querying - a real resolver backed by the same root every test's fake repository paths
+        // (`C:\repositories\...`) already assume, matching RepositoriesComponentTests' own pattern.
+        var options = Options.Create(new ServiceOptions { RootDirectory = @"C:\repositories" });
+        Services.AddSingleton<IWorkingDirectoryResolver>(new WorkingDirectoryResolver(options));
+    }
 
     [Fact]
     public async Task Filtering_by_kind_shows_only_matching_runs()
@@ -54,14 +67,15 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repositories\beta"), CancellationToken.None);
 
         var cut = Render<History>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("alpha", cut.Markup));
 
-        cut.Find("input[placeholder='Repository path']").Input(@"C:\repositories\alpha");
+        // The filter is a repository name, not the full path the list itself no longer displays.
+        cut.Find("input[placeholder='Repository name']").Input("alpha");
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(@"C:\repositories\alpha", cut.Markup);
-            Assert.DoesNotContain(@"C:\repositories\beta", cut.Markup);
+            Assert.Contains("alpha", cut.Markup);
+            Assert.DoesNotContain("beta", cut.Markup);
         });
     }
 
@@ -94,18 +108,18 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repositories\beta"), CancellationToken.None);
 
         var cut = Render<History>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("alpha", cut.Markup));
 
-        cut.Find("input[placeholder='Repository path']").Input(@"C:\repositories\alpha");
-        cut.WaitForAssertion(() => Assert.DoesNotContain(@"C:\repositories\beta", cut.Markup));
+        cut.Find("input[placeholder='Repository name']").Input("alpha");
+        cut.WaitForAssertion(() => Assert.DoesNotContain("beta", cut.Markup));
 
         var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");
         clearFiltersButton.Click();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(@"C:\repositories\alpha", cut.Markup);
-            Assert.Contains(@"C:\repositories\beta", cut.Markup);
+            Assert.Contains("alpha", cut.Markup);
+            Assert.Contains("beta", cut.Markup);
         });
     }
 

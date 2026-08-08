@@ -66,7 +66,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
 
         var cut = Render<Status>();
 
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
         Assert.DoesNotContain("Idle - no runs in flight.", cut.Markup);
     }
 
@@ -93,7 +93,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         // a second HTTP client's POST /run/git would trigger via RunEndpoints in production.
         _runEventBus.Publish(new RunEvent(runId, RunKind.GitCommand, RunEventType.Started, repositoryPath));
 
-        cut.WaitForAssertion(() => Assert.Contains(repositoryPath, cut.Markup), TimeSpan.FromSeconds(2));
+        cut.WaitForAssertion(() => Assert.Contains(Path.GetFileName(repositoryPath), cut.Markup), TimeSpan.FromSeconds(2));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         await runRepository.AddAsync(run, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(repositoryPath, cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains(Path.GetFileName(repositoryPath), cut.Markup));
 
         run.Outcome = RunOutcome.Completed;
         run.CompletedAt = DateTimeOffset.UtcNow;
@@ -215,7 +215,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
         Assert.DoesNotContain("process-row", cut.Markup);
 
         var process = new ProcessResourceSample(1234, "dotnet", DateTime.UtcNow, 12.5, 4096);
@@ -245,7 +245,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
 
         var startTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         var process = new ProcessResourceSample(4321, "testhost", startTime, 5, 2048);
@@ -304,7 +304,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
 
         var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
         Assert.Equal(4, createdBeforeExpand); // host graph only - nothing for the collapsed run card
@@ -348,7 +348,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\example", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
 
         cut.Find("button.run-graph-toggle").Click();
 

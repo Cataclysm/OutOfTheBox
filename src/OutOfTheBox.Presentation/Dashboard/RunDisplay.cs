@@ -77,4 +77,12 @@ public static class RunDisplay
             ? run.Stderr
             : kindDetail;
     }
+
+    /// <summary>
+    /// The repository's short name for list display - <see cref="Run.RepositoryPath"/> is the
+    /// resolved absolute path (needed internally for locking/uniqueness), which is exactly the kind
+    /// of host implementation detail a list row shouldn't show; the full path remains available on
+    /// the run's own detail page.
+    /// </summary>
+    public static string RepositoryName(Run run) => System.IO.Path.GetFileName(run.RepositoryPath);
 }

@@ -13,7 +13,7 @@ Feature: Repository REST Endpoints
     Scenario: An authenticated caller lists repositories with their metadata
         Given a repository named "existing-repository" is present on disk
         When an authenticated caller requests the repository list
-        Then the response includes "existing-repository" with its size and git status
+        Then the response includes "existing-repository" with its size, git status, and path
 
     Scenario: Cloning requires a bearer credential
         When an unauthenticated request is made to clone a repository

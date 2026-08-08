@@ -173,7 +173,8 @@ Response is `200 OK` with a JSON array, one object per repository:
 
 | Field | Meaning |
 |---|---|
-| `name` | The repository's directory name - what you'd pass as (or as the prefix of) `workingDirectory`/`repository` on the other endpoints. |
+| `name` | The repository's directory name - what you'd pass as (or as the prefix of) `workingDirectory`/`repository` on the other endpoints. Every endpoint that targets a repository identifies it by this name, never by `path`. |
+| `path` | The repository's resolved absolute path on the host - informational only. You never need it to call any endpoint; it exists in case you have some other use for the real on-disk location. |
 | `isActive` | Whether a `dotnet`/`git` run or a clone currently holds this repository's lock. |
 | `totalSizeBytes` / `statsComputed` | On-disk size in bytes; `statsComputed` is `false` briefly after a repository first appears, before the background sampler has measured it yet. |
 | `isGitRepository`, `branch`, `isDirty`, `aheadCount`, `behindCount` | Git status, if this is a git checkout at all (`isGitRepository: false` and the rest `null` otherwise). |

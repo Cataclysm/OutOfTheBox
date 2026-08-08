@@ -60,7 +60,7 @@ else
             <li class="status-run">
                 <div class="run-row">
                     <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span>
-                    <span class="run-repository">@run.RepositoryPath</span>
+                    <span class="run-repository">@RunDisplay.RepositoryName(run)</span>
                     <span class="run-id">@run.Id</span>
                     <span class="run-detail">@RunDisplay.Detail(run)</span>
                     <span class="run-elapsed">@Elapsed(run)</span>
