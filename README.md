@@ -4,7 +4,7 @@ A Windows-hosted service that lets a Claude Code instance running in a remote sb
 
 ## Status
 
-In active development. Not yet deployable — packaging, install scripts, and the dashboard are still being built. See [`openspec/changes/sbx-dotnet-command-service/tasks.md`](openspec/changes/sbx-dotnet-command-service/tasks.md) for the current checklist and [`design.md`](openspec/changes/sbx-dotnet-command-service/design.md) for the full architecture rationale.
+In active development. Packaging and install/upgrade scripts exist ([`INSTALL.md`](INSTALL.md)) but haven't yet been verified end-to-end on a real clean host (`tasks.md` 17.10-17.12 are still pending manual verification). See [`openspec/changes/sbx-dotnet-command-service/tasks.md`](openspec/changes/sbx-dotnet-command-service/tasks.md) for the current checklist and [`design.md`](openspec/changes/sbx-dotnet-command-service/design.md) for the full architecture rationale.
 
 ## What it does (once complete)
 

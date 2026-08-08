@@ -26,6 +26,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseWindowsService();
 
+// Data directory (config + SQLite file) - separate from the install directory per design.md's
+// Packaging decision, so `upgrade.ps1` replacing the install directory never touches it. Defaults
+// to %ProgramData%\OutOfTheBox; overridable via OUTOFTHEBOX_DATA_DIR for local dev/testing without
+// touching the real machine-wide ProgramData tree. install.ps1 writes the real production
+// appsettings.json here (root directory, bearer token, port, timeouts, output cap, SQLite path);
+// the bundled appsettings.json next to the exe only supplies non-secret defaults, so it stays safe
+// to overwrite on every upgrade. Optional (not required to exist) so `dotnet run`/BehaviorTests,
+// which configure everything via environment variables instead, are unaffected.
+var dataDirectory = Environment.GetEnvironmentVariable("OUTOFTHEBOX_DATA_DIR")
+    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OutOfTheBox");
+builder.Configuration.AddJsonFile(Path.Combine(dataDirectory, "appsettings.json"), optional: true, reloadOnChange: true);
+
 // Require HTTPS on every configured Kestrel endpoint (Section 16, per design.md's Transport
 // decision): the bearer token, command arguments/output, and the dashboard's cookie session all
 // cross this port, so plain HTTP would leak them to anyone on-path. Fails fast at startup rather

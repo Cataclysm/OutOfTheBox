@@ -110,16 +110,82 @@ per the same two-level path-confinement policy the working-directory resolution 
 `/run`/`/run/git` — with a distinct "confinement violation" outcome, separate from a plain
 "file not found" for a path that's legitimately inside the repo but doesn't exist yet.
 
-## Planned: production install
+## Production install
 
-Once `tasks.md` Section 17 (Packaging & Install/Upgrade) is implemented, this section will describe:
+### 1. Publish
 
-- Publishing `Host` as a self-contained single-file win-x64 executable (no separate .NET runtime install needed on the target machine)
-- Running `install.ps1`, which will:
-  - Create a dedicated, least-privileged local Windows service account (not local admin, not a pre-existing account)
-  - Install the service under a per-machine data directory separate from the binary's install directory, so upgrades never touch configuration or history
-  - Register it as a Windows Service with SCM crash-recovery configured (restart on crash — not automatic by default)
-  - Open the necessary firewall rule(s)
-- Running `upgrade.ps1` for subsequent releases: stop, swap the binary, start, verify via a `/version` endpoint — configuration and SQLite history are untouched
+```
+dotnet publish src/OutOfTheBox.Host -p:PublishProfile=win-x64 -o <publish-output-dir>
+```
 
-This section will be rewritten with concrete instructions once that work lands — see `design.md`'s Packaging decisions for the full rationale in the meantime.
+Produces a self-contained, single-file `OutOfTheBox.Host.exe` (~110 MB — it bundles the full .NET
+runtime, so the target machine needs nothing pre-installed beyond the OS itself and `git` on
+`PATH`) alongside a `wwwroot/` folder of static web assets (including the vendored Chart.js). Both
+the exe and `wwwroot/` must be copied together — `install.ps1`/`upgrade.ps1` below do this for you.
+
+### 2. Install
+
+```powershell
+.\scripts\install.ps1 -SourcePath <publish-output-dir> -RepoRootDirectory C:\repos `
+    -AllowedRemoteAddresses <sbx-sandbox-ip>,<operator-ip>
+```
+
+Must be run elevated (`#Requires -RunAsAdministrator`). This:
+
+- Creates a dedicated local service account (`svc-outofthebox` by default) — **not** local admin,
+  **not** a pre-existing/shared account — and grants it exactly: log-on-as-a-service (granted
+  automatically by `sc.exe create ... obj=` — no separate step needed), read/write on the data
+  directory and the configured repo root (via `icacls`, not broader filesystem access), and
+  "Performance Monitor Users" membership (required for `PerformanceCounter` access to the
+  `Processor` category — without it, host/process resource monitoring silently fails).
+- Creates the install directory (`C:\Program Files\OutOfTheBox` by default — disposable, replaced
+  wholesale by every `upgrade.ps1` run) and the data directory (`%ProgramData%\OutOfTheBox` by
+  default — config + the SQLite file, **never** touched by upgrade or reinstall, so history and
+  configuration survive both).
+- Writes the real production `appsettings.json` into the data directory (root directory, bearer
+  token — auto-generated and printed once if not supplied — port, timeouts, output cap, SQLite
+  path, and the Kestrel HTTPS certificate binding); the exe reads it via the
+  `OUTOFTHEBOX_DATA_DIR` environment variable, set on the service's own registry entry so it
+  doesn't depend on being present in a global environment.
+- Generates a self-signed certificate via `dotnet dev-certs` if `-CertificatePath` isn't supplied
+  (see [Network & transport](#network--transport) above for how the sbx-side client must then pin
+  it).
+- Registers the Windows Service and explicitly configures SCM crash-recovery (`sc.exe failure ...
+  actions= restart/60000/restart/60000/restart/60000`) — **SCM does not restart a crashed service
+  by default**, this has to be set explicitly.
+- Opens the firewall rule scoped to `-AllowedRemoteAddresses`, starts the service, and verifies
+  `git` is resolvable on the service account's own `PATH` (not just the installer's interactive
+  session) — a service process inherits the account's environment, not necessarily yours.
+
+### 3. Upgrade
+
+```powershell
+.\scripts\upgrade.ps1 -SourcePath <new-publish-output-dir>
+```
+
+Stops the service (aborting with a clear error if it doesn't reach `Stopped` within the timeout,
+rather than touching the install directory while the old process might still hold file handles),
+replaces the install directory's contents with the new build, starts the service, and polls
+`/version` to confirm the new build actually came up. The data directory is never referenced by
+this script at all — that's what makes "upgrade = replace the exe" safe to re-run and guarantees
+configuration and history (including resource samples, across every run kind) survive every
+upgrade.
+
+**Downgrade is unsupported** — EF Core migrations are forward-only, so rolling the exe back to an
+older build against a SQLite file a newer migration has already touched is not a supported path.
+If you want a manual rollback point before upgrading, copy the data directory's `outofthebox.db`
+(and its `-wal`/`-shm` sidecars, if present) somewhere safe first.
+
+### After a restart
+
+The run registry (which run ids are cancellable, which repos are locked) is **in-memory only** —
+this applies uniformly to every run kind (`dotnet`/`git` commands, clones, deletes, transfers).
+After any restart (crash-recovery, `upgrade.ps1`, or a manual restart):
+
+- A `POST /run/{runId}/cancel` for a run id from before the restart returns 404 — the registry
+  entry that tracked it is gone.
+- Repos that were locked (a run in flight against them) before the restart become immediately
+  available again — there is no persisted lock state to reconcile.
+- Any run still recorded as `Running` in SQLite from before the restart is reconciled to
+  `Interrupted` at startup, since the in-memory state that would confirm it's still actually
+  running was lost with the old process.
