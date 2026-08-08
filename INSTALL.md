@@ -112,75 +112,103 @@ per the same two-level path-confinement policy the working-directory resolution 
 
 ## Production install
 
+Packaged as a WiX Toolset installer: a Burn bootstrapper (`OutOfTheBoxSetup.exe`) that ensures the
+.NET 10 SDK and Git for Windows are present (installing either one silently if missing, skipping
+the check entirely if already satisfied), then runs the actual MSI.
+
 ### 1. Publish
 
 ```
-dotnet publish src/OutOfTheBox.Host -p:PublishProfile=win-x64 -o <publish-output-dir>
+dotnet publish src/OutOfTheBox.Host -p:PublishProfile=win-x64 -o artifacts/publish/OutOfTheBox.Host
 ```
 
 Produces a self-contained, single-file `OutOfTheBox.Host.exe` (~110 MB — it bundles the full .NET
-runtime, so the target machine needs nothing pre-installed beyond the OS itself and `git` on
-`PATH`) alongside a `wwwroot/` folder of static web assets (including the vendored Chart.js). Both
-the exe and `wwwroot/` must be copied together — `install.ps1`/`upgrade.ps1` below do this for you.
+runtime; the target machine needs nothing pre-installed beyond the OS itself, since the bootstrapper
+below handles the SDK/`git` prerequisites) alongside a `wwwroot/` folder of static web assets
+(including the vendored Chart.js) — the MSI's file harvesting picks up everything under this output
+directory automatically, so there's no separate copy step to remember.
 
-### 2. Install
+### 2. Package
 
-```powershell
-.\scripts\install.ps1 -SourcePath <publish-output-dir> -RepoRootDirectory C:\repos `
-    -AllowedRemoteAddresses <sbx-sandbox-ip>,<operator-ip>
+```
+dotnet build installer/OutOfTheBox.Msi -c Release
+dotnet build installer/OutOfTheBox.Bootstrapper -c Release
 ```
 
-Must be run elevated (`#Requires -RunAsAdministrator`). This:
+Produces `installer/OutOfTheBox.Msi/bin/x64/Release/OutOfTheBox.Msi.msi` (~40 MB, cabinet embedded)
+and `installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBox.Bootstrapper.exe` (the thing an
+operator actually runs). Both projects are deliberately outside `OutOfTheBox.slnx` and outside the
+repo's Central Package Management (`installer/Directory.Packages.props` opts out) — WiX's own
+project/package conventions don't fit either cleanly, and this keeps `dotnet build`/`dotnet test` on
+the main solution unaffected by installer changes. `WixToolset.Sdk` requires accepting the WiX v7
+"Open Source Maintenance Fee" EULA once per machine (`wix eula accept wix7`, or pass
+`-p:AcceptEula=wix7`) — see [wixtoolset's OSMF terms](https://docs.firegiant.com/wix/osmf/) before
+building on a machine that hasn't accepted it; the terms are free unless the building organization's
+annual revenue exceeds $10,000.
 
-- Creates a dedicated local service account (`svc-outofthebox` by default) — **not** local admin,
-  **not** a pre-existing/shared account — and grants it exactly: log-on-as-a-service (granted
-  automatically by `sc.exe create ... obj=` — no separate step needed), read/write on the data
-  directory and the configured repo root (via `icacls`, not broader filesystem access), and
-  "Performance Monitor Users" membership (required for `PerformanceCounter` access to the
-  `Processor` category — without it, host/process resource monitoring silently fails).
-- Creates the install directory (`C:\Program Files\OutOfTheBox` by default — disposable, replaced
-  wholesale by every `upgrade.ps1` run) and the data directory (`%ProgramData%\OutOfTheBox` by
-  default — config + the SQLite file, **never** touched by upgrade or reinstall, so history and
-  configuration survive both).
-- Writes the real production `appsettings.json` into the data directory (root directory, bearer
-  token — auto-generated and printed once if not supplied — port, timeouts, output cap, SQLite
-  path, and the Kestrel HTTPS certificate binding); the exe reads it via the
-  `OUTOFTHEBOX_DATA_DIR` environment variable, set on the service's own registry entry so it
-  doesn't depend on being present in a global environment.
-- Generates a self-signed certificate via `dotnet dev-certs` if `-CertificatePath` isn't supplied
-  (see [Network & transport](#network--transport) above for how the sbx-side client must then pin
-  it).
-- Registers the Windows Service and explicitly configures SCM crash-recovery (`sc.exe failure ...
-  actions= restart/60000/restart/60000/restart/60000`) — **SCM does not restart a crashed service
-  by default**, this has to be set explicitly.
-- Opens the firewall rule scoped to `-AllowedRemoteAddresses`, starts the service, and verifies
-  `git` is resolvable on the service account's own `PATH` (not just the installer's interactive
-  session) — a service process inherits the account's environment, not necessarily yours.
+### 3. Install
 
-### 3. Upgrade
+Run `OutOfTheBoxSetup.exe` elevated. Today this collects configuration via MSI properties passed on
+the command line rather than an interactive dialog (a `WixUI` config page is planned but not yet
+built):
 
-```powershell
-.\scripts\upgrade.ps1 -SourcePath <new-publish-output-dir>
+```
+OutOfTheBoxSetup.exe REPOROOTDIR="C:\repos" BEARERTOKEN="<a real secret>" PORTNUMBER=5443
 ```
 
-Stops the service (aborting with a clear error if it doesn't reach `Stopped` within the timeout,
-rather than touching the install directory while the old process might still hold file handles),
-replaces the install directory's contents with the new build, starts the service, and polls
-`/version` to confirm the new build actually came up. The data directory is never referenced by
-this script at all — that's what makes "upgrade = replace the exe" safe to re-run and guarantees
-configuration and history (including resource samples, across every run kind) survive every
-upgrade.
+This:
 
-**Downgrade is unsupported** — EF Core migrations are forward-only, so rolling the exe back to an
-older build against a SQLite file a newer migration has already touched is not a supported path.
-If you want a manual rollback point before upgrading, copy the data directory's `outofthebox.db`
-(and its `-wal`/`-shm` sidecars, if present) somewhere safe first.
+- Detects and, if missing, silently installs the .NET 10 SDK and Git for Windows (each is a
+  separate, `Permanent="yes"` chained package — uninstalling OutOfTheBox later does **not** remove
+  either, since other things on the host may depend on them too).
+- Creates a dedicated local service account (`svc-outofthebox`, via the WiX Util extension's
+  `util:User`) — **not** local admin, **not** a pre-existing/shared account — with log-on-as-a-service
+  (granted automatically by service creation), and "Performance Monitor Users" membership (required
+  for `PerformanceCounter` access to the `Processor` category — without it, host/process resource
+  monitoring silently fails), plus read/write on the data directory and the configured repo root.
+- Installs to `C:\Program Files\OutOfTheBox` (disposable, replaced wholesale by every upgrade) and
+  creates `%ProgramData%\OutOfTheBox` (the data directory — config + the SQLite file, **never**
+  touched by upgrade, uninstall, or reinstall, so history and configuration always survive all
+  three) — the data directory has no file `Component` referencing it at all in the MSI, so this
+  isn't just policy, it's structural.
+- Writes `REPOROOTDIR`/`BEARERTOKEN`/`PORTNUMBER` into the Windows Service's own `Environment`
+  registry value alongside `OUTOFTHEBOX_DATA_DIR`, reusing the same environment-variable
+  configuration override `Program.cs` already supports — no separate config file for the installer
+  to write.
+- Registers the Windows Service and explicitly configures SCM crash-recovery (`util:ServiceConfig`,
+  restart × 3 with a 60s delay) — **SCM does not restart a crashed service by default**, this has to
+  be set explicitly regardless of which tool sets it.
+- Opens a firewall rule for the configured port (narrow it to specific remote addresses afterward —
+  see [Network & transport](#network--transport) above — the installer doesn't know the sbx
+  sandbox's or operator's IPs at install time).
+- Re-checks `git` is resolvable via the registry as a `Launch` condition, failing loudly if
+  somehow still missing even after the bootstrapper's own check (e.g. the MSI was run directly,
+  bypassing the bootstrapper).
+
+Certificate binding for Kestrel HTTPS is not yet wired into the installer — see
+[Network & transport](#network--transport) above for generating one manually in the meantime.
+
+### 4. Upgrade / uninstall
+
+Run a newer build's `OutOfTheBoxSetup.exe` — `MajorUpgrade` handles it natively (WiX sequences the
+old version's removal and the new version's install around the service's own stop/start), so this
+is the same command as a fresh install, not a separate script. Configuration and history (including
+resource samples, across every run kind) survive, per the data-directory guarantee above.
+
+Uninstall via Programs and Features (or `OutOfTheBoxSetup.exe /uninstall`) removes the installed
+files, the Windows Service, and the dedicated service account — but, same as upgrade, never touches
+the data directory. Reinstalling recovers prior history automatically.
+
+**Downgrade is unsupported** — EF Core migrations are forward-only, so rolling back to an older
+build against a SQLite file a newer migration has already touched is not a supported path. If you
+want a manual rollback point before upgrading, copy the data directory's `outofthebox.db` (and its
+`-wal`/`-shm` sidecars, if present) somewhere safe first.
 
 ### After a restart
 
 The run registry (which run ids are cancellable, which repos are locked) is **in-memory only** —
 this applies uniformly to every run kind (`dotnet`/`git` commands, clones, deletes, transfers).
-After any restart (crash-recovery, `upgrade.ps1`, or a manual restart):
+After any restart (crash-recovery, an upgrade, or a manual restart):
 
 - A `POST /run/{runId}/cancel` for a run id from before the restart returns 404 — the registry
   entry that tracked it is gone.

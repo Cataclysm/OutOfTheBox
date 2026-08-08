@@ -32,6 +32,10 @@ TestResults/
 .nuget/
 packages/
 
+# WiX Toolset's local (per-repo) extension cache - a build artifact, not project source; the
+# installer/ projects resolve extensions via normal NuGet PackageReference regardless.
+.wix/
+
 # Local/secret configuration - never commit real tokens or certs
 appsettings.*.local.json
 *.local.json

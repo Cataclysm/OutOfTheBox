@@ -1,0 +1,20 @@
+<Project Sdk="WixToolset.Sdk/7.0.0">
+
+  <PropertyGroup>
+    <AcceptEula>wix7</AcceptEula>
+    <Platform>x64</Platform>
+    <OutputType>Bundle</OutputType>
+    <!-- The MSI this bundle chains - built separately by OutOfTheBox.Msi.wixproj and referenced
+         here by its output path, since a Burn bundle embeds a finished .msi as a payload rather
+         than compiling one itself. Same Configuration/Platform the MSI project itself used to
+         build, so this always points at a matching build. -->
+    <MsiSourcePath>$(MSBuildThisFileDirectory)..\OutOfTheBox.Msi\bin\$(Platform)\$(Configuration)\OutOfTheBox.Msi.msi</MsiSourcePath>
+    <DefineConstants>ProductVersion=$(Version);MsiSourcePath=$(MsiSourcePath)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+<Project>
+  <!-- Opts installer/ out of the repo-root Directory.Packages.props' Central Package Management -
+       WiX projects manage their own toolchain/extension package versions inline (matching WiX's
+       own project templates and docs), and forcing them into the same CPM regime as the .NET
+       class libraries elsewhere in this repo adds friction (the WiX SDK's own transitive package
+       references would also need PackageVersion entries) for no real benefit, since installer/
+       isn't part of the versioned dependency graph those libraries share. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,63 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Bundle Name="OutOfTheBox"
+          Manufacturer="Dennis Freise"
+          Version="$(ProductVersion)"
+          UpgradeCode="899fedcf-6b86-4c88-8a39-56a27874008d">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" ShowVersion="yes" SuppressOptionsUI="yes" />
+    </BootstrapperApplication>
+
+    <!-- Detection: "some .NET 10 SDK is present" is approximated as "this exact patch version's
+         install directory exists" - side-by-side SDK installs are harmless (this simply means a
+         machine with a different 10.x patch already installed gets this one installed alongside
+         it too, not a failure), which is an acceptable trade-off given Burn's built-in search
+         elements can't parse the SDK list `dotnet` itself reports; keep this version string current with
+         whatever installer/OutOfTheBox.Bootstrapper/Bundle.wxs's SdkPackage below actually installs. -->
+    <util:DirectorySearch Id="DotNetSdkSearch"
+                           Path="[ProgramFilesFolder]dotnet\sdk\10.0.302"
+                           Variable="DotNetSdkInstalled" />
+
+    <util:RegistrySearch Id="GitSearch"
+                          Root="HKLM"
+                          Key="SOFTWARE\GitForWindows"
+                          Value="InstallPath"
+                          Variable="GitInstallPath"
+                          Result="exists" />
+
+    <Chain>
+      <!-- Permanent: this is a prerequisite for the service's own core feature (spawning `dotnet
+           build`/`test` against target repos needs the SDK on PATH regardless of Host's own
+           self-contained packaging - see design.md's Packaging decision), not something
+           OutOfTheBox itself owns; uninstalling OutOfTheBox must not remove it, since other things
+           on the host may depend on it too. -->
+      <ExePackage Id="DotNetSdkPackage"
+                  InstallArguments="/install /quiet /norestart"
+                  DetectCondition="DotNetSdkInstalled"
+                  Permanent="yes"
+                  Vital="yes">
+        <ExePackagePayload Name="dotnet-sdk-10.0.302-win-x64.exe"
+                            Hash="ffa847d86755033a4e2c8dd19ab3b0d9c8ae129e1e59cef460f792cced6319c69f730b96e05c5bb88ba906094f332bf5232d4c417605789f03a310dd8f3d22c2"
+                            Size="213804008"
+                            DownloadUrl="https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.302/dotnet-sdk-10.0.302-win-x64.exe" />
+      </ExePackage>
+
+      <ExePackage Id="GitForWindowsPackage"
+                  InstallArguments="/VERYSILENT /NORESTART /NOCANCEL /SP-"
+                  DetectCondition="GitInstallPath"
+                  Permanent="yes"
+                  Vital="yes">
+        <ExePackagePayload Name="Git-2.55.0.3-64-bit.exe"
+                            Hash="af12577d0fdff74243a5988197aa49b957d5044edc17004f6ddf0768996f1dca"
+                            Size="65388144"
+                            DownloadUrl="https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.3/Git-2.55.0.3-64-bit.exe" />
+      </ExePackage>
+
+      <MsiPackage Id="OutOfTheBoxMsiPackage" SourceFile="$(var.MsiSourcePath)" Vital="yes" />
+    </Chain>
+
+  </Bundle>
+</Wix>

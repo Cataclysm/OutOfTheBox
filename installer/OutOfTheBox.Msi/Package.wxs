@@ -1,0 +1,158 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Package Name="OutOfTheBox"
+           Manufacturer="Dennis Freise"
+           Version="$(ProductVersion)"
+           UpgradeCode="5ab0e967-6c6a-434d-b262-4aa613b49f5e"
+           Scope="perMachine">
+
+    <SummaryInformation Description="OutOfTheBox - dotnet/git command execution service" />
+
+    <!-- Embed the cabinet directly in the .msi (WiX's default is a separate .cab file alongside
+         it) - the resulting single ~40 MB .msi is simpler to hand to the Burn bootstrapper below
+         (one payload, not two files that must travel together) and to distribute standalone. -->
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Native upgrade sequencing (tasks.md 17.11) - supersedes the old upgrade.ps1's hand-rolled
+         stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
+         product's files are installed, which is what makes the Windows Service's file replacement
+         safe around the service still (briefly) running the old binary. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of OutOfTheBox is already installed." />
+
+    <!-- Defense in depth (tasks.md 17.10): the Burn bootstrapper is expected to have already
+         guaranteed git is present before this MSI ever runs, but the MSI can be invoked directly,
+         bypassing the bootstrapper - so check again here and fail with a clear message rather than
+         installing a service that will fail every git run/clone. -->
+    <Property Id="GITINSTALLPATH" Secure="yes">
+      <RegistrySearch Id="GitRegistrySearch" Root="HKLM" Key="SOFTWARE\GitForWindows" Name="InstallPath" Type="raw" />
+    </Property>
+    <Launch Condition="Installed OR GITINSTALLPATH"
+            Message="Git for Windows was not found. Install it first, or run OutOfTheBoxSetup.exe (the bootstrapper) instead of this MSI directly - it installs Git automatically." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="OutOfTheBox" />
+    </StandardDirectory>
+
+    <!-- Per design.md's Data/config directory decision: never referenced by any Component or
+         RemoveFolder below, so it structurally can't be touched by upgrade or uninstall, not just
+         "by policy." This directory's only job here is to exist (created by the service account
+         Component's util:User/permissions setup) so the service has somewhere to write
+         appsettings.json/the SQLite file the first time it starts. -->
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIRFOLDER" Name="OutOfTheBox" />
+    </StandardDirectory>
+
+    <!-- Config-collection UI properties (tasks.md 17.9), fed into the service's own environment
+         block below rather than a hand-written appsettings.json - Program.cs already reads
+         standard ASP.NET Core environment-variable configuration overrides, so this reuses that
+         existing mechanism instead of introducing a custom action to render JSON. -->
+    <Property Id="REPOROOTDIR" Value="C:\repos" />
+    <Property Id="BEARERTOKEN" Hidden="yes" Secure="yes" />
+    <Property Id="PORTNUMBER" Value="5443" />
+
+    <Feature Id="MainFeature" Title="OutOfTheBox Service" Level="1">
+      <ComponentGroupRef Id="PublishOutputComponents" />
+      <ComponentRef Id="ServiceAccountComponent" />
+      <ComponentRef Id="DataDirectoryComponent" />
+      <ComponentRef Id="ServiceComponent" />
+      <ComponentRef Id="FirewallComponent" />
+    </Feature>
+
+    <!-- Wildcard file harvesting (WiX v4+'s built-in replacement for the old standalone heat.exe
+         tool) - every file under the publish output becomes its own Component/File automatically,
+         so a new static asset added to Presentation's wwwroot later is picked up without a
+         hand-maintained file list silently missing it (see design.md's Chart.js-goes-missing
+         risk). OutOfTheBox.Host.exe itself is deliberately excluded here (Exclude) since
+         ServiceComponent below already declares it explicitly, as the KeyPath the ServiceInstall/
+         ServiceControl elements attach to - a file can't be harvested twice under two different
+         Component ids. -->
+    <ComponentGroup Id="PublishOutputComponents" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishOutputPath)**">
+        <Exclude Files="$(var.PublishOutputPath)OutOfTheBox.Host.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <!-- Dedicated least-privilege service account (design.md's generic-passthrough risk
+         mitigation) - not local admin, not a pre-existing/shared account. Log-on-as-a-service is
+         granted automatically once the service below is installed to run as this account; no
+         separate rights-assignment step is needed for that specific right. Removed on uninstall. -->
+    <Component Id="ServiceAccountComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a01">
+      <util:User Id="ServiceAccount"
+                 Name="svc-outofthebox"
+                 Password="[SERVICEACCOUNTPASSWORD]"
+                 PasswordNeverExpires="yes"
+                 CanNotChangePassword="yes"
+                 CreateUser="yes"
+                 RemoveOnUninstall="yes"
+                 UpdateIfExists="yes">
+        <!-- Required for PerformanceCounter access to the Processor category (design.md's resource-
+             monitoring risk) - the account wouldn't have this by default otherwise. -->
+        <util:GroupRef Id="PerformanceMonitorUsersGroup" />
+      </util:User>
+    </Component>
+    <util:Group Id="PerformanceMonitorUsersGroup" Name="Performance Monitor Users" />
+
+    <!-- Grants the service account read/write on the data directory (config + SQLite file) and
+         creates it if it doesn't already exist. Never a Component that gets removed on uninstall -
+         see the StandardDirectory comment above. -->
+    <Component Id="DataDirectoryComponent" Directory="DATADIRFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a02">
+      <CreateFolder>
+        <util:PermissionEx User="[SERVICEACCOUNTNAME]" GenericAll="yes" />
+      </CreateFolder>
+    </Component>
+
+    <!-- Windows Service registration (tasks.md 17.7). The Environment multi-string is how the
+         config-collection UI's values (and OUTOFTHEBOX_DATA_DIR, so Program.cs finds the data
+         directory's own appsettings.json overlay) actually reach the running process - see the
+         property comment above for why this is preferred over a custom action writing JSON. -->
+    <Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a03">
+      <File Id="ServiceExeForInstall" Source="$(var.PublishOutputPath)OutOfTheBox.Host.exe" KeyPath="yes" />
+
+      <ServiceInstall Id="OutOfTheBoxServiceInstall"
+                       Name="OutOfTheBox"
+                       DisplayName="OutOfTheBox"
+                       Description="Runs dotnet/git commands and transfers build artifacts for a sandboxed Claude Code caller."
+                       Type="ownProcess"
+                       Start="auto"
+                       ErrorControl="normal"
+                       Account="[SERVICEACCOUNTDOMAIN]\[SERVICEACCOUNTNAME]"
+                       Password="[SERVICEACCOUNTPASSWORD]">
+        <!-- SCM does not restart a crashed service by default (design.md's Packaging decision) -
+             this configures the same restart/60s x3 recovery actions the old install.ps1's
+             `sc.exe failure` call used to set by hand. -->
+        <util:ServiceConfig FirstFailureActionType="restart"
+                             SecondFailureActionType="restart"
+                             ThirdFailureActionType="restart"
+                             RestartServiceDelayInSeconds="60"
+                             ResetPeriodInDays="1" />
+      </ServiceInstall>
+      <ServiceControl Id="OutOfTheBoxServiceControl"
+                       Name="OutOfTheBox"
+                       Start="install"
+                       Stop="both"
+                       Remove="uninstall"
+                       Wait="yes" />
+
+      <RegistryValue Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Services\OutOfTheBox"
+                      Name="Environment"
+                      Type="multiString"
+                      Value="OUTOFTHEBOX_DATA_DIR=[DATADIRFOLDER]&#x9;OutOfTheBox__RootDirectory=[REPOROOTDIR]&#x9;OutOfTheBox__BearerToken=[BEARERTOKEN]&#x9;Kestrel__Endpoints__Https__Url=https://0.0.0.0:[PORTNUMBER]" />
+    </Component>
+
+    <!-- Firewall rule (tasks.md 17.8) - scoped by port only here (the installer doesn't know the
+         sbx sandbox's or operator's IPs at install time); see INSTALL.md for narrowing it to
+         specific remote addresses after install, per design.md's Network & transport decision. -->
+    <Component Id="FirewallComponent" Directory="INSTALLFOLDER" Guid="7c6a1e3a-1b1f-4a1e-9b7a-5b7b6b3a1a04">
+      <fire:FirewallException Id="OutOfTheBoxFirewallRule"
+                               Name="OutOfTheBox"
+                               Port="[PORTNUMBER]"
+                               Protocol="tcp"
+                               Scope="any"
+                               IgnoreFailure="yes" />
+    </Component>
+
+  </Package>
+</Wix>

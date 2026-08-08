@@ -1,0 +1,22 @@
+<Project Sdk="WixToolset.Sdk/7.0.0">
+
+  <PropertyGroup>
+    <!-- Directory.Build.props at the repo root still applies (Version, UseArtifactsOutput) - this
+         project's own <Version> below is what WiX actually reads for the Package version, kept in
+         sync with the repo-wide one rather than duplicating the value by hand. -->
+    <AcceptEula>wix7</AcceptEula>
+    <Platform>x64</Platform>
+    <!-- Populated by the CI/operator publish step before building the MSI - see INSTALL.md.
+         Deliberately not auto-invoking `dotnet publish` from inside this project: keeps "build the
+         app" and "package the app" as separate, independently re-runnable steps, matching how the
+         Burn bootstrapper below also just consumes this MSI's output rather than building it. -->
+    <PublishOutputPath Condition="'$(PublishOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\OutOfTheBox.Host\</PublishOutputPath>
+    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Firewall.wixext" Version="7.0.0" />
+  </ItemGroup>
+
+</Project>
