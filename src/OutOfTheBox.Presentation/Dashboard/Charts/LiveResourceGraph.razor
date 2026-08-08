@@ -4,31 +4,50 @@
 @inject IChartInterop ChartInterop
 @implements IAsyncDisposable
 
-<div class="resource-graphs">
-    @if (Note is not null)
-    {
-        <p class="run-graph-note">@Note</p>
-    }
-    <div class="resource-graph">
-        <span class="resource-graph-label">CPU %</span>
-        <canvas id="@_cpuCanvasId"></canvas>
-    </div>
-    <div class="resource-graph">
-        <span class="resource-graph-label">RAM</span>
-        <canvas id="@_ramCanvasId"></canvas>
-    </div>
-    @if (IsHost)
-    {
+@if (Note is not null)
+{
+    <p class="run-graph-note">@Note</p>
+}
+
+@if (IsHost)
+{
+    <!-- Two explicit rows (CPU + per-core, then RAM + Network), per direct request - not left to
+         flex-wrap's own natural reflow, which wouldn't guarantee this specific pairing across
+         viewport widths. -->
+    <div class="resource-graphs">
+        <div class="resource-graph">
+            <span class="resource-graph-label">CPU %</span>
+            <canvas id="@_cpuCanvasId"></canvas>
+        </div>
         <div class="resource-graph">
             <span class="resource-graph-label">CPU per core</span>
             <canvas id="@_perCoreCanvasId"></canvas>
+        </div>
+    </div>
+    <div class="resource-graphs">
+        <div class="resource-graph">
+            <span class="resource-graph-label">RAM</span>
+            <canvas id="@_ramCanvasId"></canvas>
         </div>
         <div class="resource-graph">
             <span class="resource-graph-label">Network</span>
             <canvas id="@_networkCanvasId"></canvas>
         </div>
-    }
-</div>
+    </div>
+}
+else
+{
+    <div class="resource-graphs">
+        <div class="resource-graph">
+            <span class="resource-graph-label">CPU %</span>
+            <canvas id="@_cpuCanvasId"></canvas>
+        </div>
+        <div class="resource-graph">
+            <span class="resource-graph-label">RAM</span>
+            <canvas id="@_ramCanvasId"></canvas>
+        </div>
+    </div>
+}
 
 @code {
     /// <summary>The <see cref="ResourceHistoryBuffer"/> series key to read from - <see cref="ResourceHistoryBuffer.HostSeriesKey"/> for the host, or a run id's string form for a run/transfer.</summary>
