@@ -22,11 +22,31 @@ window.outOfTheBoxCharts = (() => {
             : { border: "#8b5cf6", background: "rgba(139, 92, 246, 0.12)" };
     }
 
-    function createLineChart(canvasId, datasetLabels) {
+    // Mirrors Status.razor's/Repos.razor's own FormatBytes exactly (same thresholds, same one
+    // decimal place) - kept as a separate JS copy rather than plumbed from C# because this runs
+    // inside a Chart.js tick callback, which only ever executes client-side.
+    function formatBytes(bytes) {
+        if (bytes >= 1024 * 1024 * 1024) {
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+        }
+        if (bytes >= 1024 * 1024) {
+            return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+        }
+        if (bytes >= 1024) {
+            return (bytes / 1024).toFixed(1) + " KB";
+        }
+        return bytes + " B";
+    }
+
+    function createLineChart(canvasId, datasetLabels, yAxisFormat) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
         }
+
+        const yTicks = yAxisFormat === "bytes"
+            ? { callback: formatBytes }
+            : {};
 
         const chart = new Chart(canvas, {
             type: "line",
@@ -51,7 +71,7 @@ window.outOfTheBoxCharts = (() => {
                 normalized: true,
                 scales: {
                     x: { type: "time", ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
-                    y: { beginAtZero: true },
+                    y: { beginAtZero: true, ticks: yTicks },
                 },
             },
         });

@@ -2,6 +2,16 @@
 
 namespace OutOfTheBox.Presentation.Dashboard.Charts;
 
+/// <summary>How a chart's y-axis tick labels should be rendered - lets a byte-valued series (RAM) show human-readable units instead of raw numbers, without every caller re-deriving the same formatting.</summary>
+public enum ChartValueFormat
+{
+    /// <summary>Ticks rendered as Chart.js's own default numeric formatting.</summary>
+    None,
+
+    /// <summary>Ticks rendered as human-readable byte units (B/KB/MB/GB).</summary>
+    Bytes,
+}
+
 /// <summary>
 /// Abstraction over the Chart.js JS interop calls used by this dashboard's graph components - lets
 /// tests substitute a spy instead of driving a real JS engine, the same precedent this project
@@ -11,7 +21,7 @@ namespace OutOfTheBox.Presentation.Dashboard.Charts;
 public interface IChartInterop
 {
     /// <summary>Creates a line chart in the canvas identified by <paramref name="canvasId"/>, with one dataset per label.</summary>
-    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels);
+    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None);
 
     /// <summary>Appends one point to the given dataset and redraws without animation.</summary>
     ValueTask PushPointAsync(string canvasId, int datasetIndex, DateTimeOffset timestamp, double value);

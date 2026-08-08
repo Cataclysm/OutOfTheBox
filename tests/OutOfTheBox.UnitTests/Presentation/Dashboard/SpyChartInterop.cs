@@ -20,7 +20,7 @@ internal sealed class SpyChartInterop : IChartInterop
 
     public List<string> DestroyedCanvasIds { get; } = [];
 
-    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels)
+    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None)
     {
         CreatedCanvasIds.Add(canvasId);
         return ValueTask.CompletedTask;

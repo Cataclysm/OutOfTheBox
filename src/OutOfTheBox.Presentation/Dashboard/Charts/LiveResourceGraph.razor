@@ -42,7 +42,7 @@
         }
 
         await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"]);
-        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"]);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes);
 
         var initial = HistoryBuffer.Get(SeriesKey);
         await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, initial.Select(p => (p.Timestamp, p.CpuPercent)));
