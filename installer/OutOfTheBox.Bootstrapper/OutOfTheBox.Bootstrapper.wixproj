@@ -4,6 +4,10 @@
     <AcceptEula>wix7</AcceptEula>
     <Platform>x64</Platform>
     <OutputType>Bundle</OutputType>
+    <!-- The project/assembly name (OutOfTheBox.Bootstrapper, matching this repo's per-project
+         naming convention) isn't what an operator should see on the file they double-click -
+         this is the one output filename docs/scripts actually reference. -->
+    <OutputName>OutOfTheBox_Setup</OutputName>
     <!-- The MSI this bundle chains - built separately by OutOfTheBox.Msi.wixproj and referenced
          here by its output path, since a Burn bundle embeds a finished .msi as a payload rather
          than compiling one itself. Same Configuration/Platform the MSI project itself used to

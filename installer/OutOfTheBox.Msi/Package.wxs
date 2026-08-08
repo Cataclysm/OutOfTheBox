@@ -54,7 +54,7 @@
       <RegistrySearch Id="GitRegistrySearch" Root="HKLM" Key="SOFTWARE\GitForWindows" Name="InstallPath" Type="raw" />
     </Property>
     <Launch Condition="Installed OR GITINSTALLPATH"
-            Message="Git for Windows was not found. Install it first, or run OutOfTheBoxSetup.exe (the bootstrapper) instead of this MSI directly - it installs Git automatically." />
+            Message="Git for Windows was not found. Install it first, or run OutOfTheBox_Setup.exe (the bootstrapper) instead of this MSI directly - it installs Git automatically." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="OutOfTheBox" />
