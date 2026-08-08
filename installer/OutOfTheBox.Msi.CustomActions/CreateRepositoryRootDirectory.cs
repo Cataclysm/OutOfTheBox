@@ -118,13 +118,35 @@ namespace OutOfTheBox.Msi.CustomActions
         /// chance to type a different path. Runs on every install and upgrade, not just a fresh
         /// install - re-granting an already-held right is harmless, and an upgrade is exactly when a
         /// repository root with pre-existing content most needs this applied.
+        ///
+        /// <see cref="GrantServiceAccountAccess"/> already tolerates a failure on any individual
+        /// file or subdirectory (<see cref="TryApplyRule"/>'s own catch) - one inaccessible leftover
+        /// shouldn't stop the rest of the tree from being fixed. What reaches here is different: a
+        /// failure applying the rule to the root itself, meaning the grant didn't happen *at all*,
+        /// not just partially. Logged with full exception detail and, deliberately unlike
+        /// <c>ConfigureGitSafeDirectoryAction</c>'s own "never fail the install" precedent, returned
+        /// as a real <see cref="ActionResult.Failure"/>: a silently "successful" install that leaves
+        /// this action's entire reason for existing quietly not done is worse than a loud, actionable
+        /// install failure - reasoning through the original scheduling bug (account created after
+        /// this action ran, caught only by an actual failed install) is exactly what makes the
+        /// alternative - swallow-and-continue - the wrong default here.
         /// </summary>
         [CustomAction]
         public static ActionResult CreateRepositoryRootDirectory(Session session)
         {
             var path = session["REPOSITORYROOTDIR"];
             EnsureExists(path);
-            GrantServiceAccountAccess(path, session["SERVICEACCOUNTNAME"]);
+
+            try
+            {
+                GrantServiceAccountAccess(path, session["SERVICEACCOUNTNAME"]);
+            }
+            catch (Exception ex)
+            {
+                session.Log("CreateRepositoryRootDirectory: failed to grant the service account access to '{0}': {1}", path, ex);
+                return ActionResult.Failure;
+            }
+
             return ActionResult.Success;
         }
     }

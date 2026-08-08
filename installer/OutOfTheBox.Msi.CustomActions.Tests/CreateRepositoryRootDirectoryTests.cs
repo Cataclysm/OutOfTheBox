@@ -74,6 +74,29 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         }
 
         [Fact]
+        public void GrantServiceAccountAccess_throws_when_the_account_does_not_exist()
+        {
+            // The exact real-machine bug this action's own scheduling fix guards against: called
+            // before the service account is created (or, in this test, an account that never
+            // exists at all), NTAccount.Translate throws IdentityNotMappedException - the
+            // CreateRepositoryRootDirectory entry point relies on this propagating rather than being
+            // swallowed here, since a total grant failure (as opposed to one bad file among many) is
+            // exactly the case it treats as a genuine, install-should-fail condition.
+            var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+
+            try
+            {
+                Assert.ThrowsAny<IdentityNotMappedException>(
+                    () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N")));
+            }
+            finally
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+
+        [Fact]
         public void GrantServiceAccountAccess_reaches_pre_existing_subdirectories_and_files()
         {
             // The exact real-machine scenario this guards against: a repository that already

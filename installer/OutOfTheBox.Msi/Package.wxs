@@ -139,8 +139,25 @@
            ResolveSecrets above): REPOSITORYROOTDIR only holds its final, operator-confirmed value once
            ConfigDlg has been through - scheduling this during the UI sequence's own early AppSearch
            pass would create the property's still-default value (C:\repositories) before the operator ever
-           got a chance to type a different path. -->
-      <Custom Action="CreateRepositoryRootDirectory" After="AppSearch" />
+           got a chance to type a different path.
+
+           Scheduled After="InstallServices" (a standard MSI action, unlike this next part: this
+           action grants the service account NTFS rights on the repository root, which needs the
+           account to already exist first). Found the hard way on a real install - scheduling only
+           After="AppSearch" (much earlier) ran before util:User's own CreateUser action, so the
+           account genuinely didn't exist yet, and NTAccount("svc-outofthebox")
+           .Translate(typeof(SecurityIdentifier)) (called internally by AddAccessRule) threw
+           IdentityNotMappedException, failing the entire install with error 1603.
+           After="InstallServices" is deliberate, not arbitrary: InstallServices itself needs the
+           account to exist too (a service can't be configured to log on as an account that isn't
+           there yet), so by the time InstallServices has run, CreateUser is guaranteed to already
+           have completed - referencing util:User's own action directly isn't possible from here
+           (WixToolset.Util.wixext doesn't expose it as a linkable symbol; both "Wix4CreateUser_X64"
+           - its compiled runtime name, visible in the install log - and the unprefixed "CreateUser"
+           were tried and rejected by the linker with WIX0094, "identifier could not be found").
+           Still safely before StartServices, so the directory/permissions are ready before the
+           service itself starts and tries to use them. -->
+      <Custom Action="CreateRepositoryRootDirectory" After="InstallServices" />
       <!-- Same InstallExecuteSequence-only reasoning as CreateRepositoryRootDirectory just above -
            needs REPOSITORYROOTDIR's final value, and doesn't need to run before it (the system-wide git
            config write doesn't care whether the directory exists yet, only CreateRepositoryRootDirectory does). -->
