@@ -20,4 +20,18 @@
     <PackageReference Include="WixToolset.Dtf.CustomAction" Version="7.0.0" />
   </ItemGroup>
 
+  <!-- Must be a Content item, not None: WixToolset.Dtf.CustomAction's PackCustomAction target only
+       embeds @(Content) items (plus copy-local references) into the .CA.dll SFXCA package - nothing
+       auto-generates a CustomAction.config, despite the SFXCA host looking for one by this exact
+       name at runtime. Without it, SfxCA.dll falls back to guessing which CLR to host, which failed
+       for real on a genuine Windows 11 test machine ("SFXCA: Failed to get requested CLR info. Error
+       code 0x80131700") despite .NET Framework 4.8.1 being present - this is a decades-old, still
+       load-bearing WiX/DTF quirk (traced to the same error message and fix in WiX's own issue
+       tracker going back to WiX 3.5), not something specific to this machine or this Framework
+       version. useLegacyV2RuntimeActivationPolicy="true" is required alongside supportedRuntime, not
+       optional - omitting it reproduces the exact same failure. -->
+  <ItemGroup>
+    <Content Include="CustomAction.config" />
+  </ItemGroup>
+
 </Project>
