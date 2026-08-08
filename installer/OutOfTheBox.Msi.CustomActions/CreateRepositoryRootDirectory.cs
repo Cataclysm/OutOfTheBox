@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using WixToolset.Dtf.WindowsInstaller;
 
 namespace OutOfTheBox.Msi.CustomActions
@@ -10,7 +13,9 @@ namespace OutOfTheBox.Msi.CustomActions
     /// <c>ConfigDlg</c> field bound to <c>OutOfTheBox__RootDirectory</c>) exists before the service
     /// starts, so a fresh path typed into the config dialog doesn't leave the service pointed at a
     /// directory that was never created - a real gap, since nothing else in the install ever
-    /// touches this path.
+    /// touches this path. Also grants the service account explicit NTFS rights on it, recursively -
+    /// see <see cref="GrantServiceAccountAccess"/>'s own remarks for why this is necessary and not
+    /// just belt-and-suspenders.
     /// </summary>
     public static class CreateRepositoryRootDirectoryAction
     {
@@ -23,17 +28,103 @@ namespace OutOfTheBox.Msi.CustomActions
         public static void EnsureExists(string path) => Directory.CreateDirectory(path);
 
         /// <summary>
+        /// Grants <paramref name="accountName"/> full control of <paramref name="path"/> - the
+        /// directory itself (with inheritance, so newly created repositories automatically pick it
+        /// up) and, since inheritance only ever applies going forward, every already-existing file
+        /// and subdirectory too (a repository cloned before this fix ran, or by a different
+        /// identity entirely, e.g. an operator's own interactive <c>git clone</c>).
+        ///
+        /// Found necessary on real-machine use: <see cref="Directory.CreateDirectory(string)"/>
+        /// above gives the new directory whatever ACL its parent's default inheritance provides,
+        /// which does not include the dedicated, non-administrator service account this MSI creates
+        /// (<c>util:User</c>, per design.md's least-privilege risk mitigation) - unlike the data
+        /// directory, which gets an explicit grant via <c>util:PermissionEx</c> in <c>Package.wxs</c>
+        /// because its path is fixed at compile time, the repository root's path is only known at
+        /// install time (it's operator-typed), so the equivalent grant has to happen imperatively
+        /// here instead of declaratively in WiX. Deletion is where this surfaced concretely: an
+        /// operator's own git checkout containing files (e.g. pack objects under
+        /// <c>.git\objects\pack\</c>) the service account had no ACL entry for at all failed with
+        /// <c>UnauthorizedAccessException</c> ("Access ... is denied") even after clearing the
+        /// read-only attribute (a genuinely different problem - a missing ACE, not a set attribute)
+        /// - reachable by any operator who created content in the repository root before installing,
+        /// or manually alongside the service, not just a same-class variant of the account-SID-
+        /// recreation problem <c>ConfigureGitSafeDirectoryAction</c> already documents for git's own
+        /// trust check.
+        /// </summary>
+        public static void GrantServiceAccountAccess(string path, string accountName)
+        {
+            var account = new NTAccount(accountName);
+
+            // Files can't carry inheritance flags at all (they have no children to propagate to) -
+            // .NET's AddAccessRule throws ArgumentException if any are set on a file-targeted rule,
+            // so directories and files need their own rule instances, not one shared between them.
+            var directoryRule = new FileSystemAccessRule(
+                account,
+                FileSystemRights.FullControl,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None,
+                AccessControlType.Allow);
+            var fileRule = new FileSystemAccessRule(account, FileSystemRights.FullControl, AccessControlType.Allow);
+
+            ApplyRule(new DirectoryInfo(path), directoryRule);
+
+            // Best-effort per item: one inaccessible leftover (e.g. from a prior partial failure)
+            // shouldn't stop the rest of the tree from being fixed.
+            foreach (var directory in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
+            {
+                TryApplyRule(new DirectoryInfo(directory), directoryRule);
+            }
+
+            foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            {
+                TryApplyRule(new FileInfo(file), fileRule);
+            }
+        }
+
+        private static void TryApplyRule(FileSystemInfo item, FileSystemAccessRule rule)
+        {
+            try
+            {
+                ApplyRule(item, rule);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+            {
+            }
+        }
+
+        private static void ApplyRule(FileSystemInfo item, FileSystemAccessRule rule)
+        {
+            switch (item)
+            {
+                case DirectoryInfo directory:
+                    var directorySecurity = directory.GetAccessControl();
+                    directorySecurity.AddAccessRule(rule);
+                    directory.SetAccessControl(directorySecurity);
+                    break;
+                case FileInfo file:
+                    var fileSecurity = file.GetAccessControl();
+                    fileSecurity.AddAccessRule(rule);
+                    file.SetAccessControl(fileSecurity);
+                    break;
+            }
+        }
+
+        /// <summary>
         /// MSI custom action entry point - scheduled in <c>InstallExecuteSequence</c> only (not
         /// <c>InstallUISequence</c>, unlike <c>ResolveSecrets</c>): <c>REPOSITORYROOTDIR</c> only holds
         /// its final, operator-confirmed value once <c>ConfigDlg</c> has been through and the
         /// installer has moved on to actually installing - running this any earlier would create
         /// the property's still-default value (<c>C:\repositories</c>) before the operator ever got a
-        /// chance to type a different path.
+        /// chance to type a different path. Runs on every install and upgrade, not just a fresh
+        /// install - re-granting an already-held right is harmless, and an upgrade is exactly when a
+        /// repository root with pre-existing content most needs this applied.
         /// </summary>
         [CustomAction]
         public static ActionResult CreateRepositoryRootDirectory(Session session)
         {
-            EnsureExists(session["REPOSITORYROOTDIR"]);
+            var path = session["REPOSITORYROOTDIR"];
+            EnsureExists(path);
+            GrantServiceAccountAccess(path, session["SERVICEACCOUNTNAME"]);
             return ActionResult.Success;
         }
     }

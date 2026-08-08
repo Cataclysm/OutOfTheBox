@@ -2,12 +2,21 @@
 
 using System;
 using System.IO;
+using System.Linq;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Xunit;
 
 namespace OutOfTheBox.Msi.CustomActions.Tests
 {
     public class CreateRepositoryRootDirectoryTests
     {
+        // The real MSI grants svc-outofthebox, which won't exist on a dev/CI machine - the current
+        // process' own identity is a stand-in that's guaranteed to exist and, since a temp
+        // directory this process creates is always owned by it, doesn't need elevation to modify
+        // (WRITE_DAC on an object you own doesn't require any special privilege).
+        private static readonly string TestAccountName = WindowsIdentity.GetCurrent().Name;
+
         [Fact]
         public void EnsureExists_creates_a_missing_directory()
         {
@@ -45,5 +54,57 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
                 Directory.Delete(path, recursive: true);
             }
         }
+
+        [Fact]
+        public void GrantServiceAccountAccess_grants_full_control_on_the_root_itself()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+
+            try
+            {
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
+
+                Assert.True(HasFullControlRule(new DirectoryInfo(path).GetAccessControl()));
+            }
+            finally
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void GrantServiceAccountAccess_reaches_pre_existing_subdirectories_and_files()
+        {
+            // The exact real-machine scenario this guards against: a repository that already
+            // existed (cloned before this fix ran, or by a different identity entirely) - inherited
+            // ACLs from a newly-added rule on the root never apply retroactively to it, so the grant
+            // has to walk the existing tree explicitly, not just set-and-forget on the root.
+            var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
+            var subdirectory = Path.Combine(path, "existing-repository", ".git", "objects", "pack");
+            Directory.CreateDirectory(subdirectory);
+            var packFile = Path.Combine(subdirectory, "pack-example.idx");
+            File.WriteAllText(packFile, "pack data");
+
+            try
+            {
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
+
+                Assert.True(HasFullControlRule(new DirectoryInfo(subdirectory).GetAccessControl()));
+                Assert.True(HasFullControlRule(new FileInfo(packFile).GetAccessControl()));
+            }
+            finally
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+
+        private static bool HasFullControlRule(FileSystemSecurity security) =>
+            security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(NTAccount))
+                .Cast<FileSystemAccessRule>()
+                .Any(rule =>
+                    rule.IdentityReference.Value.Equals(TestAccountName, StringComparison.OrdinalIgnoreCase) &&
+                    rule.AccessControlType == AccessControlType.Allow &&
+                    (rule.FileSystemRights & FileSystemRights.FullControl) == FileSystemRights.FullControl);
     }
 }
