@@ -50,7 +50,7 @@ window.outOfTheBoxCharts = (() => {
                 parsing: false,
                 normalized: true,
                 scales: {
-                    x: { type: "time", ticks: { maxRotation: 0 } },
+                    x: { type: "time", ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                     y: { beginAtZero: true },
                 },
             },
