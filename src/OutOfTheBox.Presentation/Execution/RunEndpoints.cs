@@ -163,6 +163,26 @@ public static class RunEndpoints
                     run.Outcome = RunOutcome.Cancelled;
                 }
             }
+            catch (IOException)
+            {
+                // A hard connection reset (the caller's process died, or the network reset without
+                // a clean close) surfaces here as IOException/ConnectionResetException, NOT
+                // OperationCanceledException - a genuinely different exception shape from every
+                // other termination path above, first found on real-machine use: a run's output
+                // stream can fail mid-write this way while the underlying process is still running,
+                // and unlike a graceful RequestAborted, nothing here was catching it - the exception
+                // propagated straight out of this handler, the process still got killed (linkedCts
+                // still observes the same abort and reaches CliProcessRunner's kill registration),
+                // but run.Outcome was never updated, leaving the row parked at Running forever
+                // regardless of any configured timeout. Recorded the same way an ordinary disconnect
+                // is - the distinction between "clean abort" and "hard reset" isn't meaningful to an
+                // operator looking at run history.
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Stdout = sink.Stdout;
+                run.Stderr = sink.Stderr;
+                run.Truncated = sink.Truncated;
+                run.Outcome = RunOutcome.Cancelled;
+            }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
             runEventBus.Publish(new RunEvent(runId, kind, RunEventType.Terminal, repoRoot));

@@ -136,6 +136,16 @@ public static class ArtifactTransferEndpoints
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = timeoutCts.IsCancellationRequested ? RunOutcome.TimedOut : RunOutcome.Cancelled;
             }
+            catch (IOException)
+            {
+                // A hard connection reset surfaces as IOException/ConnectionResetException, not
+                // OperationCanceledException - see the matching catch in RunEndpoints.cs for the
+                // full explanation (found on real-machine use: this exception type was escaping
+                // uncaught, leaving the run parked at Running even after the timeout fix above
+                // narrowed the window it could happen in).
+                run.CompletedAt = DateTimeOffset.UtcNow;
+                run.Outcome = RunOutcome.Cancelled;
+            }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
             runEventBus.Publish(new RunEvent(runId, RunKind.ArtifactTransfer, RunEventType.Terminal, repoRoot));
