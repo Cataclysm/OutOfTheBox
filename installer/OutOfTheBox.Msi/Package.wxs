@@ -316,7 +316,7 @@
          subtly-diverge hand-copy of stock behavior (five install/change/repair/remove/update
          states, each with disk-space-exhaustion sub-branches) that no longer earns its risk. -->
     <UI>
-      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Configure [ProductName]">
+      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Configure options">
         <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" Text="WixUI_Bmp_Banner" TabSkip="no" />
         <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="373" Height="0" />
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="373" Height="0" />
@@ -331,24 +331,32 @@
              opaque background box, which is exactly what showed up as an "unwanted background"
              once this title moved onto the banner bitmap. Every other control here sits on the
              plain dialog body below the banner (no bitmap under it), so none of them need it. -->
-        <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure [ProductName] v[ProductVersion]" />
+        <Control Id="Title" Type="Text" X="15" Y="15" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Configure options" />
         <!-- Shown only on an upgrade (EXISTINGVERSION is only non-empty when the version-persist
              RegistryValue from a prior install's PersistedSecretsComponent was found during
              AppSearch) - a fresh install shows nothing here, not an empty "Upgrading from v"
              line. -->
-        <Control Id="UpgradeNotice" Type="Text" X="15" Y="58" Width="340" Height="15" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
+        <Control Id="UpgradeNotice" Type="Text" X="15" Y="53" Width="340" Height="15" NoPrefix="yes" Text="Upgrading from version [EXISTINGVERSION]"
                  HideCondition="EXISTINGVERSION = &quot;&quot;" ShowCondition="EXISTINGVERSION &lt;&gt; &quot;&quot;" />
-        <Control Id="Description" Type="Text" X="15" Y="75" Width="340" Height="20" NoPrefix="yes"
+        <!-- X=25/Width=320, Y=70 (not X=15/W=340 like the title above) - matches VerifyReadyDlg's
+             own InstallText exactly (X=25 Y=70 W=320 on the same 370-wide dialog): same top
+             spacing below the banner/title, and left/right padding equal (25 each side:
+             370 - 25 - 320 = 25) the way every stock dialog's body content does, distinct from the
+             title's own flush-left placement. -->
+        <Control Id="Description" Type="Text" X="25" Y="70" Width="320" Height="20" NoPrefix="yes"
                  Text="These values are written into the Windows Service's own environment and can be changed later by editing the registry or reinstalling." />
 
-        <Control Id="RepoRootLabel" Type="Text" X="15" Y="100" Width="340" Height="15" NoPrefix="yes" Text="Repository root directory:" />
-        <Control Id="RepoRootEdit" Type="Edit" X="15" Y="115" Width="340" Height="18" Property="REPOROOTDIR" Text="{80}" />
+        <!-- Y=100 - a deliberate 5px-larger gap after the title/description block above (whose own
+             top position now matches VerifyReadyDlg's), separating it from the interactive fields
+             below; every field after this one is positioned relative to this same anchor. -->
+        <Control Id="RepoRootLabel" Type="Text" X="25" Y="100" Width="320" Height="15" NoPrefix="yes" Text="Repository root directory:" />
+        <Control Id="RepoRootEdit" Type="Edit" X="25" Y="115" Width="320" Height="18" Property="REPOROOTDIR" Text="{80}" />
 
-        <Control Id="BearerTokenLabel" Type="Text" X="15" Y="140" Width="340" Height="15" NoPrefix="yes" Text="Bearer token (sbx caller and web interface):" />
-        <Control Id="BearerTokenEdit" Type="Edit" X="15" Y="155" Width="340" Height="18" Property="BEARERTOKEN" Text="{80}" />
+        <Control Id="BearerTokenLabel" Type="Text" X="25" Y="140" Width="320" Height="15" NoPrefix="yes" Text="Bearer token (sbx caller and web interface):" />
+        <Control Id="BearerTokenEdit" Type="Edit" X="25" Y="155" Width="320" Height="18" Property="BEARERTOKEN" Text="{80}" />
 
-        <Control Id="PortLabel" Type="Text" X="15" Y="180" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
-        <Control Id="PortEdit" Type="Edit" X="15" Y="195" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
+        <Control Id="PortLabel" Type="Text" X="25" Y="180" Width="150" Height="15" NoPrefix="yes" Text="Port:" />
+        <Control Id="PortEdit" Type="Edit" X="25" Y="195" Width="80" Height="18" Property="PORTNUMBER" Text="{80}" />
 
         <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
           <Publish Event="NewDialog" Value="WelcomeDlg" Order="1" />
