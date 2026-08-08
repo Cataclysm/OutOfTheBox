@@ -51,13 +51,22 @@
                             DownloadUrl="https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.302/dotnet-sdk-10.0.302-win-x64.exe" />
       </ExePackage>
 
+      <!-- ExePackagePayload/@Hash must be SHA-512 (128 hex chars) - Burn computes/compares SHA-512
+           regardless of what you supply, so a SHA-256 value (64 hex chars, `Get-FileHash`'s
+           default -Algorithm) silently fails verification with a length-mismatched "actual" hash
+           in the log rather than erroring at build time. Real bug, not hypothetical: this exact
+           package's hash was originally captured as SHA-256 (a `Get-FileHash` default-algorithm
+           slip against the SdkPackage's above, which was correctly captured as SHA-512), and only
+           surfaced on a real install attempt - `wix msi validate`/`dotnet build` don't check
+           payload hashes against anything, so this shipped for a while unnoticed. Always pass
+           `-Algorithm SHA512` explicitly when (re-)capturing an ExePackagePayload hash. -->
       <ExePackage Id="GitForWindowsPackage"
                   InstallArguments="/VERYSILENT /NORESTART /NOCANCEL /SP-"
                   DetectCondition="GitInstallPath"
                   Permanent="yes"
                   Vital="yes">
         <ExePackagePayload Name="Git-2.55.0.3-64-bit.exe"
-                            Hash="af12577d0fdff74243a5988197aa49b957d5044edc17004f6ddf0768996f1dca"
+                            Hash="ef723f34ce8c0c1f8ef9eb7746f77e4ab6129aa7c7dcf501bee56f522ff2c57ff013f9a69db141ad04c9d1b90b4f1bbd22b6028218e3ae68eb4efec861d63f65"
                             Size="65388144"
                             DownloadUrl="https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.3/Git-2.55.0.3-64-bit.exe" />
       </ExePackage>
