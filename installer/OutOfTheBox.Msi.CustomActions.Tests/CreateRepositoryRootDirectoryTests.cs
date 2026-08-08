@@ -82,19 +82,23 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         [Fact]
         public void GrantServiceAccountAccess_throws_when_the_account_does_not_exist()
         {
-            // The exact real-machine bug this action's own scheduling fix guards against: called
-            // before the service account is created (or, in this test, an account that never
-            // exists at all), NTAccount.Translate throws IdentityNotMappedException - the
-            // CreateRepositoryRootDirectory entry point relies on this propagating rather than being
-            // swallowed here, since a total grant failure (as opposed to one bad file among many) is
-            // exactly the case it treats as a genuine, install-should-fail condition.
+            // The exact real-machine bug this action's own retry logic guards against: SID
+            // resolution for an account created moments earlier can transiently fail with
+            // IdentityNotMappedException even though the account genuinely exists (a documented LSA
+            // cache-lag issue, not a bug in this code) - GrantServiceAccountAccess retries a few
+            // times before giving up. For a *genuinely* nonexistent account (this test), every retry
+            // fails the same way, and the exception should still propagate once attempts are
+            // exhausted - the internal overload's short retry policy keeps this test fast instead of
+            // actually waiting out production's full SidResolveMaxAttempts x SidResolveRetryDelay.
             var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(path);
 
             try
             {
                 Assert.ThrowsAny<IdentityNotMappedException>(
-                    () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, ".", "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N")));
+                    () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(
+                        path, ".", "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N"),
+                        maxAttempts: 2, retryDelay: TimeSpan.FromMilliseconds(10)));
             }
             finally
             {
