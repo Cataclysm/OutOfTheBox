@@ -36,7 +36,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         });
 
         var gitCheckbox = cut.FindAll("input[type=checkbox]")
-            .Single(input => input.ParentElement!.TextContent.Trim() == nameof(RunKind.GitCommand));
+            .Single(input => input.ParentElement!.TextContent.Trim() == RunKind.GitCommand.ShortLabel());
         gitCheckbox.Change(true);
 
         cut.WaitForAssertion(() =>
@@ -56,7 +56,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         var cut = Render<History>();
         cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
 
-        cut.Find("input[placeholder='repository path']").Input(@"C:\repositories\alpha");
+        cut.Find("input[placeholder='Repository path']").Input(@"C:\repositories\alpha");
 
         cut.WaitForAssertion(() =>
         {
@@ -75,7 +75,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         var cut = Render<History>();
         cut.WaitForAssertion(() => Assert.Contains("unrelated", cut.Markup));
 
-        cut.Find("input[placeholder*='search']").Input("needle");
+        cut.Find("input[placeholder*='Search']").Input("needle");
 
         // The search box debounces for 300ms before querying - WaitForAssertion's own retry
         // window (bUnit's default) comfortably covers that.
@@ -96,7 +96,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         var cut = Render<History>();
         cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\alpha", cut.Markup));
 
-        cut.Find("input[placeholder='repository path']").Input(@"C:\repositories\alpha");
+        cut.Find("input[placeholder='Repository path']").Input(@"C:\repositories\alpha");
         cut.WaitForAssertion(() => Assert.DoesNotContain(@"C:\repositories\beta", cut.Markup));
 
         var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");

@@ -3,13 +3,13 @@
 @inject IChartInterop ChartInterop
 @implements IAsyncDisposable
 
-@if (_series.Count > 0)
-{
-    <div class="resource-graphs">
-        @if (Note is not null)
-        {
-            <p class="run-graph-note">@Note</p>
-        }
+<div class="resource-graphs">
+    @if (Note is not null)
+    {
+        <p class="run-graph-note">@Note</p>
+    }
+    @if (_series.Count > 0)
+    {
         <div class="resource-graph">
             <span class="resource-graph-label">CPU %</span>
             <canvas id="@_cpuCanvasId"></canvas>
@@ -18,8 +18,12 @@
             <span class="resource-graph-label">RAM</span>
             <canvas id="@_ramCanvasId"></canvas>
         </div>
-    </div>
-}
+    }
+    else
+    {
+        <p class="empty-state">No resource activity was recorded for this run.</p>
+    }
+</div>
 
 @code {
     /// <summary>The run whose full persisted resource-usage series (per specs/run-history) this graph renders.</summary>

@@ -59,10 +59,10 @@ else
         {
             <li class="status-run">
                 <div class="run-row">
-                    <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
+                    <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span>
                     <span class="run-repository">@run.RepositoryPath</span>
                     <span class="run-id">@run.Id</span>
-                    <span class="run-detail">@DetailFor(run)</span>
+                    <span class="run-detail">@RunDisplay.Detail(run)</span>
                     <span class="run-elapsed">@Elapsed(run)</span>
                     <button type="button" class="run-graph-toggle" @onclick="@(() => ToggleExpanded(run.Id))">@(_expandedRunIds.Contains(run.Id) ? "Hide graph" : "Show graph")</button>
                 </div>
@@ -163,14 +163,6 @@ else
             _expandedRunIds.Add(runId);
         }
     }
-
-    private static string DetailFor(Run run) => run.Kind switch
-    {
-        RunKind.DotnetCommand or RunKind.GitCommand => run.Arguments is null ? string.Empty : string.Join(' ', run.Arguments),
-        RunKind.FileTransfer => run.FilePath ?? string.Empty,
-        RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
-        _ => string.Empty,
-    };
 
     private static string Elapsed(Run run)
     {

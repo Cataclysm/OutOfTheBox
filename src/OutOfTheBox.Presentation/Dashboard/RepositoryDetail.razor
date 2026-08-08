@@ -7,8 +7,11 @@
 @inject IRepositoryManager RepositoryManager
 @inject IRunRepository RunRepository
 @inject IWorkingDirectoryResolver WorkingDirectoryResolver
+@inject NavigationManager NavigationManager
 
 <PageTitle>@VersionInfo.DisplayName - @Name</PageTitle>
+
+<a class="back-link" href="repository-management">← Back to Repositories</a>
 
 <h1>@Name</h1>
 
@@ -22,7 +25,7 @@ else
         <dt>Status</dt>
         <dd>@(_summary.IsActive ? "Active" : "Idle")</dd>
         <dt>Size</dt>
-        <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "computing…")</dd>
+        <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "Computing…")</dd>
         <dt>Git status</dt>
         <dd>@GitStatusText(_summary)</dd>
     </dl>
@@ -40,20 +43,27 @@ else if (_runs.Count == 0)
 }
 else
 {
-    <ul class="run-list">
-        @foreach (var run in _runs)
-        {
-            <li class="run-row">
-                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
-                <span class="run-outcome">@run.Outcome</span>
-                <span class="run-started">@FormatDateTime(run.StartedAt)</span>
-                @if (run.Kind is RunKind.DotnetCommand or RunKind.GitCommand or RunKind.RepositoryClone)
-                {
-                    <a href="@($"history/{run.Id}")">View</a>
-                }
-            </li>
-        }
-    </ul>
+    <table class="data-table clickable-rows">
+        <thead>
+            <tr>
+                <th @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Detail))">Detail@(SortIndicator(SortColumn.Detail))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var run in SortedRuns())
+            {
+                <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
+                    <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
+                    <td>@run.Outcome.Label()</td>
+                    <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
+                    <td>@FormatDateTime(run.StartedAt)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
 }
 
 @code {
@@ -63,6 +73,16 @@ else
 
     private RepositorySummary? _summary;
     private IReadOnlyList<Run>? _runs;
+    private SortColumn _sortColumn = SortColumn.Started;
+    private bool _sortAscending;
+
+    private enum SortColumn
+    {
+        Kind,
+        Outcome,
+        Detail,
+        Started,
+    }
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -79,16 +99,44 @@ else
             : [];
     }
 
+    private void SortBy(SortColumn column)
+    {
+        if (_sortColumn == column)
+        {
+            _sortAscending = !_sortAscending;
+        }
+        else
+        {
+            _sortColumn = column;
+            _sortAscending = true;
+        }
+    }
+
+    private string SortIndicator(SortColumn column) => _sortColumn == column ? (_sortAscending ? " ▲" : " ▼") : string.Empty;
+
+    private IEnumerable<Run> SortedRuns()
+    {
+        IEnumerable<Run> ordered = _sortColumn switch
+        {
+            SortColumn.Kind => _runs!.OrderBy(r => r.Kind.ShortLabel(), StringComparer.OrdinalIgnoreCase),
+            SortColumn.Outcome => _runs!.OrderBy(r => r.Outcome.Label(), StringComparer.OrdinalIgnoreCase),
+            SortColumn.Detail => _runs!.OrderBy(RunDisplay.Detail, StringComparer.OrdinalIgnoreCase),
+            _ => _runs!.OrderBy(r => r.StartedAt),
+        };
+
+        return _sortAscending ? ordered : ordered.Reverse();
+    }
+
     private static string GitStatusText(RepositorySummary repository)
     {
         if (!repository.StatsComputed)
         {
-            return "computing…";
+            return "Computing…";
         }
 
         if (!repository.IsGitRepository)
         {
-            return "not a git repository";
+            return "Not a git repository";
         }
 
         var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";

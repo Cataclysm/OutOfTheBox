@@ -666,6 +666,91 @@ input[type="checkbox"] {
     background: var(--border-strong);
 }
 
+.back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.back-link:hover {
+    color: var(--accent);
+}
+
+/* Sortable, column-aligned lists (History, Repositories, and a repository's own run-history
+   sub-list) - replaces the earlier flex-row "card list" markup, which didn't align across rows. */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    table-layout: fixed;
+}
+
+.data-table th, .data-table td {
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--bg-sunken);
+    user-select: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.data-table th:hover {
+    color: var(--text);
+}
+
+.data-table th.not-sortable {
+    cursor: default;
+}
+
+.data-table th.not-sortable:hover {
+    color: var(--text-muted);
+}
+
+.data-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.clickable-rows tbody tr {
+    cursor: pointer;
+}
+
+.clickable-rows tbody tr:hover {
+    background: #232733;
+}
+
+.data-table td.actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Long free-text cell content (repository paths, commands, file paths, URLs) - truncated with an
+   ellipsis rather than wrapping or overflowing the table; the full value is on the title tooltip. */
+.ellipsis {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Key/value stat blocks (repository detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
 dl {
     display: grid;

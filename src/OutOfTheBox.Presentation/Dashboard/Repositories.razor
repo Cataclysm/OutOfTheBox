@@ -8,6 +8,7 @@
 @inject IRunRepository RunRepository
 @inject RunRegistry RunRegistry
 @inject IRunEventBus RunEventBus
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Repositories</PageTitle>
@@ -17,7 +18,7 @@
 <div class="history-filters">
     <label>
         Search
-        <input type="text" @bind="_searchText" @bind:event="oninput" placeholder="repository name" />
+        <input type="text" @bind="_searchText" @bind:event="oninput" placeholder="Repository name" />
     </label>
     <label>
         <input type="checkbox" @bind="_activeOnly" /> Active only
@@ -67,27 +68,40 @@ else
     }
     else
     {
-        <ul class="run-list">
-            @foreach (var repository in filtered)
-            {
-                <li class="run-row">
-                    <span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span>
-                    <a href="@($"repository-management/{repository.Name}")">@repository.Name</a>
-                    <span>@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "computing…")</span>
-                    <span>@GitStatusText(repository)</span>
-                    @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
-                    {
-                        <button type="button" @onclick="@(() => CancelCloneAsync(cloneRunId))">Cancel clone</button>
-                    }
-                    else
-                    {
-                        <button type="button" class="@(_deleteConfirmName == repository.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repository.Name))">
-                            @(_deleteConfirmName == repository.Name ? "Confirm delete?" : "Delete")
-                        </button>
-                    }
-                </li>
-            }
-        </ul>
+        <table class="data-table clickable-rows">
+            <thead>
+                <tr>
+                    <th @onclick="@(() => SortBy(SortColumn.Status))">Status@(SortIndicator(SortColumn.Status))</th>
+                    <th @onclick="@(() => SortBy(SortColumn.Name))">Name@(SortIndicator(SortColumn.Name))</th>
+                    <th @onclick="@(() => SortBy(SortColumn.Size))">Size@(SortIndicator(SortColumn.Size))</th>
+                    <th @onclick="@(() => SortBy(SortColumn.GitStatus))">Git status@(SortIndicator(SortColumn.GitStatus))</th>
+                    <th class="not-sortable">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var repository in Sorted(filtered))
+                {
+                    <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
+                        <td><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
+                        <td class="ellipsis" title="@repository.Name">@repository.Name</td>
+                        <td>@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
+                        <td class="ellipsis" title="@GitStatusText(repository)">@GitStatusText(repository)</td>
+                        <td class="actions" @onclick:stopPropagation="true">
+                            @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
+                            {
+                                <button type="button" @onclick="@(() => CancelCloneAsync(cloneRunId))">Cancel clone</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="@(_deleteConfirmName == repository.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repository.Name))">
+                                    @(_deleteConfirmName == repository.Name ? "Confirm delete?" : "Delete")
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 }
 
@@ -103,6 +117,16 @@ else
     private bool _activeOnly;
     private string _gitStatusFilter = string.Empty;
     private string? _deleteConfirmName;
+    private SortColumn _sortColumn = SortColumn.Name;
+    private bool _sortAscending = true;
+
+    private enum SortColumn
+    {
+        Status,
+        Name,
+        Size,
+        GitStatus,
+    }
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -167,6 +191,34 @@ else
         _gitStatusFilter = string.Empty;
     }
 
+    private void SortBy(SortColumn column)
+    {
+        if (_sortColumn == column)
+        {
+            _sortAscending = !_sortAscending;
+        }
+        else
+        {
+            _sortColumn = column;
+            _sortAscending = true;
+        }
+    }
+
+    private string SortIndicator(SortColumn column) => _sortColumn == column ? (_sortAscending ? " ▲" : " ▼") : string.Empty;
+
+    private IEnumerable<RepositorySummary> Sorted(IReadOnlyList<RepositorySummary> repositories)
+    {
+        IEnumerable<RepositorySummary> ordered = _sortColumn switch
+        {
+            SortColumn.Status => repositories.OrderBy(r => r.IsActive),
+            SortColumn.Size => repositories.OrderBy(r => r.TotalSizeBytes),
+            SortColumn.GitStatus => repositories.OrderBy(GitStatusText, StringComparer.OrdinalIgnoreCase),
+            _ => repositories.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase),
+        };
+
+        return _sortAscending ? ordered : ordered.Reverse();
+    }
+
     private async Task SubmitCloneAsync()
     {
         _cloneError = null;
@@ -221,12 +273,12 @@ else
     {
         if (!repository.StatsComputed)
         {
-            return "computing…";
+            return "Computing…";
         }
 
         if (!repository.IsGitRepository)
         {
-            return "not a git repository";
+            return "Not a git repository";
         }
 
         var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";

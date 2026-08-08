@@ -76,7 +76,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("TimedOut", cut.Markup);
+            Assert.Contains("Timed Out", cut.Markup);
             Assert.Contains("Output was truncated", cut.Markup);
         });
     }
@@ -146,7 +146,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
-        cut.WaitForAssertion(() => Assert.Contains("AlreadyExists", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("Already Exists", cut.Markup));
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
-        cut.WaitForAssertion(() => Assert.Contains("NotFound", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("Not Found", cut.Markup));
     }
 
     [Fact]
@@ -270,10 +270,11 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
-    public async Task No_resource_graph_is_rendered_when_the_run_has_no_persisted_samples()
+    public async Task An_empty_state_message_is_shown_when_the_run_has_no_persisted_samples()
     {
         // A repository delete never gets a resource sample (per §11's RunResourceSample entity
-        // note) - the graph component must degrade to rendering nothing, not an empty/broken chart.
+        // note) - the graph section must still render (so the page has a consistent shape across
+        // every run kind), just with an empty-state message instead of a chart with nothing to plot.
         var run = await AddRunAsync(new Run
         {
             Id = Guid.NewGuid(),
@@ -287,6 +288,7 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
         cut.WaitForAssertion(() => Assert.Contains(@"C:\repositories\removed-repository", cut.Markup));
+        Assert.Contains("No resource activity was recorded for this run.", cut.Markup);
         Assert.Empty(_chartInterop.CreatedCanvasIds);
     }
 

@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Globalization
 @inject IRunRepository RunRepository
+@inject NavigationManager NavigationManager
 
 <PageTitle>@VersionInfo.DisplayName - History</PageTitle>
 
@@ -14,7 +15,7 @@
         {
             <label>
                 <input type="checkbox" checked="@_selectedKinds.Contains(kind)" @onchange="@(e => ToggleKind(kind, (bool)e.Value!))" />
-                @kind
+                @kind.ShortLabel()
             </label>
         }
     </fieldset>
@@ -25,19 +26,19 @@
             <option value="">(any)</option>
             @foreach (var outcome in AllOutcomes)
             {
-                <option value="@outcome">@outcome</option>
+                <option value="@outcome">@outcome.Label()</option>
             }
         </select>
     </label>
 
     <label>
         Repository
-        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="repository path" />
+        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="Repository path" />
     </label>
 
     <label>
         Search
-        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="search repository, arguments, file path, source url" />
+        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="Search repository, arguments, file path, source URL" />
     </label>
 
     <button type="button" @onclick="ClearFiltersAsync">Clear filters</button>
@@ -53,18 +54,29 @@ else if (_runs.Count == 0)
 }
 else
 {
-    <ul class="run-list">
-        @foreach (var run in _runs)
-        {
-            <li class="run-row">
-                <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind</span>
-                <span class="run-outcome">@run.Outcome</span>
-                <span class="run-repository">@run.RepositoryPath</span>
-                <span class="run-started">@FormatDateTime(run.StartedAt)</span>
-                <a href="@($"history/{run.Id}")">View</a>
-            </li>
-        }
-    </ul>
+    <table class="data-table clickable-rows">
+        <thead>
+            <tr>
+                <th @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Repository))">Repository@(SortIndicator(SortColumn.Repository))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Detail))">Detail@(SortIndicator(SortColumn.Detail))</th>
+                <th @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var run in SortedRuns())
+            {
+                <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
+                    <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
+                    <td>@run.Outcome.Label()</td>
+                    <td class="ellipsis" title="@run.RepositoryPath">@run.RepositoryPath</td>
+                    <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
+                    <td>@FormatDateTime(run.StartedAt)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
 }
 
 @code {
@@ -77,6 +89,17 @@ else
     private string _searchText = string.Empty;
     private IReadOnlyList<Run>? _runs;
     private CancellationTokenSource? _debounceCts;
+    private SortColumn _sortColumn = SortColumn.Started;
+    private bool _sortAscending;
+
+    private enum SortColumn
+    {
+        Kind,
+        Outcome,
+        Repository,
+        Detail,
+        Started,
+    }
 
     /// <inheritdoc />
     protected override Task OnInitializedAsync() => RefreshAsync();
@@ -139,6 +162,35 @@ else
         };
 
         _runs = await RunRepository.ListAsync(query, CancellationToken.None);
+    }
+
+    private void SortBy(SortColumn column)
+    {
+        if (_sortColumn == column)
+        {
+            _sortAscending = !_sortAscending;
+        }
+        else
+        {
+            _sortColumn = column;
+            _sortAscending = true;
+        }
+    }
+
+    private string SortIndicator(SortColumn column) => _sortColumn == column ? (_sortAscending ? " ▲" : " ▼") : string.Empty;
+
+    private IEnumerable<Run> SortedRuns()
+    {
+        IEnumerable<Run> ordered = _sortColumn switch
+        {
+            SortColumn.Kind => _runs!.OrderBy(r => r.Kind.ShortLabel(), StringComparer.OrdinalIgnoreCase),
+            SortColumn.Outcome => _runs!.OrderBy(r => r.Outcome.Label(), StringComparer.OrdinalIgnoreCase),
+            SortColumn.Repository => _runs!.OrderBy(r => r.RepositoryPath, StringComparer.OrdinalIgnoreCase),
+            SortColumn.Detail => _runs!.OrderBy(RunDisplay.Detail, StringComparer.OrdinalIgnoreCase),
+            _ => _runs!.OrderBy(r => r.StartedAt),
+        };
+
+        return _sortAscending ? ordered : ordered.Reverse();
     }
 
     // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.

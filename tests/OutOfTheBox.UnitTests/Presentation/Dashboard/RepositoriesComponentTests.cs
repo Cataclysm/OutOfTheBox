@@ -122,7 +122,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
             Assert.Contains("repository-b", cut.Markup);
         });
 
-        var searchInput = cut.Find("input[placeholder='repository name']");
+        var searchInput = cut.Find("input[placeholder='Repository name']");
         searchInput.Input("repository-a");
 
         cut.WaitForAssertion(() =>
@@ -138,7 +138,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
         var cut = Render<Repositories>();
         cut.WaitForAssertion(() => Assert.Contains("repository-a", cut.Markup));
 
-        cut.Find("input[placeholder='repository name']").Input("repository-a");
+        cut.Find("input[placeholder='Repository name']").Input("repository-a");
         cut.WaitForAssertion(() => Assert.DoesNotContain("repository-b", cut.Markup));
 
         var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");
