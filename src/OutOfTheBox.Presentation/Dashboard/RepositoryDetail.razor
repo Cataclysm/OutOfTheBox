@@ -71,6 +71,28 @@ else
             </dd>
         }
     </dl>
+
+    @if (_summary.IsGitRepository)
+    {
+        <div class="tab-group">
+            <button type="button" class="tab-button @(_activeTab == DetailTab.Commits ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.Commits)">Commits</button>
+            <button type="button" class="tab-button @(_activeTab == DetailTab.Files ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.Files)">Files</button>
+        </div>
+
+        @if (_activeTab == DetailTab.Commits)
+        {
+            <CommitGraph RepositoryName="@Name" />
+        }
+        else
+        {
+            <FileTree RepositoryName="@Name" />
+        }
+    }
+    else
+    {
+        <h2>Files</h2>
+        <FileTree RepositoryName="@Name" />
+    }
 }
 
 <h2>Run history</h2>
@@ -121,6 +143,13 @@ else
     private string? _cloneSourceUrl;
     private IReadOnlyList<RepositoryBranch> _branches = [];
     private string? _branchSwitchError;
+    private DetailTab _activeTab = DetailTab.Commits;
+
+    private enum DetailTab
+    {
+        Commits,
+        Files,
+    }
 
     private enum SortColumn
     {

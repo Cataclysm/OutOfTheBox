@@ -73,6 +73,19 @@ public sealed class GitDecorationParserTests
     }
 
     [Fact]
+    public void A_remotes_own_symbolic_HEAD_pointer_is_excluded()
+    {
+        // Real `git log --format=%D` output on a freshly cloned repo, verified against this
+        // repository's own history: "HEAD -> main, origin/main, origin/HEAD" - origin/HEAD is the
+        // remote's symbolic default-branch pointer, not an actual branch, and must not be shown as
+        // a "origin/HEAD" ref pill on the commit.
+        var refs = GitDecorationParser.Parse("HEAD -> main, origin/main, origin/HEAD", OriginOnly);
+
+        Assert.Equal(2, refs.Count);
+        Assert.DoesNotContain(refs, r => r.Name == "origin/HEAD");
+    }
+
+    [Fact]
     public void A_full_realistic_decoration_string_parses_every_token()
     {
         var refs = GitDecorationParser.Parse("HEAD -> main, origin/main, origin/feature/x, tag: v2.0", OriginOnly);

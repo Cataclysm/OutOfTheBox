@@ -1,0 +1,83 @@
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryFileBrowser FileBrowser
+@implements IDisposable
+
+<div class="file-tree">
+    @if (_entries is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (_entries.Count == 0)
+    {
+        <p class="empty-state">This repository is empty.</p>
+    }
+    else
+    {
+        @foreach (var entry in _entries)
+        {
+            <FileTreeNode
+                @key="entry.Name"
+                RepositoryName="@RepositoryName"
+                ParentRelativePath=""
+                Name="@entry.Name"
+                IsDirectory="@entry.IsDirectory"
+                SizeBytes="@entry.SizeBytes"
+                Depth="0"
+                OnChanged="LoadRootAsync"
+                ConfirmDialogRef="_confirmDialog!" />
+        }
+    }
+</div>
+
+<ConfirmDialog @ref="_confirmDialog" />
+
+@code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
+
+    /// <summary>Which repository's file tree to browse, rooted at that repository's own directory.</summary>
+    [Parameter, EditorRequired]
+    public string RepositoryName { get; set; } = string.Empty;
+
+    private IReadOnlyList<RepositoryFileEntry>? _entries;
+    private ConfirmDialog? _confirmDialog;
+    private CancellationTokenSource? _pollCts;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRootAsync();
+
+        // The repository root itself is always "expanded" (its contents are the tree's top level),
+        // so it polls the same way any other expanded FileTreeNode folder does.
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task LoadRootAsync()
+    {
+        _entries = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, CancellationToken.None);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(PollInterval, cancellationToken);
+                var fresh = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                _entries = fresh;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _pollCts?.Cancel();
+}

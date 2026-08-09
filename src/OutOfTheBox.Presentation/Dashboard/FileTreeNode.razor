@@ -1,0 +1,247 @@
+@using System.Globalization
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryFileBrowser FileBrowser
+@implements IDisposable
+
+<div class="file-tree-row" @onclick="OnRowClickAsync">
+    <Icon Name="@(IsDirectory ? (_expanded ? "folder-open" : "folder") : "file")" />
+
+    @if (_renaming)
+    {
+        <input class="file-tree-rename-input" value="@_renameValue" @oninput="@(e => _renameValue = e.Value?.ToString() ?? string.Empty)" @onclick:stopPropagation="true" @onkeydown="OnRenameKeyDownAsync" />
+        <span class="file-tree-actions" style="display: flex" @onclick:stopPropagation="true">
+            <button type="button" class="icon-button" title="Confirm rename" @onclick="ConfirmRenameAsync">
+                <Icon Name="confirm" />
+            </button>
+            <button type="button" class="icon-button" title="Cancel rename" @onclick="CancelRename">
+                <Icon Name="close" />
+            </button>
+        </span>
+    }
+    else
+    {
+        <span class="file-tree-name" title="@Name">@Name</span>
+        @if (!IsDirectory && SizeBytes is not null)
+        {
+            <span class="file-tree-meta">@FormatSize(SizeBytes.Value)</span>
+        }
+        <span class="file-tree-actions" @onclick:stopPropagation="true">
+            @if (!IsDirectory)
+            {
+                <a class="icon-button" title="Download" href="@DownloadUrl">
+                    <Icon Name="download" />
+                </a>
+            }
+            <button type="button" class="icon-button" title="Rename" @onclick="StartRename">
+                <Icon Name="pencil" />
+            </button>
+            <button type="button" class="icon-button icon-button-danger" title="Delete" @onclick="ConfirmDeleteAsync">
+                <Icon Name="trash" />
+            </button>
+        </span>
+    }
+</div>
+
+@if (IsDirectory && _expanded)
+{
+    <div class="file-tree-children">
+        @if (_children is null)
+        {
+            <p class="empty-state">Loading...</p>
+        }
+        else if (_children.Count == 0)
+        {
+            <p class="empty-state">Empty</p>
+        }
+        else
+        {
+            @foreach (var child in _children)
+            {
+                <FileTreeNode
+                    @key="child.Name"
+                    RepositoryName="@RepositoryName"
+                    ParentRelativePath="@RelativePath"
+                    Name="@child.Name"
+                    IsDirectory="@child.IsDirectory"
+                    SizeBytes="@child.SizeBytes"
+                    Depth="@(Depth + 1)"
+                    OnChanged="LoadChildrenAsync"
+                    ConfirmDialogRef="ConfirmDialogRef" />
+            }
+        }
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
+
+    /// <summary>Which repository this node belongs to.</summary>
+    [Parameter, EditorRequired]
+    public string RepositoryName { get; set; } = string.Empty;
+
+    /// <summary>The relative path of this node's parent directory (empty string for a top-level entry, directly under the repository root).</summary>
+    [Parameter]
+    public string ParentRelativePath { get; set; } = string.Empty;
+
+    /// <summary>This entry's own name within its parent directory.</summary>
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Whether this entry is a folder.</summary>
+    [Parameter]
+    public bool IsDirectory { get; set; }
+
+    /// <summary>The file's size in bytes; <see langword="null"/> for a folder.</summary>
+    [Parameter]
+    public long? SizeBytes { get; set; }
+
+    /// <summary>How many levels deep this node is - used only for the CSS indentation the parent's <c>.file-tree-children</c> margin already applies per level, kept as a parameter for a future non-CSS-based indentation need.</summary>
+    [Parameter]
+    public int Depth { get; set; }
+
+    /// <summary>Raised after this node is successfully renamed or deleted, so the parent reloads its own children list - the single source of truth for what's actually on disk, rather than this node privately mutating its own name.</summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    /// <summary>The single <see cref="ConfirmDialog"/> shared by the whole tree (per <see cref="FileTree"/>), reused for every node's delete confirmation rather than one dialog per row.</summary>
+    [Parameter, EditorRequired]
+    public ConfirmDialog ConfirmDialogRef { get; set; } = default!;
+
+    private bool _expanded;
+    private IReadOnlyList<RepositoryFileEntry>? _children;
+    private CancellationTokenSource? _pollCts;
+    private bool _renaming;
+    private string _renameValue = string.Empty;
+
+    private string RelativePath => string.IsNullOrEmpty(ParentRelativePath) ? Name : $"{ParentRelativePath}/{Name}";
+
+    private string DownloadUrl => $"/dashboard-files/{Uri.EscapeDataString(RepositoryName)}?path={Uri.EscapeDataString(RelativePath)}";
+
+    private async Task OnRowClickAsync()
+    {
+        if (!IsDirectory || _renaming)
+        {
+            return;
+        }
+
+        _expanded = !_expanded;
+
+        if (_expanded)
+        {
+            await LoadChildrenAsync();
+            StartPolling();
+        }
+        else
+        {
+            StopPolling();
+        }
+    }
+
+    private async Task LoadChildrenAsync()
+    {
+        _children = await FileBrowser.ListDirectoryAsync(RepositoryName, RelativePath, CancellationToken.None);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartPolling()
+    {
+        _pollCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _pollCts = cts;
+        _ = PollLoopAsync(cts.Token);
+    }
+
+    private void StopPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts = null;
+    }
+
+    // Re-lists just this one folder's own immediate children on a fixed interval while expanded -
+    // not the whole tree - per specs/service-dashboard's "An expanded folder reflects a change made
+    // elsewhere" requirement/scenario, independent of every other expanded node's own polling.
+    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(PollInterval, cancellationToken);
+                var fresh = await FileBrowser.ListDirectoryAsync(RepositoryName, RelativePath, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                _children = fresh;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void StartRename()
+    {
+        _renameValue = Name;
+        _renaming = true;
+    }
+
+    private void CancelRename() => _renaming = false;
+
+    private async Task OnRenameKeyDownAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+                await ConfirmRenameAsync();
+                break;
+            case "Escape":
+                CancelRename();
+                break;
+        }
+    }
+
+    private async Task ConfirmRenameAsync()
+    {
+        _renaming = false;
+
+        if (string.IsNullOrWhiteSpace(_renameValue) || _renameValue == Name)
+        {
+            return;
+        }
+
+        var result = await FileBrowser.RenameAsync(RepositoryName, RelativePath, _renameValue, CancellationToken.None);
+        if (result is RepositoryFileActionResult.Succeeded)
+        {
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private Task ConfirmDeleteAsync() =>
+        ConfirmDialogRef.ShowAsync(
+            IsDirectory ? "Delete folder" : "Delete file",
+            IsDirectory
+                ? $"Permanently delete the folder '{Name}' and everything inside it? This cannot be undone."
+                : $"Permanently delete '{Name}'? This cannot be undone.",
+            DeleteAsync,
+            confirmLabel: "Delete");
+
+    private async Task DeleteAsync()
+    {
+        var result = await FileBrowser.DeleteAsync(RepositoryName, RelativePath, CancellationToken.None);
+        if (result is RepositoryFileActionResult.Succeeded)
+        {
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{(bytes / (1024.0 * 1024 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} GB",
+        >= 1024L * 1024 => $"{(bytes / (1024.0 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} MB",
+        >= 1024L => $"{(bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture)} KB",
+        _ => $"{bytes} B",
+    };
+
+    /// <inheritdoc />
+    public void Dispose() => StopPolling();
+}

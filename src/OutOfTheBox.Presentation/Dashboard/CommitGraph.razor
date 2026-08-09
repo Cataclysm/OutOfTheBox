@@ -1,0 +1,169 @@
+@using System.Globalization
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryManager RepositoryManager
+@inject IRepositoryStatsEventBus RepositoryStatsEventBus
+@implements IDisposable
+
+@if (_commits is null)
+{
+    <p>Loading...</p>
+}
+else if (_commits.Count == 0)
+{
+    <p class="empty-state">No commit history.</p>
+}
+else
+{
+    @if (_error is not null)
+    {
+        <span class="login-error">@_error</span>
+    }
+
+    <table class="data-table commit-table">
+        <tbody>
+            @for (var i = 0; i < _commits.Count; i++)
+            {
+                var commit = _commits[i];
+                var row = _graph!.Rows[i];
+                <tr>
+                    <td class="commit-graph-cell">
+                        <svg width="@(_graph.LaneCount * LaneWidth)" height="@RowHeight">
+                            @foreach (var connector in row.Connectors)
+                            {
+                                <line
+                                    x1="@(connector.FromLane * LaneWidth + LaneWidth / 2)"
+                                    y1="0"
+                                    x2="@(connector.ToLane * LaneWidth + LaneWidth / 2)"
+                                    y2="@RowHeight"
+                                    stroke="@LaneColor(Math.Min(connector.FromLane, connector.ToLane))"
+                                    stroke-width="2" />
+                            }
+                            <circle cx="@(row.Lane * LaneWidth + LaneWidth / 2)" cy="@(RowHeight / 2)" r="4" fill="@LaneColor(row.Lane)" />
+                        </svg>
+                    </td>
+                    <td class="ellipsis commit-subject" title="@commit.Subject">
+                        @foreach (var reference in commit.Refs)
+                        {
+                            <span class="ref-pill @RefPillClass(reference.Kind)">
+                                <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
+                            </span>
+                        }
+                        @commit.Subject
+                    </td>
+                    <td class="ellipsis">@commit.AuthorName</td>
+                    <td>@FormatDate(commit.AuthorDate)</td>
+                    <td class="ellipsis" title="@commit.Hash">@commit.ShortHash</td>
+                    <td class="actions">
+                        <button type="button" class="icon-button" title="Checkout as detached HEAD" @onclick="@(() => ConfirmCheckoutAsync(commit))">
+                            <Icon Name="checkout" />
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_hasMore)
+    {
+        <button type="button" @onclick="LoadMoreAsync">Load more</button>
+    }
+}
+
+<ConfirmDialog @ref="_confirmDialog" />
+
+@code {
+    private const int PageSize = 50;
+    private const int RowHeight = 32;
+    private const int LaneWidth = 16;
+
+    private static readonly string[] LaneColors =
+    [
+        "#ec4899", "#fb923c", "#6d28d9", "#22d3ee", "#4ade80", "#facc15", "#f87171", "#a78bfa",
+    ];
+
+    /// <summary>Which repository's commit history to show.</summary>
+    [Parameter, EditorRequired]
+    public string RepositoryName { get; set; } = string.Empty;
+
+    private IReadOnlyList<CommitSummary>? _commits;
+    private CommitGraphResult? _graph;
+    private bool _hasMore;
+    private string? _error;
+    private IDisposable? _statsSubscription;
+    private ConfirmDialog? _confirmDialog;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync(PageSize);
+
+        // Piggybacks on the same live-update signal driving git-status refresh elsewhere on this
+        // page, rather than a separate polling loop - a pull, checkout, or commit made anywhere
+        // recomputes stats, which is exactly when the commit graph could also be stale.
+        _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
+    }
+
+    private void OnRepositoryStatsChanged(string repositoryName)
+    {
+        if (!string.Equals(repositoryName, RepositoryName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync(Math.Max(PageSize, _commits?.Count ?? PageSize));
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadAsync(int take)
+    {
+        var commits = await RepositoryManager.ListCommitsAsync(RepositoryName, 0, take, CancellationToken.None);
+        _commits = commits;
+        _graph = CommitGraphLayout.Compute(commits);
+        _hasMore = commits.Count == take;
+    }
+
+    private Task LoadMoreAsync() => LoadAsync((_commits?.Count ?? 0) + PageSize);
+
+    private Task ConfirmCheckoutAsync(CommitSummary commit) =>
+        _confirmDialog!.ShowAsync(
+            "Checkout commit",
+            $"Check out commit {commit.ShortHash} (\"{commit.Subject}\") as a detached HEAD? The working tree moves to this exact commit, leaving the current branch.",
+            () => CheckoutAsync(commit.Hash),
+            confirmLabel: "Checkout");
+
+    private async Task CheckoutAsync(string hash)
+    {
+        _error = null;
+        var result = await RepositoryManager.CheckoutCommitAsync(RepositoryName, hash, CancellationToken.None);
+
+        _error = result switch
+        {
+            RepositoryGitActionResult.Failed failed => failed.ErrorMessage ?? "Checkout failed.",
+            RepositoryGitActionResult.Rejected { Reason: RepositoryActionRejectionReason.Busy } rejected => $"Busy - conflicting run {rejected.ConflictingRunId}.",
+            RepositoryGitActionResult.Rejected => "Rejected.",
+            _ => null,
+        };
+
+        await LoadAsync(Math.Max(PageSize, _commits?.Count ?? PageSize));
+    }
+
+    private static string LaneColor(int lane) => LaneColors[lane % LaneColors.Length];
+
+    private static string RefPillClass(CommitRefKind kind) => kind switch
+    {
+        CommitRefKind.RemoteBranch => "ref-pill-remote",
+        CommitRefKind.Tag => "ref-pill-tag",
+        _ => "ref-pill-local",
+    };
+
+    // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.
+    private static string FormatDate(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    /// <inheritdoc />
+    public void Dispose() => _statsSubscription?.Dispose();
+}

@@ -28,7 +28,11 @@ public static class GitDecorationParser
         foreach (var rawToken in decorations.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
             var token = rawToken.Trim();
-            if (token.Length == 0 || token == "HEAD")
+
+            // Bare "HEAD" (detached-HEAD state is surfaced elsewhere, not as a ref) and a remote's
+            // own symbolic default-branch pointer ("origin/HEAD") - not a real branch, so it's
+            // excluded the same way ListBranchesAsync's `git branch -r` parsing already excludes it.
+            if (token.Length == 0 || token == "HEAD" || token.EndsWith("/HEAD", StringComparison.Ordinal))
             {
                 continue;
             }

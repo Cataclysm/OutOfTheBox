@@ -909,3 +909,160 @@ dd {
     align-self: center;
     word-break: break-word;
 }
+
+/* Repository detail's Commits/Files tab group - only one of the two (each potentially long) panels
+   visible at a time, per direct instruction. */
+.tab-group {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin: 1.5rem 0 1rem;
+}
+
+.tab-button {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0.6rem 1rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.tab-button:hover {
+    background: transparent;
+    color: var(--text);
+}
+
+.tab-button.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+/* Commit graph (repository detail's Commits tab) - lane/connector SVG per row plus branch/tag pills,
+   in the spirit of a git client's graph view (straight-line lanes, not bezier curves - see design.md's
+   "Commit graph" decision for why). */
+.commit-graph-cell {
+    width: 1%;
+    white-space: nowrap;
+    padding: 0 0.5rem !important;
+}
+
+.commit-graph-cell svg {
+    display: block;
+}
+
+.commit-subject {
+    max-width: 480px;
+}
+
+.ref-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-right: 0.35rem;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.ref-pill .icon {
+    width: 11px;
+    height: 11px;
+}
+
+.ref-pill-local {
+    background: rgba(236, 72, 153, 0.14);
+    border-color: rgba(236, 72, 153, 0.4);
+    color: var(--accent);
+}
+
+.ref-pill-remote {
+    background: rgba(109, 40, 217, 0.18);
+    border-color: rgba(109, 40, 217, 0.45);
+    color: #a78bfa;
+}
+
+.ref-pill-tag {
+    background: rgba(251, 146, 60, 0.14);
+    border-color: rgba(251, 146, 60, 0.4);
+    color: var(--accent-2);
+}
+
+/* File tree browser (repository detail's Files tab) - Explorer-style expand/collapse rows. */
+.file-tree {
+    font-size: 0.85rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.5rem;
+    box-shadow: var(--shadow-card);
+}
+
+.file-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.file-tree-row:hover {
+    background: #232733;
+}
+
+.file-tree-row .icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    width: 16px;
+    height: 16px;
+}
+
+.file-tree-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-tree-meta {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+}
+
+.file-tree-actions {
+    display: none;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.file-tree-row:hover .file-tree-actions {
+    display: flex;
+}
+
+.file-tree-actions .icon-button {
+    width: 1.8rem;
+    height: 1.8rem;
+}
+
+.file-tree-actions .icon-button .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.file-tree-children {
+    margin-left: 1.35rem;
+    border-left: 1px solid var(--border);
+    padding-left: 0.5rem;
+}
+
+.file-tree-rename-input {
+    flex: 1;
+    padding: 0.2rem 0.4rem;
+}
