@@ -4,6 +4,8 @@ Greenfield project (repository currently empty apart from openspec scaffold). Ho
 
 `git-command-execution`, `file-transfer`, and `repository-management` were all added to this change before any of it was implemented (Sections 1–8 already shipped only `dotnet-command-execution`, `service-authentication`, and their shared infrastructure) — they extend the same in-progress plan rather than modifying delivered behavior.
 
+**Cross-reference**: `openspec/changes/sbx-mcp-server/` is a separate, later, purely additive change exposing this same capability set (`dotnet`/`git` execution, file transfer, repository list/clone) as MCP tools alongside the REST+SSE API this document describes — nothing in this document's REST/SSE behavior changed because of it.
+
 ## Goals / Non-Goals
 
 **Goals:**

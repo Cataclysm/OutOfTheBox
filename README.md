@@ -10,7 +10,7 @@ Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL
 
 ## What it does
 
-- Accepts a `dotnet` or `git` command (arguments + working directory) over HTTP, authenticated by a shared bearer credential, and streams stdout/stderr back over Server-Sent Events as the command runs.
+- Accepts a `dotnet` or `git` command (arguments + working directory) over HTTP, authenticated by a shared bearer credential, and streams stdout/stderr back over Server-Sent Events as the command runs. The same capability set is also reachable as MCP tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`, `clone_repository`) over the MCP Streamable HTTP transport at `/mcp` — a second, fully additive interface for an MCP-native caller like Claude Code, alongside the REST+SSE API, not a replacement for it. See [`openspec/changes/sbx-mcp-server/`](openspec/changes/sbx-mcp-server/) and the "Calling this service over MCP" section of the skill doc below.
 - Confines execution to a configured root directory; runs against different repositories in parallel, serializes commands against the same repository, and supports cancellation.
 - Transfers a single build-produced file back to the caller, confined to the same repository.
 - Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, pull/push/force-push/fetch/clean, branch switching with auto-tracking, plus REST endpoints for list/clone so the sbx caller can reach those two directly — everything else stays dashboard-only).
