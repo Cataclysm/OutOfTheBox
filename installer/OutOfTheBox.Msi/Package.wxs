@@ -141,7 +141,7 @@
          Installer then exposes to it as Session.CustomActionData. -->
     <CustomAction Id="SetCreateRepositoryRootDirectoryData"
                   Property="CreateRepositoryRootDirectory"
-                  Value="REPOSITORYROOTDIR=[REPOSITORYROOTDIR];SERVICEACCOUNTDOMAIN=[SERVICEACCOUNTDOMAIN];SERVICEACCOUNTNAME=[SERVICEACCOUNTNAME]" />
+                  Value="REPOSITORYROOTDIR=[REPOSITORYROOTDIR];SERVICEACCOUNTNAME=[SERVICEACCOUNTNAME]" />
     <CustomAction Id="CreateRepositoryRootDirectory"
                   BinaryRef="ResolveSecretsCA"
                   DllEntry="CreateRepositoryRootDirectory"
@@ -193,9 +193,13 @@
            immediate property-setting half of the deferred-action pair - see the CustomAction
            authoring above for why this needs to be deferred+elevated at all) is scheduled directly
            in front of the deferred action it feeds; scheduling it any earlier would risk a later
-           action changing REPOSITORYROOTDIR/SERVICEACCOUNTDOMAIN/SERVICEACCOUNTNAME before the
-           snapshot is taken (none currently do, but there's no benefit to scheduling it earlier
-           than strictly necessary either). -->
+           action changing REPOSITORYROOTDIR/SERVICEACCOUNTNAME before the snapshot is taken (none
+           currently do, but there's no benefit to scheduling it earlier than strictly necessary
+           either). SERVICEACCOUNTDOMAIN is deliberately NOT plumbed through here - see
+           CreateRepositoryRootDirectory.cs's own GrantServiceAccountAccess remarks: "." is not a
+           valid domain qualifier for NTAccount.Translate/LookupAccountName the way it is for
+           ServiceInstall's own Account attribute below, confirmed on real-machine use, so the SID
+           resolution this action performs uses the bare account name only. -->
       <Custom Action="SetCreateRepositoryRootDirectoryData" After="InstallServices" />
       <Custom Action="CreateRepositoryRootDirectory" After="SetCreateRepositoryRootDirectoryData" />
       <!-- Same InstallExecuteSequence-only reasoning as CreateRepositoryRootDirectory just above -

@@ -14,14 +14,14 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         // The real MSI grants svc-outofthebox, which won't exist on a dev/CI machine - the current
         // process' own identity is a stand-in that's guaranteed to exist and, since a temp
         // directory this process creates is always owned by it, doesn't need elevation to modify
-        // (WRITE_DAC on an object you own doesn't require any special privilege). Split into domain
-        // and bare name, matching GrantServiceAccountAccess's own two-argument shape - a real
-        // regression this split guards against: a single pre-qualified "DOMAIN\name" string passed
-        // through NTAccount's one-argument constructor is a silently different (and, on a real
-        // install, failing) code path from the two-argument constructor the production code uses.
+        // (WRITE_DAC on an object you own doesn't require any special privilege). Bare name only,
+        // matching GrantServiceAccountAccess's own single-argument shape - confirmed on real-machine
+        // use that a "." domain qualifier (which this test deliberately does NOT use) fails SID
+        // translation even interactively, outside any MSI context entirely.
         private static readonly string CurrentIdentityName = WindowsIdentity.GetCurrent().Name;
-        private static readonly string TestAccountDomain = CurrentIdentityName.Split('\\')[0];
-        private static readonly string TestAccountName = CurrentIdentityName.Split('\\')[1];
+        private static readonly string TestAccountName = CurrentIdentityName.Contains('\\')
+            ? CurrentIdentityName.Split('\\')[1]
+            : CurrentIdentityName;
 
         [Fact]
         public void EnsureExists_creates_a_missing_directory()
@@ -69,7 +69,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
 
             try
             {
-                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountDomain, TestAccountName);
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
 
                 Assert.True(HasFullControlRule(new DirectoryInfo(path).GetAccessControl()));
             }
@@ -82,14 +82,12 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         [Fact]
         public void GrantServiceAccountAccess_throws_when_the_account_does_not_exist()
         {
-            // The exact real-machine bug this action's own retry logic guards against: SID
-            // resolution for an account created moments earlier can transiently fail with
-            // IdentityNotMappedException even though the account genuinely exists (a documented LSA
-            // cache-lag issue, not a bug in this code) - GrantServiceAccountAccess retries a few
-            // times before giving up. For a *genuinely* nonexistent account (this test), every retry
-            // fails the same way, and the exception should still propagate once attempts are
-            // exhausted - the internal overload's short retry policy keeps this test fast instead of
-            // actually waiting out production's full SidResolveMaxAttempts x SidResolveRetryDelay.
+            // GrantServiceAccountAccess retries a few times on IdentityNotMappedException as cheap
+            // insurance against genuine LSA cache lag - for a *genuinely* nonexistent account (this
+            // test), every retry fails the same way, and the exception should still propagate once
+            // attempts are exhausted. The internal overload's short retry policy keeps this test fast
+            // instead of actually waiting out production's full SidResolveMaxAttempts x
+            // SidResolveRetryDelay.
             var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(path);
 
@@ -97,7 +95,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
             {
                 Assert.ThrowsAny<IdentityNotMappedException>(
                     () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(
-                        path, ".", "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N"),
+                        path, "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N"),
                         maxAttempts: 2, retryDelay: TimeSpan.FromMilliseconds(10)));
             }
             finally
@@ -121,7 +119,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
 
             try
             {
-                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountDomain, TestAccountName);
+                CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(path, TestAccountName);
 
                 Assert.True(HasFullControlRule(new DirectoryInfo(subdirectory).GetAccessControl()));
                 Assert.True(HasFullControlRule(new FileInfo(packFile).GetAccessControl()));

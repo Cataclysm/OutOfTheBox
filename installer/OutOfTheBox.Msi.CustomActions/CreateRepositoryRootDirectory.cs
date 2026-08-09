@@ -21,7 +21,7 @@ namespace OutOfTheBox.Msi.CustomActions
     /// starts, so a fresh path typed into the config dialog doesn't leave the service pointed at a
     /// directory that was never created - a real gap, since nothing else in the install ever
     /// touches this path. Also grants the service account explicit NTFS rights on it, recursively -
-    /// see <see cref="GrantServiceAccountAccess(string, string, string)"/>'s own remarks for why this is necessary and not
+    /// see <see cref="GrantServiceAccountAccess(string, string)"/>'s own remarks for why this is necessary and not
     /// just belt-and-suspenders.
     /// </summary>
     public static class CreateRepositoryRootDirectoryAction
@@ -35,12 +35,11 @@ namespace OutOfTheBox.Msi.CustomActions
         public static void EnsureExists(string path) => Directory.CreateDirectory(path);
 
         /// <summary>
-        /// Grants <paramref name="accountDomain"/>\<paramref name="accountName"/> full control of
-        /// <paramref name="path"/> - the directory itself (with inheritance, so newly created
-        /// repositories automatically pick it up) and, since inheritance only ever applies going
-        /// forward, every already-existing file and subdirectory too (a repository cloned before
-        /// this fix ran, or by a different identity entirely, e.g. an operator's own interactive
-        /// <c>git clone</c>).
+        /// Grants <paramref name="accountName"/> full control of <paramref name="path"/> - the
+        /// directory itself (with inheritance, so newly created repositories automatically pick it
+        /// up) and, since inheritance only ever applies going forward, every already-existing file
+        /// and subdirectory too (a repository cloned before this fix ran, or by a different identity
+        /// entirely, e.g. an operator's own interactive <c>git clone</c>).
         ///
         /// Found necessary on real-machine use: <see cref="Directory.CreateDirectory(string)"/>
         /// above gives the new directory whatever ACL its parent's default inheritance provides,
@@ -59,29 +58,34 @@ namespace OutOfTheBox.Msi.CustomActions
         /// recreation problem <c>ConfigureGitSafeDirectoryAction</c> already documents for git's own
         /// trust check.
         ///
-        /// <paramref name="accountDomain"/> is required, not optional, despite <see cref="NTAccount"/>
-        /// having a single-string constructor that looks like it should accept a bare name - a bare
-        /// <c>new NTAccount("svc-outofthebox")</c> (no domain qualifier) also threw
-        /// <see cref="IdentityNotMappedException"/> on real-machine use, while the qualified
-        /// <c>.\svc-outofthebox</c> form <c>Package.wxs</c>'s own
-        /// <c>ServiceInstall/@Account="[SERVICEACCOUNTDOMAIN]\[SERVICEACCOUNTNAME]"</c> already uses
-        /// successfully does resolve - not itself sufficient (see <see cref="ResolveSidWithRetry"/>'s
-        /// own remarks for the actual remaining cause), but a real fix in its own right, not just a
-        /// red herring.
+        /// Deliberately unqualified - no domain prefix - despite <c>Package.wxs</c>'s own
+        /// <c>ServiceInstall/@Account="[SERVICEACCOUNTDOMAIN]\[SERVICEACCOUNTNAME]"</c> using
+        /// <c>.\svc-outofthebox</c> successfully for that unrelated purpose. Confirmed on
+        /// real-machine use, interactively, completely outside any MSI custom action context
+        /// (ruling out elevation, impersonation, and timing as the cause): <c>.\svc-outofthebox</c>
+        /// reliably threw <see cref="IdentityNotMappedException"/> from both
+        /// <c>NTAccount.Translate</c> and PowerShell's own identical call, while both the bare
+        /// <c>svc-outofthebox</c> form and the real computer-name-qualified
+        /// <c>COMPUTERNAME\svc-outofthebox</c> form resolved immediately every time - <c>.</c> is
+        /// simply not a "local machine" alias <c>LookupAccountName</c> (which <c>NTAccount.Translate</c>
+        /// calls into) honors, unlike <c>CreateService</c>'s <c>lpServiceStartName</c>, which does
+        /// accept it. Bare, not computer-name-qualified, since the account is always local by design
+        /// (never domain-joined support) and the bare form needs no extra property plumbed through
+        /// <c>CustomActionData</c> at all.
         /// </summary>
-        public static void GrantServiceAccountAccess(string path, string accountDomain, string accountName) =>
-            GrantServiceAccountAccess(path, accountDomain, accountName, SidResolveMaxAttempts, SidResolveRetryDelay);
+        public static void GrantServiceAccountAccess(string path, string accountName) =>
+            GrantServiceAccountAccess(path, accountName, SidResolveMaxAttempts, SidResolveRetryDelay);
 
         /// <summary>
-        /// Same as <see cref="GrantServiceAccountAccess(string, string, string)"/>, with the SID
+        /// Same as <see cref="GrantServiceAccountAccess(string, string)"/>, with the SID
         /// resolution retry policy overridable - exists so tests can exercise the retry-then-fail
         /// path (a genuinely nonexistent account) in milliseconds instead of the real
         /// <see cref="SidResolveMaxAttempts"/> x <see cref="SidResolveRetryDelay"/> the production
         /// path deliberately waits, per <see cref="ResolveSidWithRetry"/>'s own remarks.
         /// </summary>
-        internal static void GrantServiceAccountAccess(string path, string accountDomain, string accountName, int maxAttempts, TimeSpan retryDelay)
+        internal static void GrantServiceAccountAccess(string path, string accountName, int maxAttempts, TimeSpan retryDelay)
         {
-            var account = new NTAccount(accountDomain, accountName);
+            var account = new NTAccount(accountName);
             var sid = ResolveSidWithRetry(account, maxAttempts, retryDelay);
 
             // Files can't carry inheritance flags at all (they have no children to propagate to) -
@@ -117,21 +121,16 @@ namespace OutOfTheBox.Msi.CustomActions
         private static readonly TimeSpan SidResolveRetryDelay = TimeSpan.FromSeconds(1);
 
         /// <summary>
-        /// Resolves <paramref name="account"/> to its <see cref="SecurityIdentifier"/>, retrying on
-        /// <see cref="IdentityNotMappedException"/> - a documented, real-world timing issue for an
-        /// account created moments earlier in the very same process (found on real-machine use:
-        /// <c>NTAccount.Translate</c> failed to resolve <c>svc-outofthebox</c> even running fully
-        /// deferred and elevated - <c>Impersonate="no"</c>, confirmed via the compiled MSI's
-        /// <c>CustomAction</c> table - and even after <c>Wix4CreateUser_X64</c>/<c>InstallServices</c>
-        /// had both already completed successfully in the same install, ruling out both the
-        /// scheduling-order and impersonation hypotheses this action's history already tried and
-        /// rejected). SID/name-translation lookups go through the LSA, whose own local cache can
-        /// lag a just-created account by a few seconds even for a fully privileged (SYSTEM) caller -
-        /// a handful of retries with a short delay is the standard, documented workaround for
-        /// exactly this class of transient failure, not a symptom of anything this code is doing
-        /// wrong. Resolving once up front (rather than letting <see cref="FileSystemAccessRule"/> retry
-        /// internally on every single file) also means the wait, if any, happens once per install,
-        /// not once per file in a possibly-large repository tree.
+        /// Resolves <paramref name="account"/> to its <see cref="SecurityIdentifier"/>, retrying a
+        /// handful of times on <see cref="IdentityNotMappedException"/> as a defensive fallback for
+        /// genuine LSA cache lag on a just-created account - kept as cheap insurance even though the
+        /// actual, root-caused failure behind this action's long real-machine debugging history
+        /// turned out to be unrelated to timing entirely: qualifying the account with <c>.</c> as its
+        /// domain (see <see cref="GrantServiceAccountAccess(string, string)"/>'s own remarks), which
+        /// no amount of retrying would ever have fixed. Resolving once up front (rather than letting
+        /// <see cref="FileSystemAccessRule"/> retry internally on every single file) also means the
+        /// wait, if any, happens once per install, not once per file in a possibly-large repository
+        /// tree.
         /// </summary>
         private static SecurityIdentifier ResolveSidWithRetry(NTAccount account, int maxAttempts, TimeSpan delay)
         {
@@ -191,7 +190,7 @@ namespace OutOfTheBox.Msi.CustomActions
         /// install - re-granting an already-held right is harmless, and an upgrade is exactly when a
         /// repository root with pre-existing content most needs this applied.
         ///
-        /// <see cref="GrantServiceAccountAccess(string, string, string)"/> already tolerates a failure on any individual
+        /// <see cref="GrantServiceAccountAccess(string, string)"/> already tolerates a failure on any individual
         /// file or subdirectory (<see cref="TryApplyRule"/>'s own catch) - one inaccessible leftover
         /// shouldn't stop the rest of the tree from being fixed. What reaches here is different: a
         /// failure applying the rule to the root itself, meaning the grant didn't happen *at all*,
@@ -212,22 +211,21 @@ namespace OutOfTheBox.Msi.CustomActions
             // deferred actions don't have access to the property table at all, only whatever an
             // earlier immediate action packed into CustomActionData for them.
             var path = session.CustomActionData["REPOSITORYROOTDIR"];
-            var accountDomain = session.CustomActionData["SERVICEACCOUNTDOMAIN"];
             var accountName = session.CustomActionData["SERVICEACCOUNTNAME"];
             EnsureExists(path);
 
             try
             {
-                GrantServiceAccountAccess(path, accountDomain, accountName);
+                GrantServiceAccountAccess(path, accountName);
             }
             catch (Exception ex)
             {
-                // The account string itself is logged explicitly, not just left to whatever the
+                // The account name itself is logged explicitly, not just left to whatever the
                 // exception's own message happens to include (IdentityNotMappedException's is a
                 // generic "Some or all identity references could not be translated," naming no
                 // account at all) - found necessary while diagnosing this exact failure the first
                 // time, from a log that otherwise gave no way to tell which identity was attempted.
-                session.Log("CreateRepositoryRootDirectory: failed to grant '{0}\\{1}' access to '{2}': {3}", accountDomain, accountName, path, ex);
+                session.Log("CreateRepositoryRootDirectory: failed to grant '{0}' access to '{1}': {2}", accountName, path, ex);
                 return ActionResult.Failure;
             }
 
