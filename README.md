@@ -6,14 +6,14 @@ A Windows-hosted service that lets a Claude Code instance running in a remote sb
 
 ## Status
 
-Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL.md)); only manual end-to-end verification on a real, clean Windows machine remains (Section 19 of `tasks.md`). See [`openspec/changes/sbx-dotnet-command-service/tasks.md`](openspec/changes/sbx-dotnet-command-service/tasks.md) for the current checklist and [`design.md`](openspec/changes/sbx-dotnet-command-service/design.md) for the full architecture rationale.
+Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL.md)); only manual end-to-end verification on a real, clean Windows machine remains (Section 19 of `tasks.md`, and the newer full workflow plan in [`E2ETESTPLAN.md`](E2ETESTPLAN.md)). See [`openspec/changes/sbx-dotnet-command-service/tasks.md`](openspec/changes/sbx-dotnet-command-service/tasks.md) for the current checklist and [`design.md`](openspec/changes/sbx-dotnet-command-service/design.md) for the full architecture rationale.
 
 ## What it does
 
 - Accepts a `dotnet` or `git` command (arguments + working directory) over HTTP, authenticated by a shared bearer credential, and streams stdout/stderr back over Server-Sent Events as the command runs.
 - Confines execution to a configured root directory; runs against different repositories in parallel, serializes commands against the same repository, and supports cancellation.
 - Transfers a single build-produced file back to the caller, confined to the same repository.
-- Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, plus REST endpoints for list/clone so the sbx caller can reach those two directly — delete stays dashboard-only).
+- Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, pull/push/force-push/fetch/clean, branch switching with auto-tracking, plus REST endpoints for list/clone so the sbx caller can reach those two directly — everything else stays dashboard-only).
 - Ships as a self-contained single-file executable, packaged by a WiX Toolset installer (a Burn bootstrapper chaining the .NET SDK/Git for Windows prerequisites ahead of an MSI) with native upgrade/uninstall support.
 
 ## How it works
@@ -82,10 +82,17 @@ Once logged in, three top-level views are available:
   each command run spawned, with a kill button per process.
 - **History** — every past run, filterable by kind/outcome/repository and free-text searchable, with a
   per-run detail page showing full output and its resource-usage graph.
-- **Repositories** — every repository under the configured root, with live size/git-status/active state;
-  clone a new one in or delete an existing one directly from here. Listing and cloning are also
-  reachable via REST (`GET /repositories`, `POST /repositories/clone`), so the sbx-side caller can
-  do those two itself; deletion is dashboard-only, by design — there's no API for it at all.
+- **Repositories** — every repository under the configured root, with live size/git-status (branch,
+  clean/dirty, ahead/behind, or "remote gone" if a tracking branch's remote side was deleted) and
+  active state. Clone a new one in (optionally on a specific branch, picked from a dropdown populated
+  by querying the remote), delete one, or run pull/push/force-push/fetch/clean directly from the list
+  — the last two require an explicit popup confirmation, and none of the five stream output; the
+  triggering icon just flashes green or red to report the outcome. A repository's detail page adds its
+  clone source URL, full remote list, and a branch-switch dropdown (switching to a remote-only branch
+  auto-creates its local tracking branch). Listing and cloning are also reachable via REST
+  (`GET /repositories`, `POST /repositories/clone`), so the sbx-side caller can do those two itself;
+  everything else (delete, pull/push/force-push/fetch/clean, branch switching) is dashboard-only, by
+  design — there's no API for any of it.
 
 ## Running a Claude Code instance in the sbx sandbox
 
@@ -120,5 +127,6 @@ surface for either); those stay operator-only, from the dashboard above.
 - [`BUILD.md`](BUILD.md) — building and testing this repository
 - [`INSTALL.md`](INSTALL.md) — running/deploying the service
 - [`CHANGELOG.md`](CHANGELOG.md) — what's changed, release by release
+- [`E2ETESTPLAN.md`](E2ETESTPLAN.md) — a full sandbox-realistic end-to-end workflow test plan (not yet executed) to run against a real deployed instance
 - [`CLAUDE.md`](CLAUDE.md) — project conventions and quick-reference for AI-assisted development in this repository
 - [`openspec/changes/sbx-dotnet-command-service/`](openspec/changes/sbx-dotnet-command-service/) — the full proposal, specs, design, and task checklist this project is being built from
