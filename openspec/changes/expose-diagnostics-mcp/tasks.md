@@ -12,10 +12,10 @@
 
 ## 3. File-lock diagnostics (Application + Infrastructure)
 
-- [ ] 3.1 Add `FileLockApplicationType` enum and `FileLockingProcess(int ProcessId, string ApplicationName, FileLockApplicationType ApplicationType, bool IsRestartable)` in `OutOfTheBox.Application.Diagnostics`.
-- [ ] 3.2 Add `IFileLockInspector.GetLockingProcessesAsync(string filePath, CancellationToken)` in the same namespace.
-- [ ] 3.3 Add `RestartManager.cs` (`OutOfTheBox.Infrastructure.Diagnostics`), a `[SupportedOSPlatform("windows")]` static class P/Invoking `rstrtmgr.dll` (`RmStartSession`/`RmRegisterResources`/`RmGetList`/`RmEndSession`) matching `Win32MemoryStatus`'s exact style (`[DllImport]`, `[StructLayout(LayoutKind.Sequential)]` structs for `RM_UNIQUE_PROCESS`/`RM_PROCESS_INFO`, throws with `Marshal.GetLastWin32Error()` on an unexpected failure code), implementing `RmGetList`'s two-call sizing pattern internally. Always calls `RmEndSession` (via `try`/`finally`) even on failure.
-- [ ] 3.4 Implement `RestartManagerFileLockInspector : IFileLockInspector` (`OutOfTheBox.Infrastructure.Diagnostics`) wrapping the P/Invoke layer, mapping `RM_APP_TYPE`'s raw values to `FileLockApplicationType`.
+- [x] 3.1 Add `FileLockApplicationType` enum and `FileLockingProcess(int ProcessId, string ApplicationName, FileLockApplicationType ApplicationType, bool IsRestartable)` in `OutOfTheBox.Application.Diagnostics`.
+- [x] 3.2 Add `IFileLockInspector.GetLockingProcessesAsync(string filePath, CancellationToken)` in the same namespace.
+- [x] 3.3 Add `RestartManager.cs` (`OutOfTheBox.Infrastructure.Diagnostics`), a `[SupportedOSPlatform("windows")]` static class P/Invoking `rstrtmgr.dll` (`RmStartSession`/`RmRegisterResources`/`RmGetList`/`RmEndSession`) matching `Win32MemoryStatus`'s exact style (`[DllImport]`, `[StructLayout(LayoutKind.Sequential)]` structs for `RM_UNIQUE_PROCESS`/`RM_PROCESS_INFO`, throws with `Marshal.GetLastWin32Error()` on an unexpected failure code), implementing `RmGetList`'s two-call sizing pattern internally. Always calls `RmEndSession` (via `try`/`finally`) even on failure.
+- [x] 3.4 Implement `RestartManagerFileLockInspector : IFileLockInspector` (`OutOfTheBox.Infrastructure.Diagnostics`) wrapping the P/Invoke layer, mapping `RM_APP_TYPE`'s raw values to `FileLockApplicationType`.
 
 ## 4. `get_file_lock_info` MCP tool (Presentation)
 
