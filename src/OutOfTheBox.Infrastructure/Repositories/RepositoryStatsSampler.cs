@@ -31,7 +31,7 @@ public sealed class RepositoryStatsSampler(
 
         // Compute both halves once immediately at startup, so the dashboard isn't stuck showing
         // "computing…" until the first tick of whichever cadence is slower.
-        await ForEachRepositoryAsync(RecomputeOneFullAsync, stoppingToken);
+        await RecomputeAllOnceAsync(stoppingToken);
 
         try
         {
@@ -44,6 +44,16 @@ public sealed class RepositoryStatsSampler(
             // Expected on shutdown (stoppingToken cancelled) - not an error.
         }
     }
+
+    /// <summary>
+    /// Runs one full (both-halves) recompute sweep over every repository under the configured root -
+    /// exposed publicly so a test can exercise the crash-resilience behavior (one repository's
+    /// failure must never stop the sweep, let alone the whole <see cref="BackgroundService"/>)
+    /// directly, the same way <c>HostResourceSamplerService.TickAsync</c> is exposed for its own
+    /// tests, without needing the real <see cref="PeriodicTimer"/>-driven loop.
+    /// </summary>
+    public Task RecomputeAllOnceAsync(CancellationToken cancellationToken) =>
+        ForEachRepositoryAsync(RecomputeOneFullAsync, cancellationToken);
 
     private async Task GitStatusLoopAsync(CancellationToken stoppingToken)
     {

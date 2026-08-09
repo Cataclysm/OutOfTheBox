@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.ComponentModel;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Infrastructure.Repositories;
 
@@ -46,9 +47,36 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
         Assert.Equal("hello world".Length, stats.TotalSizeBytes);
     }
 
+    [Fact]
+    public async Task ComputeGitStatusAsync_does_not_throw_when_git_exe_is_unreachable()
+    {
+        // Regression test for the bug that made repository stats stop updating entirely: a
+        // Win32Exception from an unreachable git.exe (e.g. missing from the service account's PATH)
+        // previously propagated straight out of this method, which - left uncaught two layers up in
+        // RepositoryStatsSampler - crashed the whole BackgroundService (and, by default, the host).
+        Directory.CreateDirectory(Path.Combine(_root, ".git"));
+        var provider = new GitRepositoryStatsProvider(new Win32ExceptionProcessRunner());
+
+        var status = await provider.ComputeGitStatusAsync(_root, CancellationToken.None);
+
+        Assert.True(status.IsGitRepository);
+        Assert.Null(status.Branch);
+        Assert.False(status.IsDirty);
+        Assert.Null(status.AheadCount);
+        Assert.Null(status.BehindCount);
+        Assert.False(status.IsRemoteGone);
+        Assert.Empty(status.Remotes);
+    }
+
     private sealed class UnreachableProcessRunner : IProcessRunner
     {
         public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
             throw new InvalidOperationException("A non-git directory must not spawn git.exe.");
+    }
+
+    private sealed class Win32ExceptionProcessRunner : IProcessRunner
+    {
+        public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
+            throw new Win32Exception("The system cannot find the file specified.");
     }
 }

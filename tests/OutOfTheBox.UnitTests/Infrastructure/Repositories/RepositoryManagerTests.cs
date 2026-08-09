@@ -172,6 +172,146 @@ public sealed class RepositoryManagerTests : IDisposable
         Assert.NotNull(row.CompletedAt);
     }
 
+    [Fact]
+    public async Task GitActions_reject_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        foreach (var operation in GitActionOperations(manager))
+        {
+            var result = await operation(@"..\evil");
+            var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+            Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
+        }
+    }
+
+    [Fact]
+    public async Task GitActions_reject_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        foreach (var operation in GitActionOperations(manager))
+        {
+            var result = await operation("does-not-exist");
+            var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+            Assert.Equal(RepositoryActionRejectionReason.NotFound, rejected.Reason);
+        }
+    }
+
+    [Fact]
+    public async Task GitActions_reject_a_busy_repository_and_never_invoke_git()
+    {
+        var repositoryPath = Path.Combine(_root, "busy-repository");
+        Directory.CreateDirectory(repositoryPath);
+
+        var registry = new RunRegistry();
+        using var cts = new CancellationTokenSource();
+        var conflictingRunId = Guid.NewGuid();
+        registry.TryAcquire(repositoryPath, conflictingRunId, cts, out _);
+
+        // CreateManager's UnreachableProcessRunner fails the test loudly if any of these reach
+        // process execution instead of being rejected up front.
+        var manager = CreateManager(registry);
+
+        foreach (var operation in GitActionOperations(manager))
+        {
+            var result = await operation("busy-repository");
+            var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+            Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
+            Assert.Equal(conflictingRunId, rejected.ConflictingRunId);
+        }
+    }
+
+    [Fact]
+    public async Task SwitchBranchAsync_rejects_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.SwitchBranchAsync(@"..\evil", "main", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task SwitchBranchAsync_rejects_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.SwitchBranchAsync("does-not-exist", "main", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.NotFound, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task GetCloneSourceUrlAsync_returns_null_for_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        Assert.Null(await manager.GetCloneSourceUrlAsync(@"..\evil", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetCloneSourceUrlAsync_returns_null_when_no_clone_history_exists()
+    {
+        var repositoryPath = Path.Combine(_root, "pre-existing-repository");
+        Directory.CreateDirectory(repositoryPath);
+        var manager = CreateManager(new RunRegistry());
+
+        Assert.Null(await manager.GetCloneSourceUrlAsync("pre-existing-repository", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetCloneSourceUrlAsync_returns_the_most_recent_completed_clones_source_url()
+    {
+        var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
+        var repositoryPath = Path.Combine(_root, "cloned-repository");
+        Directory.CreateDirectory(repositoryPath);
+
+        await runRepository.AddAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.RepositoryClone,
+            RepositoryPath = repositoryPath,
+            SourceUrl = "https://example.com/old.git",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-9),
+            Outcome = RunOutcome.Completed,
+        }, CancellationToken.None);
+        await runRepository.AddAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.RepositoryClone,
+            RepositoryPath = repositoryPath,
+            SourceUrl = "https://example.com/new.git",
+            StartedAt = DateTimeOffset.UtcNow,
+            CompletedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Completed,
+        }, CancellationToken.None);
+
+        var manager = CreateManager(new RunRegistry(), runRepository);
+
+        Assert.Equal("https://example.com/new.git", await manager.GetCloneSourceUrlAsync("cloned-repository", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListBranchesAsync_returns_empty_for_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        Assert.Empty(await manager.ListBranchesAsync("does-not-exist", CancellationToken.None));
+    }
+
+    private static IEnumerable<Func<string, Task<RepositoryGitActionResult>>> GitActionOperations(IRepositoryManager manager) =>
+    [
+        name => manager.PullAsync(name, CancellationToken.None),
+        name => manager.PushAsync(name, CancellationToken.None),
+        name => manager.ForcePushAsync(name, CancellationToken.None),
+        name => manager.FetchAsync(name, CancellationToken.None),
+        name => manager.CleanAsync(name, CancellationToken.None),
+    ];
+
     private RepositoryManager CreateManager(RunRegistry runRegistry, IRunRepository? runRepository = null, RepositoryStatsCache? statsCache = null) =>
         new(
             new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root })),
