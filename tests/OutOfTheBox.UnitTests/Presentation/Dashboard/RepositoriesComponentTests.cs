@@ -178,5 +178,11 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
     {
         public Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("This test seeds RepositoryStatsCache directly.");
+
+        public Task<GitStatusSnapshot> ComputeGitStatusAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("This test seeds RepositoryStatsCache directly.");
+
+        public Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("This test seeds RepositoryStatsCache directly.");
     }
 }

@@ -13,4 +13,10 @@ public sealed record RepositoryStats(
     string? Branch,
     bool IsDirty,
     int? AheadCount,
-    int? BehindCount);
+    int? BehindCount,
+    bool IsRemoteGone = false,
+    IReadOnlyList<RepositoryRemote>? Remotes = null)
+{
+    /// <summary>Never null on a constructed instance - defaults to empty so callers don't need a null check.</summary>
+    public IReadOnlyList<RepositoryRemote> Remotes { get; init; } = Remotes ?? [];
+}

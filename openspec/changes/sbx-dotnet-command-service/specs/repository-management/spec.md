@@ -7,7 +7,7 @@ A "repository" for the purposes of this capability is a top-level directory dire
 ## ADDED Requirements
 
 ### Requirement: Repositories are listed with identifying stats
-The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured, or a distinct "remote branch gone" indication if a tracking branch was configured but its remote-side branch no longer exists — or an indication that it isn't a git repository at all), its clone source URL if known, its configured remotes (name and URL), and whether it is currently active (holds the per-repository command lock per `dotnet-command-execution`/`git-command-execution`).
+The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured, or a distinct "remote branch gone" indication if a tracking branch was configured but its remote-side branch no longer exists — or an indication that it isn't a git repository at all), and whether it is currently active (holds the per-repository command lock per `dotnet-command-execution`/`git-command-execution`). Its clone source URL (if known) and its configured remotes (name and URL) SHALL additionally be shown on its detail subpage (per `service-dashboard`'s "Repository detail is its own subpage").
 
 #### Scenario: Listing repositories
 - **WHEN** an operator views the repository list

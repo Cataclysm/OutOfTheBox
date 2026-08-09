@@ -3,4 +3,5 @@
 namespace OutOfTheBox.Presentation.Execution;
 
 /// <summary>The JSON request body for <c>POST /repositories/clone</c>.</summary>
-public sealed record CloneRepositoryRequest(string? Url, string? Name);
+/// <param name="Branch">Optional - checks out this branch instead of the remote's default when supplied.</param>
+public sealed record CloneRepositoryRequest(string? Url, string? Name, string? Branch = null);

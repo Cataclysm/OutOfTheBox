@@ -21,6 +21,37 @@ public sealed class RepositoryStatsCache
     /// <summary>Records freshly computed stats for <paramref name="name"/>, replacing any previous value.</summary>
     public void Set(string name, RepositoryStats stats) => _stats[name] = stats;
 
+    /// <summary>
+    /// Merges a freshly computed git-status half into <paramref name="name"/>'s cached stats,
+    /// preserving whatever size half (if any) is already cached - the fast git-status cadence and the
+    /// slow size cadence each only ever have one half of the picture at a time. If nothing is cached
+    /// yet, the size half starts at 0 (displayed as "Computing…" via <c>RepositorySummary.StatsComputed</c>
+    /// only checking for cache presence, not size specifically - the next size tick fills it in).
+    /// </summary>
+    public void SetGitStatus(string name, GitStatusSnapshot gitStatus) =>
+        _stats.AddOrUpdate(
+            name,
+            static (_, snapshot) => new RepositoryStats(0, snapshot.IsGitRepository, snapshot.Branch, snapshot.IsDirty, snapshot.AheadCount, snapshot.BehindCount, snapshot.IsRemoteGone, snapshot.Remotes),
+            static (_, existing, snapshot) => existing with
+            {
+                IsGitRepository = snapshot.IsGitRepository,
+                Branch = snapshot.Branch,
+                IsDirty = snapshot.IsDirty,
+                AheadCount = snapshot.AheadCount,
+                BehindCount = snapshot.BehindCount,
+                IsRemoteGone = snapshot.IsRemoteGone,
+                Remotes = snapshot.Remotes,
+            },
+            gitStatus);
+
+    /// <summary>Merges a freshly computed total size into <paramref name="name"/>'s cached stats, preserving whatever git-status half is already cached. See <see cref="SetGitStatus"/>'s own remarks.</summary>
+    public void SetSize(string name, long totalSizeBytes) =>
+        _stats.AddOrUpdate(
+            name,
+            static (_, size) => new RepositoryStats(size, IsGitRepository: false, Branch: null, IsDirty: false, AheadCount: null, BehindCount: null),
+            static (_, existing, size) => existing with { TotalSizeBytes = size },
+            totalSizeBytes);
+
     /// <summary>Removes any cached stats for <paramref name="name"/> - called once a repository is deleted, so a stale entry can't outlive its directory.</summary>
     public void Remove(string name) => _stats.TryRemove(name, out _);
 }

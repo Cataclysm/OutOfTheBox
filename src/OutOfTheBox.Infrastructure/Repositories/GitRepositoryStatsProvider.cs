@@ -22,11 +22,30 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
     /// <inheritdoc />
     public async Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken)
     {
-        var totalSizeBytes = ComputeDirectorySize(repositoryPath);
+        var totalSizeBytes = await ComputeSizeAsync(repositoryPath, cancellationToken);
+        var gitStatus = await ComputeGitStatusAsync(repositoryPath, cancellationToken);
 
+        return new RepositoryStats(
+            totalSizeBytes,
+            gitStatus.IsGitRepository,
+            gitStatus.Branch,
+            gitStatus.IsDirty,
+            gitStatus.AheadCount,
+            gitStatus.BehindCount,
+            gitStatus.IsRemoteGone,
+            gitStatus.Remotes);
+    }
+
+    /// <inheritdoc />
+    public Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken) =>
+        Task.FromResult(ComputeDirectorySize(repositoryPath));
+
+    /// <inheritdoc />
+    public async Task<GitStatusSnapshot> ComputeGitStatusAsync(string repositoryPath, CancellationToken cancellationToken)
+    {
         if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
         {
-            return new RepositoryStats(totalSizeBytes, IsGitRepository: false, Branch: null, IsDirty: false, AheadCount: null, BehindCount: null);
+            return new GitStatusSnapshot(IsGitRepository: false, Branch: null, IsDirty: false, AheadCount: null, BehindCount: null, IsRemoteGone: false, Remotes: []);
         }
 
         var branch = (await RunGitCaptureAsync(repositoryPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
@@ -50,7 +69,56 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
             }
         }
 
-        return new RepositoryStats(totalSizeBytes, IsGitRepository: true, branch, isDirty, ahead, behind);
+        // Distinguishes "upstream configured but its remote-side branch was deleted" from "no
+        // upstream configured at all" - both collapse to a bare rev-list failure above (ahead/behind
+        // stay null either way), so this is git's own tracking-state marker, which reports the
+        // literal "[gone]" token when the upstream ref it remembers no longer exists on the remote.
+        var isRemoteGone = false;
+        if (!string.IsNullOrEmpty(branch))
+        {
+            var trackState = await RunGitCaptureAsync(repositoryPath, ["for-each-ref", "--format=%(upstream:track)", $"refs/heads/{branch}"], cancellationToken);
+            isRemoteGone = trackState?.Contains("[gone]", StringComparison.Ordinal) == true;
+        }
+
+        var remotes = await ComputeRemotesAsync(repositoryPath, cancellationToken);
+
+        return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes);
+    }
+
+    private async Task<IReadOnlyList<RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)
+    {
+        var output = await RunGitCaptureAsync(repositoryPath, ["remote", "-v"], cancellationToken);
+        if (string.IsNullOrEmpty(output))
+        {
+            return [];
+        }
+
+        // "origin\thttps://example.com/repo.git (fetch)" / "(push)" - one line per remote per
+        // direction; de-duplicated to one entry per remote name, keeping whichever URL is seen first
+        // (fetch and push URLs are almost always identical, and this is a display summary, not a
+        // config editor).
+        var remotes = new List<RepositoryRemote>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Trim().Split('\t', 2);
+            if (parts.Length != 2)
+            {
+                continue;
+            }
+
+            var name = parts[0];
+            var urlAndDirection = parts[1].Split(' ', 2);
+            if (urlAndDirection.Length == 0 || !seenNames.Add(name))
+            {
+                continue;
+            }
+
+            remotes.Add(new RepositoryRemote(name, urlAndDirection[0]));
+        }
+
+        return remotes;
     }
 
     private static long ComputeDirectorySize(string path)

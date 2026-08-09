@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.ComponentModel;
+using System.Text;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
@@ -67,6 +68,8 @@ public sealed class RepositoryManager(
                     IsDirty = stats.IsDirty,
                     AheadCount = stats.AheadCount,
                     BehindCount = stats.BehindCount,
+                    IsRemoteGone = stats.IsRemoteGone,
+                    Remotes = [.. stats.Remotes.Select(r => new Domain.Repositories.RepositoryRemote(r.Name, r.Url))],
                     IsActive = isActive,
                 });
         }
@@ -75,7 +78,7 @@ public sealed class RepositoryManager(
     }
 
     /// <inheritdoc />
-    public async Task<RepositoryActionResult> CloneAsync(string url, string name, CancellationToken cancellationToken)
+    public async Task<RepositoryActionResult> CloneAsync(string url, string name, string? branch, CancellationToken cancellationToken)
     {
         var resolution = workingDirectoryResolver.Resolve(name);
         if (!resolution.IsAllowed)
@@ -127,7 +130,7 @@ public sealed class RepositoryManager(
         // returns as soon as the run is accepted and keeps going in the background, visible via
         // Status/History like any other run, per specs/service-dashboard's "the clone starts,
         // appears as an in-flight run" requirement.
-        _ = RunCloneToCompletionAsync(run, targetPath, url, cancelRequestCts);
+        _ = RunCloneToCompletionAsync(run, targetPath, url, branch, cancelRequestCts);
 
         return new RepositoryActionResult.Accepted(runId);
     }
@@ -221,6 +224,344 @@ public sealed class RepositoryManager(
         return new RepositoryActionResult.Accepted(runId);
     }
 
+    /// <inheritdoc />
+    public Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken) =>
+        RunGitActionAsync(name, ["pull"], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken) =>
+        RunGitActionAsync(name, ["push"], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken) =>
+        RunGitActionAsync(name, ["push", "--force"], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken) =>
+        RunGitActionAsync(name, ["fetch"], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken) =>
+        RunGitActionAsync(name, ["clean", "-xdf"], cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return null;
+        }
+
+        var runs = await runRepository.ListAsync(
+            new RunQuery { RepositoryPath = resolution.ResolvedPath, Kinds = [RunKind.RepositoryClone], Outcomes = [RunOutcome.Completed] },
+            cancellationToken);
+
+        // Most-recent-first per IRunRepository.ListAsync - the latest completed clone is the one
+        // that actually produced the directory as it exists today.
+        return runs.Count > 0 ? runs[0].SourceUrl : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        {
+            return [];
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        var currentBranch = (await RunGitCaptureAsync(targetPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
+        var localOutput = await RunGitCaptureAsync(targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+        var remoteOutput = await RunGitCaptureAsync(targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+
+        var localNames = new HashSet<string>(StringComparer.Ordinal);
+        var branches = new List<RepositoryBranch>();
+
+        foreach (var branchName in SplitNonEmptyLines(localOutput))
+        {
+            localNames.Add(branchName);
+            branches.Add(new RepositoryBranch(branchName, IsRemote: false, IsCurrent: branchName == currentBranch));
+        }
+
+        foreach (var remoteRef in SplitNonEmptyLines(remoteOutput))
+        {
+            // "origin/feature" -> "feature"; skips the symbolic "origin/HEAD" ref and any remote
+            // branch that already has a local tracking branch of the same short name (per
+            // specs/repository-management's "switching to a remote branch with no local counterpart"
+            // wording - one with a local counterpart is just the local entry above, not listed twice).
+            var slashIndex = remoteRef.IndexOf('/');
+            if (slashIndex < 0 || remoteRef.EndsWith("/HEAD", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var branchName = remoteRef[(slashIndex + 1)..];
+            if (localNames.Contains(branchName))
+            {
+                continue;
+            }
+
+            branches.Add(new RepositoryBranch(branchName, IsRemote: true, IsCurrent: false));
+        }
+
+        return branches;
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        if (!Directory.Exists(targetPath))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+        }
+
+        var runId = Guid.NewGuid();
+        using var cancelRequestCts = new CancellationTokenSource();
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        try
+        {
+            var localOutput = await RunGitCaptureAsync(targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+            var hasLocal = SplitNonEmptyLines(localOutput).Contains(branch, StringComparer.Ordinal);
+
+            string[] checkoutArguments;
+            if (hasLocal)
+            {
+                checkoutArguments = ["checkout", branch];
+            }
+            else
+            {
+                var remoteRef = await FindRemoteRefAsync(targetPath, branch, cancellationToken);
+                if (remoteRef is null)
+                {
+                    return new RepositoryGitActionResult.Failed($"No local or remote branch named '{branch}'.");
+                }
+
+                checkoutArguments = ["checkout", "-b", branch, "--track", remoteRef];
+            }
+
+            var sink = new CapturingOutputSink();
+
+            try
+            {
+                var result = await processRunner.RunAsync(new ProcessRunRequest(checkoutArguments, targetPath, "git"), sink, cancellationToken);
+                if (result.ExitCode != 0)
+                {
+                    return new RepositoryGitActionResult.Failed(sink.Stderr);
+                }
+            }
+            catch (Win32Exception ex)
+            {
+                return new RepositoryGitActionResult.Failed(ex.Message);
+            }
+
+            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
+            statsCache.Set(name, stats);
+            statsEventBus.Publish(name);
+
+            return new RepositoryGitActionResult.Succeeded();
+        }
+        finally
+        {
+            runRegistry.Release(targetPath);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+        var sink = new CapturingOutputSink();
+
+        try
+        {
+            var result = await processRunner.RunAsync(new ProcessRunRequest(["ls-remote", "--heads", url], options.Value.RootDirectory, "git"), sink, linkedCts.Token);
+            if (result.ExitCode != 0)
+            {
+                return [];
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
+        catch (Win32Exception)
+        {
+            return [];
+        }
+
+        const string headsPrefix = "refs/heads/";
+        var branches = new List<string>();
+
+        foreach (var line in SplitNonEmptyLines(sink.Stdout))
+        {
+            var tabIndex = line.IndexOf('\t');
+            if (tabIndex < 0)
+            {
+                continue;
+            }
+
+            var refName = line[(tabIndex + 1)..].Trim();
+            if (refName.StartsWith(headsPrefix, StringComparison.Ordinal))
+            {
+                branches.Add(refName[headsPrefix.Length..]);
+            }
+        }
+
+        return branches;
+    }
+
+    /// <summary>
+    /// Shared implementation for <see cref="PullAsync"/>/<see cref="PushAsync"/>/<see cref="ForcePushAsync"/>/
+    /// <see cref="FetchAsync"/>/<see cref="CleanAsync"/> - resolves and confines the name, acquires
+    /// the per-repository lock for the duration, runs the given git invocation to completion (no
+    /// streamed output, no history record - per specs/repository-management's "Dashboard-only
+    /// pull/push/force-push/fetch/clean actions" requirement), and refreshes cached stats on success.
+    /// </summary>
+    private async Task<RepositoryGitActionResult> RunGitActionAsync(string name, string[] gitArguments, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        if (!Directory.Exists(targetPath))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+        }
+
+        var runId = Guid.NewGuid();
+        using var cancelRequestCts = new CancellationTokenSource();
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        try
+        {
+            var timeout = TimeSpan.FromSeconds(options.Value.DefaultExecutionTimeoutSeconds);
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+            var sink = new CapturingOutputSink();
+
+            try
+            {
+                var result = await processRunner.RunAsync(new ProcessRunRequest(gitArguments, targetPath, "git"), sink, linkedCts.Token);
+                if (result.ExitCode != 0)
+                {
+                    return new RepositoryGitActionResult.Failed(sink.Stderr);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return new RepositoryGitActionResult.Failed("Timed out.");
+            }
+            catch (Win32Exception ex)
+            {
+                return new RepositoryGitActionResult.Failed(ex.Message);
+            }
+
+            // Recompute+publish immediately, the same as a clone's completion already does - so the
+            // row reflects the result without waiting for the next background sampler tick.
+            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
+            statsCache.Set(name, stats);
+            statsEventBus.Publish(name);
+
+            return new RepositoryGitActionResult.Succeeded();
+        }
+        finally
+        {
+            runRegistry.Release(targetPath);
+        }
+    }
+
+    private async Task<string?> FindRemoteRefAsync(string targetPath, string branch, CancellationToken cancellationToken)
+    {
+        var remoteOutput = await RunGitCaptureAsync(targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+        string? fallback = null;
+
+        foreach (var remoteRef in SplitNonEmptyLines(remoteOutput))
+        {
+            if (!remoteRef.EndsWith($"/{branch}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (remoteRef.StartsWith("origin/", StringComparison.Ordinal))
+            {
+                return remoteRef;
+            }
+
+            fallback ??= remoteRef;
+        }
+
+        return fallback;
+    }
+
+    private static IEnumerable<string> SplitNonEmptyLines(string text) =>
+        text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0);
+
+    /// <summary>Runs a short-lived git invocation and captures its stdout, for the ad-hoc lookups (branches, remotes) this class needs outside the streamed/history-tracked run path.</summary>
+    private async Task<string?> RunGitCaptureAsync(string workingDirectory, string[] arguments, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+        var sink = new CapturingOutputSink();
+
+        try
+        {
+            var result = await processRunner.RunAsync(new ProcessRunRequest(arguments, workingDirectory, "git"), sink, linkedCts.Token);
+            return result.ExitCode == 0 ? sink.Stdout : null;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Win32Exception)
+        {
+            return null;
+        }
+    }
+
+    private sealed class CapturingOutputSink : IProcessOutputSink
+    {
+        private readonly StringBuilder _stdout = new();
+        private readonly StringBuilder _stderr = new();
+
+        public string Stdout => _stdout.ToString();
+
+        public string Stderr => _stderr.ToString();
+
+        public Task OnStandardOutputAsync(string line, CancellationToken cancellationToken)
+        {
+            _stdout.AppendLine(line);
+            return Task.CompletedTask;
+        }
+
+        public Task OnStandardErrorAsync(string line, CancellationToken cancellationToken)
+        {
+            _stderr.AppendLine(line);
+            return Task.CompletedTask;
+        }
+    }
+
     /// <summary>
     /// Recursively clears the read-only attribute from every file under <paramref name="path"/> -
     /// see <see cref="DeleteAsync"/>'s own remarks for why this is necessary before a recursive delete.
@@ -236,7 +577,7 @@ public sealed class RepositoryManager(
         }
     }
 
-    private async Task RunCloneToCompletionAsync(Run run, string targetPath, string url, CancellationTokenSource cancelRequestCts)
+    private async Task RunCloneToCompletionAsync(Run run, string targetPath, string url, string? branch, CancellationTokenSource cancelRequestCts)
     {
         var sink = new RepositoryCloneOutputSink(runEventBus, run.Id, targetPath, options.Value.OutputCapBytes);
 
@@ -246,10 +587,14 @@ public sealed class RepositoryManager(
             using var timeoutCts = new CancellationTokenSource(timeout);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancelRequestCts.Token);
 
+            var cloneArguments = string.IsNullOrWhiteSpace(branch)
+                ? new[] { "clone", url, targetPath }
+                : new[] { "clone", "--branch", branch, url, targetPath };
+
             try
             {
                 var result = await processRunner.RunAsync(
-                    new ProcessRunRequest(["clone", url, targetPath], options.Value.RootDirectory, "git"),
+                    new ProcessRunRequest(cloneArguments, options.Value.RootDirectory, "git"),
                     sink,
                     linkedCts.Token,
                     onStarted: pid => runRegistry.SetProcessId(run.Id, pid));

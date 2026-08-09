@@ -114,6 +114,7 @@ else
     private bool _showCloneForm;
     private string _cloneUrl = string.Empty;
     private string _cloneName = string.Empty;
+    private string? _cloneBranch;
     private string? _cloneError;
     private string _searchText = string.Empty;
     private bool _activeOnly;
@@ -240,7 +241,7 @@ else
     private async Task SubmitCloneAsync()
     {
         _cloneError = null;
-        var result = await RepositoryManager.CloneAsync(_cloneUrl, _cloneName, CancellationToken.None);
+        var result = await RepositoryManager.CloneAsync(_cloneUrl, _cloneName, _cloneBranch, CancellationToken.None);
 
         if (result is RepositoryActionResult.Rejected rejected)
         {

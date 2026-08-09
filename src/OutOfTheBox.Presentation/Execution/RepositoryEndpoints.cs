@@ -55,7 +55,7 @@ public static class RepositoryEndpoints
             return Results.BadRequest(new { reason = "validation" });
         }
 
-        var result = await repositoryManager.CloneAsync(body.Url, body.Name, cancellationToken);
+        var result = await repositoryManager.CloneAsync(body.Url, body.Name, body.Branch, cancellationToken);
 
         switch (result)
         {

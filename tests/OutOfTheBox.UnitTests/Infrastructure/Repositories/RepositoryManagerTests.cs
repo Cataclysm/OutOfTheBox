@@ -56,7 +56,7 @@ public sealed class RepositoryManagerTests : IDisposable
     {
         var manager = CreateManager(new RunRegistry());
 
-        var result = await manager.CloneAsync("https://example.com/repository.git", @"..\evil", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", @"..\evil", null, CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
@@ -69,7 +69,7 @@ public sealed class RepositoryManagerTests : IDisposable
         var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
         var manager = CreateManager(new RunRegistry(), runRepository);
 
-        var result = await manager.CloneAsync("https://example.com/repository.git", "existing-repository", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", "existing-repository", null, CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.AlreadyExists, rejected.Reason);
@@ -90,7 +90,7 @@ public sealed class RepositoryManagerTests : IDisposable
 
         var manager = CreateManager(registry);
 
-        var result = await manager.CloneAsync("https://example.com/repository.git", "target-repository", CancellationToken.None);
+        var result = await manager.CloneAsync("https://example.com/repository.git", "target-repository", null, CancellationToken.None);
 
         var rejected = Assert.IsType<RepositoryActionResult.Rejected>(result);
         Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
@@ -232,6 +232,12 @@ public sealed class RepositoryManagerTests : IDisposable
     private sealed class UnreachableStatsProvider : IRepositoryStatsProvider
     {
         public Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A rejection-path test unexpectedly reached stats computation.");
+
+        public Task<GitStatusSnapshot> ComputeGitStatusAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A rejection-path test unexpectedly reached stats computation.");
+
+        public Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A rejection-path test unexpectedly reached stats computation.");
     }
 }

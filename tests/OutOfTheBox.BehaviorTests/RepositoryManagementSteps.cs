@@ -52,7 +52,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     public async Task WhenAnOperatorClonesTheFixtureRepositoryUnderANewName()
     {
         await EnsureFactoryAsync();
-        _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
+        _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, null, CancellationToken.None);
 
         // The clone runs in the background (CloneAsync returns as soon as it's accepted) - poll
         // briefly for the terminal history row rather than assuming it's already there.
@@ -90,7 +90,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"an operator attempts to clone into that same name")]
-    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
+    public async Task WhenAnOperatorAttemptsToCloneIntoThatSameName() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, null, CancellationToken.None);
 
     [Then(@"the clone is rejected as already existing")]
     public void ThenTheCloneIsRejectedAsAlreadyExisting()
@@ -127,7 +127,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
     [When(@"a second clone into that same name is requested before the first finishes")]
-    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, CancellationToken.None);
+    public async Task WhenASecondCloneIntoThatSameNameIsRequestedBeforeTheFirstFinishes() => _cloneResult = await RepositoryManager.CloneAsync(SourceRepositoryPath, TargetName, null, CancellationToken.None);
 
     [Then(@"the second clone is rejected as a conflict identifying the in-flight run")]
     public void ThenTheSecondCloneIsRejectedAsAConflictIdentifyingTheInFlightRun()

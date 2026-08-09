@@ -47,13 +47,23 @@ public sealed class ServiceOptions
     public string SqliteFilePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// How often the background repository-stats sampler recomputes size/git status for every
-    /// repository, in seconds. Deliberately slow (default 60s) relative to the resource sampler -
-    /// per design.md, both size and git status are also recomputed immediately whenever a run
-    /// against that specific repository reaches a terminal state, so this interval only bounds the
-    /// worst-case staleness for a repository nothing has run against recently.
+    /// How often the background repository-stats sampler recomputes total on-disk size for every
+    /// repository, in seconds. Deliberately slow (default 60s) - a full recursive directory walk is
+    /// materially more expensive than a git-status check, per design.md's two-cadence decision. Both
+    /// size and git status are also recomputed immediately whenever a run against that specific
+    /// repository reaches a terminal state, so this interval only bounds the worst-case staleness for
+    /// a repository nothing has run against recently.
     /// </summary>
     public int RepositoryStatsSamplerIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// How often the background repository-stats sampler recomputes git status (branch, dirty/clean,
+    /// ahead/behind, remote-gone) for every repository, in seconds. Deliberately faster than
+    /// <see cref="RepositoryStatsSamplerIntervalSeconds"/>'s size cadence - a handful of short-lived
+    /// <c>git</c> invocations is much cheaper than a full directory walk, per design.md's two-cadence
+    /// decision.
+    /// </summary>
+    public int RepositoryGitStatusIntervalSeconds { get; set; } = 10;
 
     /// <summary>
     /// How often the background host/process resource sampler ticks, in seconds. Deliberately

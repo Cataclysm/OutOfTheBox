@@ -45,6 +45,16 @@ public sealed class RepositorySummary
     /// <summary>Commits behind the configured upstream, if one exists; <see langword="null"/> if there is none.</summary>
     public int? BehindCount { get; init; }
 
+    /// <summary>
+    /// Whether the current branch has a configured upstream whose remote-side branch no longer
+    /// exists (git's own "[gone]" tracking state) - distinct from having no upstream configured at
+    /// all, in which case this is <see langword="false"/> and <see cref="AheadCount"/>/<see cref="BehindCount"/> are both null.
+    /// </summary>
+    public bool IsRemoteGone { get; init; }
+
+    /// <summary>This repository's configured git remotes (name and URL), shown on its detail subpage. Empty if not a git repository.</summary>
+    public IReadOnlyList<RepositoryRemote> Remotes { get; init; } = [];
+
     /// <summary>Whether this repository currently holds the per-repository command lock (an in-flight <c>dotnet</c>/<c>git</c> run or clone). Sourced live, never cached.</summary>
     public required bool IsActive { get; init; }
 }

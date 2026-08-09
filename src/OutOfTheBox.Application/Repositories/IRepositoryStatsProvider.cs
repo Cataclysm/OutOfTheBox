@@ -10,6 +10,12 @@ namespace OutOfTheBox.Application.Repositories;
 /// </summary>
 public interface IRepositoryStatsProvider
 {
-    /// <summary>Computes current size/git-status for the repository at <paramref name="repositoryPath"/>.</summary>
+    /// <summary>Computes current size/git-status for the repository at <paramref name="repositoryPath"/> - both halves, for callers that need a full snapshot in one shot (initial sampler startup sweep, post-clone, post-run-event recompute).</summary>
     Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken);
+
+    /// <summary>Computes only the git-status half (branch, dirty, ahead/behind, remote-gone, remotes) - cheap (a handful of short-lived <c>git</c> invocations, no directory walk), for the sampler's fast cadence.</summary>
+    Task<GitStatusSnapshot> ComputeGitStatusAsync(string repositoryPath, CancellationToken cancellationToken);
+
+    /// <summary>Computes only the total on-disk size - a full recursive directory walk, for the sampler's slow cadence.</summary>
+    Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken);
 }

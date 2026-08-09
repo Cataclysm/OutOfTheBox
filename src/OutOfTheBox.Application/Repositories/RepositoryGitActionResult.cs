@@ -1,0 +1,22 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+
+namespace OutOfTheBox.Application.Repositories;
+
+/// <summary>
+/// The outcome of a pull/push/force-push/fetch/clean action (per <see cref="IRepositoryManager"/>) -
+/// unlike <see cref="RepositoryActionResult"/>'s clone/delete outcomes, these run to completion
+/// synchronously (no run id, no history record, no streamed output) since the dashboard only needs
+/// to recolor an icon on completion, per specs/repository-management's "Dashboard-only
+/// pull/push/force-push/fetch/clean actions" requirement.
+/// </summary>
+public abstract record RepositoryGitActionResult
+{
+    /// <summary>The git invocation completed with exit code 0.</summary>
+    public sealed record Succeeded : RepositoryGitActionResult;
+
+    /// <summary>The git invocation ran but exited non-zero, or could not start at all.</summary>
+    public sealed record Failed(string? ErrorMessage) : RepositoryGitActionResult;
+
+    /// <summary>The request was rejected before acquiring any lock or invoking git.</summary>
+    public sealed record Rejected(RepositoryActionRejectionReason Reason, Guid? ConflictingRunId = null) : RepositoryGitActionResult;
+}
