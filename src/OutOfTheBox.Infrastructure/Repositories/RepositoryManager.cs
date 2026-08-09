@@ -289,13 +289,19 @@ public sealed class RepositoryManager(
             var scopedRunRepository = scope.ServiceProvider.GetRequiredService<IRunRepository>();
             await scopedRunRepository.UpdateAsync(run, CancellationToken.None);
 
-            runEventBus.Publish(new RunEvent(run.Id, RunKind.RepositoryClone, RunEventType.Terminal, targetPath));
-
+            // Computed and cached BEFORE the Terminal event below, not after - found on real-machine
+            // use: Repositories.razor refreshes exactly once, synchronously, off that event, so
+            // publishing it first left the dashboard's one-shot snapshot racing this computation and
+            // permanently stuck showing "Computing…" (StatsComputed still false at snapshot time)
+            // until some unrelated event elsewhere triggered another refresh. Ordering this first
+            // means the snapshot the Terminal event triggers always already has the fresh stats.
             if (run.Outcome == RunOutcome.Completed)
             {
                 var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
                 statsCache.Set(Path.GetFileName(targetPath), stats);
             }
+
+            runEventBus.Publish(new RunEvent(run.Id, RunKind.RepositoryClone, RunEventType.Terminal, targetPath));
         }
         finally
         {
