@@ -372,6 +372,7 @@ public sealed class RepositoryManager(
             }
             catch (Win32Exception ex)
             {
+                logger.LogError(ex, "git checkout failed to start for repository '{Name}' switching to branch '{Branch}'.", name, branch);
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
@@ -402,10 +403,18 @@ public sealed class RepositoryManager(
         }
         catch (OperationCanceledException)
         {
+            // Timed out - the clone dialog's branch dropdown just stays empty, per specs/
+            // repository-management's "Branch enumeration failure does not block cloning"
+            // requirement. Not logged: a slow/unreachable remote URL the operator typed is routine,
+            // caller-driven behavior, not a bug in this service.
             return [];
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
+            // Unlike a timeout, git.exe itself failing to start is this service's own problem, not
+            // the remote's - worth a trace, since otherwise it's indistinguishable from "this URL
+            // genuinely has zero branches."
+            logger.LogWarning(ex, "git ls-remote failed to start while enumerating branches for {Url}.", url);
             return [];
         }
 
@@ -523,6 +532,7 @@ public sealed class RepositoryManager(
             }
             catch (Win32Exception ex)
             {
+                logger.LogError(ex, "git checkout failed to start for repository '{Name}' checking out commit {Hash}.", name, hash);
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
@@ -614,10 +624,12 @@ public sealed class RepositoryManager(
             }
             catch (OperationCanceledException)
             {
+                logger.LogWarning("git {Arguments} timed out for repository '{Name}'.", string.Join(' ', gitArguments), name);
                 return new RepositoryGitActionResult.Failed("Timed out.");
             }
             catch (Win32Exception ex)
             {
+                logger.LogError(ex, "git {Arguments} failed to start for repository '{Name}'.", string.Join(' ', gitArguments), name);
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
@@ -677,8 +689,12 @@ public sealed class RepositoryManager(
         {
             return null;
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
+            // Backs ListBranchesAsync/ListCommitsAsync/FindRemoteRefAsync/SwitchBranchAsync's local-
+            // branch check - a failure here surfaces only as an empty branch list or commit graph,
+            // indistinguishable from "genuinely nothing there" without this trace.
+            logger.LogWarning(ex, "git {Arguments} failed to start in {WorkingDirectory}.", string.Join(' ', arguments), workingDirectory);
             return null;
         }
     }
@@ -767,6 +783,7 @@ public sealed class RepositoryManager(
                 // method has no HTTP response to abort onto, so there's no other signal that
                 // would ever surface the failure. The message is captured into Stderr the same way
                 // DeleteAsync's catch does, so an operator sees why, not just that it failed.
+                logger.LogError(ex, "git clone failed to start for run {RunId} ({Url} -> {TargetPath}).", run.Id, url, targetPath);
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Failed;
                 run.Stderr = ex.Message;

@@ -13,6 +13,7 @@ using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 
@@ -26,8 +27,8 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 public sealed class StatusComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
-    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus();
-    private readonly IResourceEventBus _resourceEventBus = new InMemoryResourceEventBus();
+    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
+    private readonly IResourceEventBus _resourceEventBus = new InMemoryResourceEventBus(NullLogger<InMemoryResourceEventBus>.Instance);
     private readonly SpyProcessMonitor _processMonitor = new();
     private readonly SpyChartInterop _chartInterop = new();
 

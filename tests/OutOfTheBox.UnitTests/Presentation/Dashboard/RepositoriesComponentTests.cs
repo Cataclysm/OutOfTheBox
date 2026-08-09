@@ -30,8 +30,8 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
 {
     private readonly string _root;
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
-    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus();
-    private readonly IRepositoryStatsEventBus _repositoryStatsEventBus = new InMemoryRepositoryStatsEventBus();
+    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
+    private readonly IRepositoryStatsEventBus _repositoryStatsEventBus = new InMemoryRepositoryStatsEventBus(NullLogger<InMemoryRepositoryStatsEventBus>.Instance);
     private readonly RunRegistry _runRegistry = new();
     private readonly RepositoryStatsCache _statsCache = new();
     private readonly ServiceProvider _scopeFactoryProvider;

@@ -40,7 +40,7 @@ public sealed class RepositoryStatsSamplerTests : IDisposable
     public async Task RecomputeAllOnceAsync_skips_a_failing_repository_and_still_computes_the_rest()
     {
         var statsCache = new RepositoryStatsCache();
-        var statsEventBus = new InMemoryRepositoryStatsEventBus();
+        var statsEventBus = new InMemoryRepositoryStatsEventBus(NullLogger<InMemoryRepositoryStatsEventBus>.Instance);
         var publishedNames = new List<string>();
         using var subscription = statsEventBus.Subscribe(publishedNames.Add);
 
@@ -48,7 +48,7 @@ public sealed class RepositoryStatsSamplerTests : IDisposable
             Options.Create(new ServiceOptions { RootDirectory = _root }),
             new ThrowsForOneRepositoryStatsProvider("bad-repo"),
             statsCache,
-            new InMemoryRunEventBus(),
+            new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance),
             statsEventBus,
             NullLogger<RepositoryStatsSampler>.Instance);
 

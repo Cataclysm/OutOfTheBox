@@ -149,8 +149,8 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
     private HostResourceSamplerService CreateService(IResourceSampler sampler) => new(
         Options.Create(new ServiceOptions { ResourceSamplerIntervalSeconds = 3 }),
         sampler,
-        new InMemoryResourceEventBus(),
-        new InMemoryRunEventBus(),
+        new InMemoryResourceEventBus(NullLogger<InMemoryResourceEventBus>.Instance),
+        new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance),
         new ResourceHistoryBuffer(new SystemClock()),
         _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>(),
         NullLogger<HostResourceSamplerService>.Instance);

@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using OutOfTheBox.Application.Events;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Events;
 
@@ -13,7 +14,7 @@ namespace OutOfTheBox.Infrastructure.Events;
 /// <c>IRunEventBus</c> among the ports Infrastructure implements, so dashboard components in
 /// Presentation depend only on the interface, never on this concrete type.
 /// </remarks>
-public sealed class InMemoryRunEventBus : IRunEventBus
+public sealed class InMemoryRunEventBus(ILogger<InMemoryRunEventBus> logger) : IRunEventBus
 {
     private readonly ConcurrentDictionary<Guid, Action<RunEvent>> _subscribers = new();
 
@@ -26,10 +27,13 @@ public sealed class InMemoryRunEventBus : IRunEventBus
             {
                 handler(runEvent);
             }
-            catch
+            catch (Exception ex)
             {
                 // A subscriber's own failure (e.g. a Blazor component mid-teardown) must never
-                // break the publishing code path (command execution, persistence) it's attached to.
+                // break the publishing code path (command execution, persistence) it's attached to -
+                // logged at Warning, not Error, since a torn-down circuit throwing here is an
+                // expected race, not an operation the operator directly triggered failing.
+                logger.LogWarning(ex, "A run-event subscriber threw handling a {EventType} event for run {RunId}.", runEvent.Type, runEvent.RunId);
             }
         }
     }
