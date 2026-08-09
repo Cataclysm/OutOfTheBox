@@ -25,12 +25,14 @@
                 SizeBytes="@entry.SizeBytes"
                 Depth="0"
                 OnChanged="LoadRootAsync"
-                ConfirmDialogRef="_confirmDialog!" />
+                ConfirmDialogRef="_confirmDialog!"
+                PreviewDialogRef="_previewDialog!" />
         }
     }
 </div>
 
 <ConfirmDialog @ref="_confirmDialog" />
+<FilePreviewDialog @ref="_previewDialog" />
 
 @code {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
@@ -41,6 +43,7 @@
 
     private IReadOnlyList<RepositoryFileEntry>? _entries;
     private ConfirmDialog? _confirmDialog;
+    private FilePreviewDialog? _previewDialog;
     private CancellationTokenSource? _pollCts;
 
     /// <inheritdoc />

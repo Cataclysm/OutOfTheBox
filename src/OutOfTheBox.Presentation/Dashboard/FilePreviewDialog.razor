@@ -1,0 +1,161 @@
+@using System.Text
+@using Microsoft.JSInterop
+@using OutOfTheBox.Application.Repositories
+@inject IRepositoryFileBrowser FileBrowser
+@inject IJSRuntime JS
+
+<dialog @ref="_dialogElement" class="file-preview-dialog">
+    <div class="dialog-body">
+        <h2 class="ellipsis" title="@_name">@_name</h2>
+        @if (_loading)
+        {
+            <p>Loading...</p>
+        }
+        else if (_error is not null)
+        {
+            <p class="empty-state">@_error</p>
+        }
+        else if (_kind == PreviewKind.Image)
+        {
+            <img class="file-preview-image" src="@_imageUrl" alt="@_name" />
+        }
+        else if (_kind == PreviewKind.Text)
+        {
+            <pre class="run-output file-preview-text">@_text</pre>
+            @if (_truncated)
+            {
+                <p class="empty-state">Preview truncated to the first @FormatSize(PreviewMaxBytes) - download the file for the rest.</p>
+            }
+        }
+        <div class="dialog-actions">
+            <button type="button" @onclick="CloseAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Close
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    private const long PreviewMaxBytes = 1024 * 1024;
+
+    // Extension-based only, per design: no magic-byte sniffing, no attempt to preview anything
+    // outside these two kinds - a file this doesn't recognize simply isn't offered a preview at all
+    // (see CanPreview, checked by the caller before ever showing this dialog).
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico",
+    };
+
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt", ".md", ".cs", ".csproj", ".sln", ".slnx", ".json", ".xml", ".yml", ".yaml", ".css",
+        ".js", ".ts", ".jsx", ".tsx", ".html", ".htm", ".csv", ".log", ".config", ".gitignore",
+        ".gitattributes", ".editorconfig", ".props", ".targets", ".razor", ".cshtml", ".py", ".rb",
+        ".go", ".rs", ".java", ".c", ".h", ".cpp", ".hpp", ".sh", ".ps1", ".bat", ".ini", ".toml",
+        ".sql", ".wxs", ".wxi", ".wxl",
+    };
+
+    private static readonly HashSet<string> ExtensionlessTextNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Dockerfile", "LICENSE", "README", "Makefile", "CHANGELOG",
+    };
+
+    private enum PreviewKind
+    {
+        Unsupported,
+        Text,
+        Image,
+    }
+
+    private ElementReference _dialogElement;
+    private string _name = string.Empty;
+    private string _imageUrl = string.Empty;
+    private string _text = string.Empty;
+    private bool _truncated;
+    private bool _loading;
+    private string? _error;
+    private PreviewKind _kind;
+
+    /// <summary>Whether <paramref name="name"/> is a file type this dialog knows how to preview - callers should skip opening it entirely otherwise.</summary>
+    public static bool CanPreview(string name) => Classify(name) != PreviewKind.Unsupported;
+
+    private static PreviewKind Classify(string name)
+    {
+        var extension = Path.GetExtension(name);
+
+        if (ImageExtensions.Contains(extension))
+        {
+            return PreviewKind.Image;
+        }
+
+        if (TextExtensions.Contains(extension) || (extension.Length == 0 && ExtensionlessTextNames.Contains(name)))
+        {
+            return PreviewKind.Text;
+        }
+
+        return PreviewKind.Unsupported;
+    }
+
+    /// <summary>Opens the dialog and loads a preview for the given file - an image renders via its existing download URL, text is read directly (capped, with a truncation note past that cap).</summary>
+    public async Task ShowAsync(string repositoryName, string relativePath, string name, string downloadUrl)
+    {
+        _name = name;
+        _kind = Classify(name);
+        _error = null;
+        _text = string.Empty;
+        _truncated = false;
+        _loading = _kind == PreviewKind.Text;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+
+        if (_kind == PreviewKind.Image)
+        {
+            _imageUrl = downloadUrl;
+            return;
+        }
+
+        if (_kind != PreviewKind.Text)
+        {
+            return;
+        }
+
+        var resolvedPath = await FileBrowser.ResolveConfinedFilePathAsync(repositoryName, relativePath, CancellationToken.None);
+        if (resolvedPath is null)
+        {
+            _error = "File not found.";
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(resolvedPath);
+            if (fileInfo.Length <= PreviewMaxBytes)
+            {
+                _text = await File.ReadAllTextAsync(resolvedPath);
+            }
+            else
+            {
+                await using var stream = File.OpenRead(resolvedPath);
+                var buffer = new byte[PreviewMaxBytes];
+                var read = await stream.ReadAsync(buffer.AsMemory());
+                _text = Encoding.UTF8.GetString(buffer, 0, read);
+                _truncated = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _error = "Failed to read file - it may be locked by another process.";
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+
+    private static string FormatSize(long bytes) => bytes >= 1024 * 1024
+        ? $"{bytes / (1024.0 * 1024):F1} MB"
+        : $"{bytes / 1024.0:F1} KB";
+}

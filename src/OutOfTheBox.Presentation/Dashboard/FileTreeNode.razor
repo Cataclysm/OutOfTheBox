@@ -10,7 +10,7 @@
     @if (_renaming)
     {
         <input class="file-tree-rename-input" value="@_renameValue" @oninput="@(e => _renameValue = e.Value?.ToString() ?? string.Empty)" @onclick:stopPropagation="true" @onkeydown="OnRenameKeyDownAsync" />
-        <span class="file-tree-actions" style="display: flex" @onclick:stopPropagation="true">
+        <span class="file-tree-actions" style="visibility: visible" @onclick:stopPropagation="true">
             <button type="button" class="icon-button" title="Confirm rename" @onclick="ConfirmRenameAsync">
                 <Icon Name="confirm" />
             </button>
@@ -22,10 +22,6 @@
     else
     {
         <span class="file-tree-name" title="@Name">@Name</span>
-        @if (!IsDirectory && SizeBytes is not null)
-        {
-            <span class="file-tree-meta">@FormatSize(SizeBytes.Value)</span>
-        }
         <span class="file-tree-actions" @onclick:stopPropagation="true">
             @if (!IsDirectory)
             {
@@ -40,6 +36,10 @@
                 <Icon Name="trash" />
             </button>
         </span>
+        @if (!IsDirectory && SizeBytes is not null)
+        {
+            <span class="file-tree-meta">@FormatSize(SizeBytes.Value)</span>
+        }
     }
 </div>
 
@@ -67,7 +67,8 @@
                     SizeBytes="@child.SizeBytes"
                     Depth="@(Depth + 1)"
                     OnChanged="LoadChildrenAsync"
-                    ConfirmDialogRef="ConfirmDialogRef" />
+                    ConfirmDialogRef="ConfirmDialogRef"
+                    PreviewDialogRef="PreviewDialogRef" />
             }
         }
     </div>
@@ -108,6 +109,10 @@
     [Parameter, EditorRequired]
     public ConfirmDialog ConfirmDialogRef { get; set; } = default!;
 
+    /// <summary>The single <see cref="FilePreviewDialog"/> shared by the whole tree (per <see cref="FileTree"/>), reused for every file row's click-to-preview rather than one dialog per row.</summary>
+    [Parameter, EditorRequired]
+    public FilePreviewDialog PreviewDialogRef { get; set; } = default!;
+
     private bool _expanded;
     private IReadOnlyList<RepositoryFileEntry>? _children;
     private CancellationTokenSource? _pollCts;
@@ -120,8 +125,20 @@
 
     private async Task OnRowClickAsync()
     {
-        if (!IsDirectory || _renaming)
+        if (_renaming)
         {
+            return;
+        }
+
+        if (!IsDirectory)
+        {
+            // Nothing happens for a file type FilePreviewDialog doesn't know how to render (per its
+            // own CanPreview) - not every click needs to do something.
+            if (FilePreviewDialog.CanPreview(Name))
+            {
+                await PreviewDialogRef.ShowAsync(RepositoryName, RelativePath, Name, DownloadUrl);
+            }
+
             return;
         }
 

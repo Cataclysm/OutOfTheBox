@@ -1130,20 +1130,28 @@ dd {
     white-space: nowrap;
 }
 
+/* Trailing element, right after .file-tree-actions - stays pinned at the row's right edge
+   regardless of whether the action icons are visible, since that span's own width is now always
+   reserved (see .file-tree-actions above) rather than appearing/disappearing on hover. */
 .file-tree-meta {
+    flex-shrink: 0;
     color: var(--text-muted);
     font-size: 0.75rem;
-    margin-right: 0.5rem;
 }
 
+/* Always laid out (never display: none) so its width/height are permanently reserved - toggling
+   visibility, not display, on hover keeps the row's own height constant (an icon-button is taller
+   than the row's other content, so display: none/flex swapping it in and out was growing the row on
+   hover) and keeps .file-tree-meta from shifting left as this space appears/disappears. */
 .file-tree-actions {
-    display: none;
+    display: flex;
     align-items: center;
     gap: 0.15rem;
+    visibility: hidden;
 }
 
 .file-tree-row:hover .file-tree-actions {
-    display: flex;
+    visibility: visible;
 }
 
 .file-tree-actions .icon-button {
@@ -1165,4 +1173,28 @@ dd {
 .file-tree-rename-input {
     flex: 1;
     padding: 0.2rem 0.4rem;
+}
+
+/* Wider than the base dialog's 480px cap - a text/image preview needs real room to be useful, unlike
+   the confirm/clone/rename dialogs' short prompts and single fields. */
+.file-preview-dialog {
+    max-width: min(860px, calc(100vw - 2rem));
+    width: 860px;
+}
+
+.file-preview-dialog h2 {
+    font-size: 1rem;
+}
+
+.file-preview-text {
+    max-height: 65vh;
+}
+
+.file-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 65vh;
+    margin: 0 auto;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
 }
