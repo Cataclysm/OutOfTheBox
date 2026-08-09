@@ -103,5 +103,15 @@ public sealed class RepositoryStatsSampler(
         catch (OperationCanceledException)
         {
         }
+        catch (Exception)
+        {
+            // One repository's stats computation failing for any reason (e.g. a future
+            // IRepositoryStatsProvider implementation hitting an I/O or process-start error this
+            // method doesn't specifically know about) must never take down the whole sampler - this
+            // is a BackgroundService, and an exception escaping ExecuteAsync stops the entire host
+            // by default (BackgroundServiceExceptionBehavior.StopHost), silently ending stats
+            // updates for every repository, not just this one. Skip this tick for this repository;
+            // the next tick (or the next event-driven recompute) tries again.
+        }
     }
 }

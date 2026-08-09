@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.ComponentModel;
 using System.Text;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Repositories;
@@ -98,6 +99,17 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
         }
         catch (OperationCanceledException)
         {
+            return null;
+        }
+        catch (Win32Exception)
+        {
+            // git.exe unreachable for the process's account/PATH (e.g. a service account whose
+            // environment doesn't resolve it) - treated the same as "this git invocation produced
+            // nothing usable" rather than allowed to propagate. Left uncaught, this previously
+            // escaped RecomputeOneAsync/RecomputeAllAsync (which only caught
+            // OperationCanceledException) and crashed RepositoryStatsSampler's BackgroundService -
+            // which by default (BackgroundServiceExceptionBehavior.StopHost) stops the whole host,
+            // silently ending every future stats update, not just this one repository's.
             return null;
         }
     }
