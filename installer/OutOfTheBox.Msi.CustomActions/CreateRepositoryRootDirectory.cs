@@ -2,16 +2,9 @@
 
 using System;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using System.Threading;
 using WixToolset.Dtf.WindowsInstaller;
-
-// So CreateRepositoryRootDirectoryTests can exercise the retry-then-fail path with a
-// fast/short-delay retry policy instead of production's real (slower, deliberately so)
-// SidResolveMaxAttempts/SidResolveRetryDelay.
-[assembly: InternalsVisibleTo("OutOfTheBox.Msi.CustomActions.Tests")]
 
 namespace OutOfTheBox.Msi.CustomActions
 {
@@ -73,20 +66,9 @@ namespace OutOfTheBox.Msi.CustomActions
         /// (never domain-joined support) and the bare form needs no extra property plumbed through
         /// <c>CustomActionData</c> at all.
         /// </summary>
-        public static void GrantServiceAccountAccess(string path, string accountName) =>
-            GrantServiceAccountAccess(path, accountName, SidResolveMaxAttempts, SidResolveRetryDelay);
-
-        /// <summary>
-        /// Same as <see cref="GrantServiceAccountAccess(string, string)"/>, with the SID
-        /// resolution retry policy overridable - exists so tests can exercise the retry-then-fail
-        /// path (a genuinely nonexistent account) in milliseconds instead of the real
-        /// <see cref="SidResolveMaxAttempts"/> x <see cref="SidResolveRetryDelay"/> the production
-        /// path deliberately waits, per <see cref="ResolveSidWithRetry"/>'s own remarks.
-        /// </summary>
-        internal static void GrantServiceAccountAccess(string path, string accountName, int maxAttempts, TimeSpan retryDelay)
+        public static void GrantServiceAccountAccess(string path, string accountName)
         {
-            var account = new NTAccount(accountName);
-            var sid = ResolveSidWithRetry(account, maxAttempts, retryDelay);
+            var sid = (SecurityIdentifier)new NTAccount(accountName).Translate(typeof(SecurityIdentifier));
 
             // Files can't carry inheritance flags at all (they have no children to propagate to) -
             // .NET's AddAccessRule throws ArgumentException if any are set on a file-targeted rule,
@@ -112,44 +94,6 @@ namespace OutOfTheBox.Msi.CustomActions
             {
                 TryApplyRule(new FileInfo(file), fileRule);
             }
-        }
-
-        /// <summary>Production retry count for <see cref="ResolveSidWithRetry"/> - see its own remarks for why this needs to exist at all.</summary>
-        private const int SidResolveMaxAttempts = 10;
-
-        /// <summary>Production delay between retries for <see cref="ResolveSidWithRetry"/>.</summary>
-        private static readonly TimeSpan SidResolveRetryDelay = TimeSpan.FromSeconds(1);
-
-        /// <summary>
-        /// Resolves <paramref name="account"/> to its <see cref="SecurityIdentifier"/>, retrying a
-        /// handful of times on <see cref="IdentityNotMappedException"/> as a defensive fallback for
-        /// genuine LSA cache lag on a just-created account - kept as cheap insurance even though the
-        /// actual, root-caused failure behind this action's long real-machine debugging history
-        /// turned out to be unrelated to timing entirely: qualifying the account with <c>.</c> as its
-        /// domain (see <see cref="GrantServiceAccountAccess(string, string)"/>'s own remarks), which
-        /// no amount of retrying would ever have fixed. Resolving once up front (rather than letting
-        /// <see cref="FileSystemAccessRule"/> retry internally on every single file) also means the
-        /// wait, if any, happens once per install, not once per file in a possibly-large repository
-        /// tree.
-        /// </summary>
-        private static SecurityIdentifier ResolveSidWithRetry(NTAccount account, int maxAttempts, TimeSpan delay)
-        {
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
-            {
-                try
-                {
-                    return (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
-                }
-                catch (IdentityNotMappedException) when (attempt < maxAttempts)
-                {
-                    Thread.Sleep(delay);
-                }
-            }
-
-            // One last, un-retried attempt so a genuine (non-transient) failure throws its own
-            // real IdentityNotMappedException here, rather than a synthetic one that would hide
-            // which account/step actually failed from the caller's own exception handling/logging.
-            return (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
         }
 
         private static void TryApplyRule(FileSystemInfo item, FileSystemAccessRule rule)

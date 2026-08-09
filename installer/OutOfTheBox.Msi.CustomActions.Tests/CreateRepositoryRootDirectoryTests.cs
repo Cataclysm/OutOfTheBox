@@ -82,12 +82,6 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
         [Fact]
         public void GrantServiceAccountAccess_throws_when_the_account_does_not_exist()
         {
-            // GrantServiceAccountAccess retries a few times on IdentityNotMappedException as cheap
-            // insurance against genuine LSA cache lag - for a *genuinely* nonexistent account (this
-            // test), every retry fails the same way, and the exception should still propagate once
-            // attempts are exhausted. The internal overload's short retry policy keeps this test fast
-            // instead of actually waiting out production's full SidResolveMaxAttempts x
-            // SidResolveRetryDelay.
             var path = Path.Combine(Path.GetTempPath(), "OutOfTheBox-Test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(path);
 
@@ -95,8 +89,7 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
             {
                 Assert.ThrowsAny<IdentityNotMappedException>(
                     () => CreateRepositoryRootDirectoryAction.GrantServiceAccountAccess(
-                        path, "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N"),
-                        maxAttempts: 2, retryDelay: TimeSpan.FromMilliseconds(10)));
+                        path, "OutOfTheBox-Nonexistent-Account-" + Guid.NewGuid().ToString("N")));
             }
             finally
             {
