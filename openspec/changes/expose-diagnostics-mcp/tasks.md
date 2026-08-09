@@ -24,7 +24,7 @@
 
 ## 5. `mcp-server` spec/test update
 
-- [ ] 5.1 Update `tests/OutOfTheBox.BehaviorTests/McpServer.feature`'s "Listing available tools" scenario to the full ten-tool list (adds `get_environment_info`, `get_file_lock_info` - and confirms `get_run_resources` from the prior change is already present).
+- [x] 5.1 Update `tests/OutOfTheBox.BehaviorTests/McpServer.feature`'s "Listing available tools" scenario to the full ten-tool list (adds `get_environment_info`, `get_file_lock_info` - and confirms `get_run_resources` from the prior change is already present).
 
 ## 6. Tests
 
