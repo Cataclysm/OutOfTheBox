@@ -16,10 +16,7 @@ public sealed class GitDecorationParserTests
         Assert.Empty(GitDecorationParser.Parse(decorations, OriginOnly));
 
     [Fact]
-    public void Bare_HEAD_token_is_skipped()
-    {
-        Assert.Empty(GitDecorationParser.Parse("HEAD", OriginOnly));
-    }
+    public void Bare_HEAD_token_is_skipped() => Assert.Empty(GitDecorationParser.Parse("HEAD", OriginOnly));
 
     [Fact]
     public void HEAD_arrow_branch_is_the_current_local_branch()

@@ -110,6 +110,11 @@ builder.Services.AddSingleton<IRepositoryStatsEventBus, InMemoryRepositoryStatsE
 builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
 builder.Services.AddHostedService<RepositoryStatsSampler>();
 
+// File tree browser (Section 23) - dashboard-only, same reasoning as IRepositoryManager above,
+// but has no scoped dependency of its own (only the singleton WorkingDirectoryResolver/RunRegistry),
+// so it's registered singleton rather than scoped.
+builder.Services.AddSingleton<IRepositoryFileBrowser, RepositoryFileBrowser>();
+
 // Host/process resource monitoring (Section 14). IClock/ResourceHistoryBuffer/IResourceEventBus
 // are process-wide singletons for the same reasons as RunRegistry above; IResourceSampler and
 // IProcessMonitor are singletons too - both are stateless/cheap-per-call aside from the sampler's
