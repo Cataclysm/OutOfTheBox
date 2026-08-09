@@ -493,6 +493,105 @@ public sealed class RepositoryManager(
     }
 
     /// <inheritdoc />
+    public async Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        {
+            return null;
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        var remoteNames = await GetRemoteNamesAsync(targetPath, cancellationToken);
+
+        // Same %x1f/%x1e delimiter trick as ListCommitsAsync - %b (the message body) can itself
+        // contain newlines, but never the unit-separator control character, so splitting on it stays
+        // safe even for a multi-paragraph commit message. --name-status appended after --format is
+        // git's own documented way to get a formatted header followed by a blank line and then
+        // per-file "STATUS<TAB>PATH" lines (or "R100<TAB>OLD<TAB>NEW" for a rename/copy) - --no-patch
+        // can't be combined with --name-status (git rejects that combination outright), so the header
+        // record separator is what marks where the header ends and the file list begins instead.
+        var format = $"%H{LogFieldSeparator}%h{LogFieldSeparator}%P{LogFieldSeparator}%an{LogFieldSeparator}%ae{LogFieldSeparator}%at{LogFieldSeparator}%cn{LogFieldSeparator}%ce{LogFieldSeparator}%ct{LogFieldSeparator}%D{LogFieldSeparator}%s{LogFieldSeparator}%b{LogRecordSeparator}";
+        var output = await RunGitCaptureAsync(targetPath, ["show", $"--format={format}", "--name-status", hash], cancellationToken);
+
+        if (string.IsNullOrEmpty(output))
+        {
+            return null;
+        }
+
+        var recordSeparatorIndex = output.IndexOf(LogRecordSeparator, StringComparison.Ordinal);
+        if (recordSeparatorIndex < 0)
+        {
+            return null;
+        }
+
+        var fields = output[..recordSeparatorIndex].Split(LogFieldSeparator);
+        if (fields.Length < 12)
+        {
+            return null;
+        }
+
+        var files = ParseNameStatus(output[(recordSeparatorIndex + LogRecordSeparator.Length)..]);
+        var refs = GitDecorationParser.Parse(fields[9].Trim(), remoteNames);
+
+        return new CommitDetail(
+            Hash: fields[0].Trim(),
+            ShortHash: fields[1].Trim(),
+            ParentHashes: fields[2].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries),
+            AuthorName: fields[3].Trim(),
+            AuthorEmail: fields[4].Trim(),
+            AuthorDate: ParseUnixSeconds(fields[5]),
+            CommitterName: fields[6].Trim(),
+            CommitterEmail: fields[7].Trim(),
+            CommitterDate: ParseUnixSeconds(fields[8]),
+            Subject: fields[10].Trim(),
+            Body: fields[11].Trim(),
+            Refs: refs,
+            Files: files);
+    }
+
+    private static DateTimeOffset ParseUnixSeconds(string field) =>
+        long.TryParse(field.Trim(), out var unixSeconds) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds) : DateTimeOffset.UnixEpoch;
+
+    private static IReadOnlyList<CommitFileChange> ParseNameStatus(string section)
+    {
+        var files = new List<CommitFileChange>();
+
+        foreach (var rawLine in section.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var parts = line.Split('\t');
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            var kind = parts[0][0] switch
+            {
+                'A' => CommitFileChangeKind.Added,
+                'M' => CommitFileChangeKind.Modified,
+                'D' => CommitFileChangeKind.Deleted,
+                'R' => CommitFileChangeKind.Renamed,
+                'C' => CommitFileChangeKind.Copied,
+                _ => CommitFileChangeKind.Other,
+            };
+
+            // A rename/copy status line carries both the old and new path ("R100<TAB>old<TAB>new");
+            // every other status carries just the one current path.
+            files.Add(kind is CommitFileChangeKind.Renamed or CommitFileChangeKind.Copied && parts.Length >= 3
+                ? new CommitFileChange(parts[2], kind, parts[1])
+                : new CommitFileChange(parts[1], kind));
+        }
+
+        return files;
+    }
+
+    /// <inheritdoc />
     public async Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken)
     {
         var resolution = workingDirectoryResolver.Resolve(name);

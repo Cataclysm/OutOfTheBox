@@ -92,4 +92,12 @@ public interface IRepositoryManager
     /// dashboard requires confirmation before calling this given it changes the checked-out state.
     /// </summary>
     Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches the full detail of one commit (<c>git show</c>) - full message body, separate author/
+    /// committer identity, and the list of files it touched - for the commit detail subpage.
+    /// <see langword="null"/> for an invalid repository name, a repository that isn't a git
+    /// repository, or a hash it doesn't contain.
+    /// </summary>
+    Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken);
 }

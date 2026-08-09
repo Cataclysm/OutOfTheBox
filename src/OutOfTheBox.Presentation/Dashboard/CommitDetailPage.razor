@@ -1,0 +1,134 @@
+@page "/repository-management/{Name}/commits/{Hash}"
+@attribute [Authorize]
+@using System.Globalization
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
+@inject IRepositoryManager RepositoryManager
+
+<PageTitle>@VersionInfo.DisplayName - Commit @Hash</PageTitle>
+
+<a class="back-link" href="@($"repository-management/{Name}")">← Back to @Name</a>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_detail is null)
+{
+    <p class="empty-state">Commit not found.</p>
+}
+else
+{
+    <h1>@_detail.ShortHash</h1>
+
+    <dl>
+        <dt>Hash</dt>
+        <dd>@_detail.Hash</dd>
+        <dt>Parents</dt>
+        <dd>
+            @if (_detail.ParentHashes.Count == 0)
+            {
+                @:None (root commit)
+            }
+            else
+            {
+                @for (var i = 0; i < _detail.ParentHashes.Count; i++)
+                {
+                    var parentHash = _detail.ParentHashes[i];
+                    <a href="@($"repository-management/{Name}/commits/{parentHash}")">@parentHash[..Math.Min(7, parentHash.Length)]</a>
+                    @(i < _detail.ParentHashes.Count - 1 ? ", " : "")
+                }
+            }
+        </dd>
+        @if (_detail.Refs.Count > 0)
+        {
+            <dt>Refs</dt>
+            <dd>
+                @foreach (var reference in _detail.Refs)
+                {
+                    <span class="ref-pill @RefPillClass(reference.Kind)">
+                        <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
+                    </span>
+                }
+            </dd>
+        }
+        <dt>Author</dt>
+        <dd>@_detail.AuthorName &lt;@_detail.AuthorEmail&gt; on @FormatDate(_detail.AuthorDate)</dd>
+        <dt>Committer</dt>
+        <dd>@_detail.CommitterName &lt;@_detail.CommitterEmail&gt; on @FormatDate(_detail.CommitterDate)</dd>
+    </dl>
+
+    <h2>Message</h2>
+    <p><strong>@_detail.Subject</strong></p>
+    @if (!string.IsNullOrWhiteSpace(_detail.Body))
+    {
+        <pre class="run-output">@_detail.Body</pre>
+    }
+
+    <h2>Files changed (@_detail.Files.Count)</h2>
+    @if (_detail.Files.Count == 0)
+    {
+        <p class="empty-state">No file changes recorded (a merge commit's own changes aren't shown by default).</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <tbody>
+                @foreach (var file in _detail.Files)
+                {
+                    <tr>
+                        <td><span class="kind-badge kind-file@(file.Kind.ToString().ToLowerInvariant())">@FileChangeLabel(file.Kind)</span></td>
+                        <td class="ellipsis" title="@file.Path">
+                            @if (file.OldPath is not null)
+                            {
+                                @: @file.OldPath →
+                            }
+                            @file.Path
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    /// <summary>The repository name from the route.</summary>
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The commit hash from the route.</summary>
+    [Parameter]
+    public string Hash { get; set; } = string.Empty;
+
+    private CommitDetail? _detail;
+    private bool _loading = true;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        _detail = await RepositoryManager.GetCommitDetailAsync(Name, Hash, CancellationToken.None);
+        _loading = false;
+    }
+
+    private static string FileChangeLabel(CommitFileChangeKind kind) => kind switch
+    {
+        CommitFileChangeKind.Added => "Added",
+        CommitFileChangeKind.Modified => "Modified",
+        CommitFileChangeKind.Deleted => "Deleted",
+        CommitFileChangeKind.Renamed => "Renamed",
+        CommitFileChangeKind.Copied => "Copied",
+        _ => "Changed",
+    };
+
+    private static string RefPillClass(CommitRefKind kind) => kind switch
+    {
+        CommitRefKind.RemoteBranch => "ref-pill-remote",
+        CommitRefKind.Tag => "ref-pill-tag",
+        _ => "ref-pill-local",
+    };
+
+    // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.
+    private static string FormatDate(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+}

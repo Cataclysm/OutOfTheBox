@@ -3,6 +3,7 @@
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 @if (_commits is null)
@@ -21,19 +22,29 @@ else
     }
 
     <div class="commit-graph-wrapper">
-        <table class="data-table commit-table">
+        <table class="data-table commit-table clickable-rows">
             <tbody>
                 @for (var i = 0; i < _commits.Count; i++)
                 {
                     var commit = _commits[i];
-                    <tr>
+                    <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
                         <td class="commit-graph-cell" style="width:@(_graph!.LaneCount * LaneWidth)px"></td>
                         <td class="ellipsis commit-subject" title="@commit.Subject">
                             @foreach (var reference in commit.Refs)
                             {
-                                <span class="ref-pill @RefPillClass(reference.Kind)">
-                                    <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
-                                </span>
+                                @if (reference.Kind == CommitRefKind.Tag || reference.IsCurrent)
+                                {
+                                    <span class="ref-pill @RefPillClass(reference.Kind)">
+                                        <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button type="button" class="ref-pill @RefPillClass(reference.Kind)" title="Switch to this branch"
+                                            @onclick="@(() => ConfirmSwitchBranchAsync(reference))" @onclick:stopPropagation="true">
+                                        <Icon Name="branch" />@reference.Name
+                                    </button>
+                                }
                             }
                             @commit.Subject
                         </td>
@@ -41,7 +52,8 @@ else
                         <td>@FormatDate(commit.AuthorDate)</td>
                         <td class="ellipsis" title="@commit.Hash">@commit.ShortHash</td>
                         <td class="actions">
-                            <button type="button" class="icon-button" title="Checkout as detached HEAD" @onclick="@(() => ConfirmCheckoutAsync(commit))">
+                            <button type="button" class="icon-button" title="Checkout as detached HEAD"
+                                    @onclick="@(() => ConfirmCheckoutAsync(commit))" @onclick:stopPropagation="true">
                                 <Icon Name="checkout" />
                             </button>
                         </td>
@@ -162,6 +174,38 @@ else
         _error = result switch
         {
             RepositoryGitActionResult.Failed failed => failed.ErrorMessage ?? "Checkout failed.",
+            RepositoryGitActionResult.Rejected { Reason: RepositoryActionRejectionReason.Busy } rejected => $"Busy - conflicting run {rejected.ConflictingRunId}.",
+            RepositoryGitActionResult.Rejected => "Rejected.",
+            _ => null,
+        };
+
+        await LoadAsync(Math.Max(PageSize, _commits?.Count ?? PageSize));
+    }
+
+    // A remote-tracking ref's Name keeps its "<remote>/<branch>" shape (see CommitRef's own remarks),
+    // but SwitchBranchAsync takes a short branch name and resolves a matching remote ref itself - the
+    // same contract RepositoryDetail.razor's branch dropdown already relies on.
+    private Task ConfirmSwitchBranchAsync(CommitRef reference)
+    {
+        var shortName = reference.Kind == CommitRefKind.RemoteBranch
+            ? reference.Name[(reference.Name.IndexOf('/') + 1)..]
+            : reference.Name;
+
+        return _confirmDialog!.ShowAsync(
+            "Switch branch",
+            $"Switch to branch '{shortName}'? The working tree will be updated to match its tip.",
+            () => SwitchBranchAsync(shortName),
+            confirmLabel: "Switch");
+    }
+
+    private async Task SwitchBranchAsync(string branch)
+    {
+        _error = null;
+        var result = await RepositoryManager.SwitchBranchAsync(RepositoryName, branch, CancellationToken.None);
+
+        _error = result switch
+        {
+            RepositoryGitActionResult.Failed failed => failed.ErrorMessage ?? "Branch switch failed.",
             RepositoryGitActionResult.Rejected { Reason: RepositoryActionRejectionReason.Busy } rejected => $"Busy - conflicting run {rejected.ConflictingRunId}.",
             RepositoryGitActionResult.Rejected => "Rejected.",
             _ => null,

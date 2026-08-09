@@ -1018,6 +1018,47 @@ dd {
     color: var(--accent-2);
 }
 
+/* A ref pill rendered as a <button> (checkout-a-branch action, commit graph only) instead of a
+   plain <span> (tags, and the current branch, which there's no point offering to "switch to") -
+   these two selectors' specificity (two classes plus :hover) beats the generic button:hover rule's
+   own background/border-color, which would otherwise flash the pill to a neutral gray on hover. */
+.ref-pill-local:hover {
+    background: rgba(236, 72, 153, 0.26);
+    border-color: var(--accent);
+}
+
+.ref-pill-remote:hover {
+    background: rgba(109, 40, 217, 0.3);
+    border-color: #a78bfa;
+}
+
+/* File-change kind badges (commit detail page) - same pill shape as .kind-badge, one tint per
+   change type. */
+.kind-fileadded {
+    background: rgba(74, 222, 128, 0.16);
+    color: var(--success);
+}
+
+.kind-filemodified {
+    background: rgba(251, 191, 36, 0.16);
+    color: #fbbf24;
+}
+
+.kind-filedeleted {
+    background: rgba(255, 92, 92, 0.16);
+    color: var(--danger);
+}
+
+.kind-filerenamed {
+    background: rgba(56, 189, 248, 0.16);
+    color: #7dd3fc;
+}
+
+.kind-filecopied {
+    background: rgba(167, 139, 250, 0.16);
+    color: #a78bfa;
+}
+
 /* File tree browser (repository detail's Files tab) - Explorer-style expand/collapse rows. */
 .file-tree {
     font-size: 0.85rem;
