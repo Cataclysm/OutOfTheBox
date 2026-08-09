@@ -17,6 +17,7 @@ using OutOfTheBox.Presentation.Authentication;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.Presentation.Execution;
+using OutOfTheBox.Presentation.Mcp;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -100,6 +101,10 @@ builder.Services
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
     .WithToolsFromAssembly(typeof(RunEndpoints).Assembly);
+
+// Process-wide in-memory store of MCP-started runs' output, polled by read_run_output - same
+// singleton-lifetime reasoning as RunRegistry above (Section 2 of sbx-mcp-server).
+builder.Services.AddSingleton<McpRunOutputRegistry>();
 
 // Infrastructure implementations registered against Application's ports - this file (plus
 // DependencyInjection-style extension methods, if it grows large enough to warrant them) is the
