@@ -117,6 +117,7 @@ builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolve
 builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 builder.Services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
 builder.Services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
+builder.Services.AddSingleton<IFileLockInspector, RestartManagerFileLockInspector>();
 
 // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repository lock
 // would be meaningless (each request would get its own empty registry).

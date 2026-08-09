@@ -19,8 +19,8 @@
 
 ## 4. `get_file_lock_info` MCP tool (Presentation)
 
-- [ ] 4.1 Add `McpFileLockInfoResult`-shaped record(s) near `McpToolResults.cs`.
-- [ ] 4.2 Add `FileLockDiagnosticsMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), exposing `[McpServerTool] GetFileLockInfoAsync(string repository, string path)`: same two-level confinement as `FileTransferMcpTools.TransferFileAsync` (copy the pattern exactly), rejects a nonexistent file as not-found, then calls `IFileLockInspector` and maps the result. XML doc comments + `[Description]` attributes matching existing style.
+- [x] 4.1 Add `McpFileLockInfoResult`-shaped record(s) near `McpToolResults.cs`.
+- [x] 4.2 Add `FileLockDiagnosticsMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), exposing `[McpServerTool] GetFileLockInfoAsync(string repository, string path)`: same two-level confinement as `FileTransferMcpTools.TransferFileAsync` (copy the pattern exactly), rejects a nonexistent file as not-found, then calls `IFileLockInspector` and maps the result. XML doc comments + `[Description]` attributes matching existing style.
 
 ## 5. `mcp-server` spec/test update
 
@@ -29,7 +29,7 @@
 ## 6. Tests
 
 - [ ] 6.1 `mcp-environment-info.feature` and `mcp-file-lock-diagnostics.feature` (`tests/OutOfTheBox.BehaviorTests/`), Gherkin scenarios transcribed from each spec's `#### Scenario:` blocks, against a real running `Host`. The file-lock scenarios need a real locked file - reuse the locking pattern `RepositoryManagementSteps.GivenAFileInsideThatRepositoryIsLockedOpen` already establishes (open a `FileStream` with `FileShare.Read`, no `Delete` flag) rather than inventing a new one.
-- [ ] 6.2 Run `dotnet test tests/OutOfTheBox.UnitTests` and `tests/OutOfTheBox.ArchitectureTests` (fast suites) after Section 1 and again after Sections 3-4.
+- [x] 6.2 Run `dotnet test tests/OutOfTheBox.UnitTests` and `tests/OutOfTheBox.ArchitectureTests` (fast suites) after Section 1 and again after Sections 3-4.
 - [ ] 6.3 Run the full suite including `tests/OutOfTheBox.BehaviorTests` before the final commit of this change.
 
 ## 7. Live verification
