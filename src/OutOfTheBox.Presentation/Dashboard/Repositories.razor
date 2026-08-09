@@ -8,6 +8,7 @@
 @inject IRunRepository RunRepository
 @inject RunRegistry RunRegistry
 @inject IRunEventBus RunEventBus
+@inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
@@ -109,6 +110,7 @@ else
     private IReadOnlyList<RepositorySummary>? _summaries;
     private Dictionary<string, Guid> _inFlightClonesByRepositoryName = [];
     private IDisposable? _subscription;
+    private IDisposable? _statsSubscription;
     private bool _showCloneForm;
     private string _cloneUrl = string.Empty;
     private string _cloneName = string.Empty;
@@ -133,6 +135,13 @@ else
     {
         await RefreshAsync();
         _subscription = RunEventBus.Subscribe(OnRunEvent);
+
+        // A repository's stats cache can update independently of any run reaching a terminal state
+        // (the stats sampler's slow-cadence sweep, or the delayed half of a clone's own event-driven
+        // recompute) - without this, a page left open would sit showing "Computing…" or a stale size
+        // until some unrelated run's event happened to trigger another refresh. See
+        // IRepositoryStatsEventBus's own remarks.
+        _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
     }
 
     private void OnRunEvent(RunEvent runEvent)
@@ -142,6 +151,15 @@ else
             return;
         }
 
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void OnRepositoryStatsChanged(string repositoryName)
+    {
         _ = InvokeAsync(async () =>
         {
             await RefreshAsync();
@@ -297,5 +315,9 @@ else
     }
 
     /// <inheritdoc />
-    public void Dispose() => _subscription?.Dispose();
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        _statsSubscription?.Dispose();
+    }
 }

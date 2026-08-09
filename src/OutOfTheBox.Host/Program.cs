@@ -106,6 +106,7 @@ builder.Services.AddScoped<IRunResourceSampleRepository, EfRunResourceSampleRepo
 // reasoning as RunRegistry/IRunEventBus above.
 builder.Services.AddSingleton<RepositoryStatsCache>();
 builder.Services.AddSingleton<IRepositoryStatsProvider, GitRepositoryStatsProvider>();
+builder.Services.AddSingleton<IRepositoryStatsEventBus, InMemoryRepositoryStatsEventBus>();
 builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
 builder.Services.AddHostedService<RepositoryStatsSampler>();
 

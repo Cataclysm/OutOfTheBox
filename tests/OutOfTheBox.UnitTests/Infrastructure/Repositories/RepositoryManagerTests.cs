@@ -181,6 +181,7 @@ public sealed class RepositoryManagerTests : IDisposable
             new UnreachableProcessRunner(),
             new UnreachableStatsProvider(),
             statsCache ?? new RepositoryStatsCache(),
+            new NoOpRepositoryStatsEventBus(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ServiceOptions
             {
@@ -196,6 +197,22 @@ public sealed class RepositoryManagerTests : IDisposable
         }
 
         public IDisposable Subscribe(Action<RunEvent> handler) => new NoOpSubscription();
+
+        private sealed class NoOpSubscription : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    private sealed class NoOpRepositoryStatsEventBus : IRepositoryStatsEventBus
+    {
+        public void Publish(string repositoryName)
+        {
+        }
+
+        public IDisposable Subscribe(Action<string> handler) => new NoOpSubscription();
 
         private sealed class NoOpSubscription : IDisposable
         {

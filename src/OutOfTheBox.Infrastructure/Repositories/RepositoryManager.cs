@@ -32,6 +32,7 @@ public sealed class RepositoryManager(
     IProcessRunner processRunner,
     IRepositoryStatsProvider statsProvider,
     RepositoryStatsCache statsCache,
+    IRepositoryStatsEventBus statsEventBus,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options) : IRepositoryManager
 {
@@ -298,7 +299,9 @@ public sealed class RepositoryManager(
             if (run.Outcome == RunOutcome.Completed)
             {
                 var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
-                statsCache.Set(Path.GetFileName(targetPath), stats);
+                var name = Path.GetFileName(targetPath);
+                statsCache.Set(name, stats);
+                statsEventBus.Publish(name);
             }
 
             runEventBus.Publish(new RunEvent(run.Id, RunKind.RepositoryClone, RunEventType.Terminal, targetPath));

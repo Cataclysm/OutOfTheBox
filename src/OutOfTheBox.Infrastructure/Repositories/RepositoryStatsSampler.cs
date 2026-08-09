@@ -19,7 +19,8 @@ public sealed class RepositoryStatsSampler(
     IOptions<ServiceOptions> options,
     IRepositoryStatsProvider statsProvider,
     RepositoryStatsCache statsCache,
-    IRunEventBus runEventBus) : BackgroundService
+    IRunEventBus runEventBus,
+    IRepositoryStatsEventBus statsEventBus) : BackgroundService
 {
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -89,7 +90,15 @@ public sealed class RepositoryStatsSampler(
         try
         {
             var stats = await statsProvider.ComputeAsync(repositoryPath, cancellationToken);
-            statsCache.Set(Path.GetFileName(repositoryPath), stats);
+            var name = Path.GetFileName(repositoryPath);
+            statsCache.Set(name, stats);
+
+            // Otherwise a dashboard page open on Repositories/RepositoryDetail while this tick runs
+            // (either the slow-cadence sweep or an event-driven single-repo recompute) has no way to
+            // learn the cache changed - it isn't itself a RunEvent, so without this, the page would
+            // sit showing whatever it last snapshotted until some unrelated event triggered another
+            // refresh. See IRepositoryStatsEventBus's own remarks.
+            statsEventBus.Publish(name);
         }
         catch (OperationCanceledException)
         {

@@ -7,7 +7,9 @@
 @inject IRepositoryManager RepositoryManager
 @inject IRunRepository RunRepository
 @inject IWorkingDirectoryResolver WorkingDirectoryResolver
+@inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @inject NavigationManager NavigationManager
+@implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - @Name</PageTitle>
 
@@ -77,6 +79,7 @@ else
     private IReadOnlyList<Run>? _runs;
     private SortColumn _sortColumn = SortColumn.Started;
     private bool _sortAscending;
+    private IDisposable? _statsSubscription;
 
     private enum SortColumn
     {
@@ -89,8 +92,7 @@ else
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
     {
-        var summaries = await RepositoryManager.ListAsync(CancellationToken.None);
-        _summary = summaries.FirstOrDefault(r => string.Equals(r.Name, Name, StringComparison.OrdinalIgnoreCase));
+        await RefreshSummaryAsync();
 
         // Reuses the same RunQuery/IRunRepository.ListAsync mechanism the History view's list uses
         // (per task 13.14), pre-filtered to this repository's resolved path - the route only carries the
@@ -99,7 +101,35 @@ else
         _runs = resolution.IsAllowed
             ? await RunRepository.ListAsync(new RunQuery { RepositoryPath = resolution.ResolvedPath }, CancellationToken.None)
             : [];
+
+        // Otherwise this page, left open on a repository whose stats aren't cached yet, would sit
+        // showing "Computing…" forever - unlike Repositories.razor, it has no other event subscription
+        // at all to piggyback a refresh onto. See IRepositoryStatsEventBus's own remarks.
+        _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
     }
+
+    private void OnRepositoryStatsChanged(string repositoryName)
+    {
+        if (!string.Equals(repositoryName, Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshSummaryAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshSummaryAsync()
+    {
+        var summaries = await RepositoryManager.ListAsync(CancellationToken.None);
+        _summary = summaries.FirstOrDefault(r => string.Equals(r.Name, Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _statsSubscription?.Dispose();
 
     private void SortBy(SortColumn column)
     {

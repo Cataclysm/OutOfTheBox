@@ -30,6 +30,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
     private readonly string _root;
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus();
+    private readonly IRepositoryStatsEventBus _repositoryStatsEventBus = new InMemoryRepositoryStatsEventBus();
     private readonly RunRegistry _runRegistry = new();
     private readonly RepositoryStatsCache _statsCache = new();
     private readonly ServiceProvider _scopeFactoryProvider;
@@ -55,6 +56,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
             new UnreachableProcessRunner(),
             new UnreachableStatsProvider(),
             _statsCache,
+            _repositoryStatsEventBus,
             _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>(),
             options);
 
@@ -62,6 +64,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton(_runRegistry);
         Services.AddSingleton(_runEventBus);
+        Services.AddSingleton(_repositoryStatsEventBus);
     }
 
     [Fact]
