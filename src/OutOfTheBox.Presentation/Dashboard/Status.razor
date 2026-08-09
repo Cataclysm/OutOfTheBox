@@ -33,6 +33,10 @@
         <span class="resource-tile-value">@VersionInfo.Current</span>
     </div>
     <div class="resource-tile">
+        <span class="resource-tile-label">Uptime</span>
+        <span class="resource-tile-value">@ServiceUptime.Format(DateTimeOffset.UtcNow)</span>
+    </div>
+    <div class="resource-tile">
         <span class="resource-tile-label">Git Version</span>
         <span class="resource-tile-value">@(_toolVersions.GitVersion ?? "not detected")</span>
     </div>

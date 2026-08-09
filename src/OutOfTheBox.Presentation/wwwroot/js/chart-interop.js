@@ -7,6 +7,11 @@
 window.outOfTheBoxCharts = (() => {
     const charts = new Map();
 
+    // Matches ResourceHistoryBuffer.WindowDuration server-side - the initial seed (setSeries) is
+    // already windowed there, but a chart left open past that window keeps receiving pushPoint
+    // ticks indefinitely with nothing else to trim it, so the window is re-enforced here too.
+    const WINDOW_MS = 10 * 60 * 1000;
+
     // Chart.js's own defaults assume a light page - left alone, tick/legend text renders in a dark
     // gray that's nearly invisible against the dashboard's dark background. Set once, globally,
     // rather than per-chart, since every chart on this dashboard shares the same dark theme.
@@ -113,7 +118,14 @@ window.outOfTheBoxCharts = (() => {
             return;
         }
 
-        chart.data.datasets[datasetIndex].data.push({ x: timestampMs, y: value });
+        const data = chart.data.datasets[datasetIndex].data;
+        data.push({ x: timestampMs, y: value });
+
+        const cutoff = timestampMs - WINDOW_MS;
+        while (data.length > 0 && data[0].x < cutoff) {
+            data.shift();
+        }
+
         chart.update("none");
     }
 

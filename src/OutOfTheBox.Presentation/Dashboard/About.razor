@@ -1,0 +1,52 @@
+@page "/about"
+@attribute [Authorize]
+
+<PageTitle>@VersionInfo.DisplayName - About</PageTitle>
+
+<h1>About</h1>
+
+<p>
+    @VersionInfo.DisplayName is a Windows-hosted service that lets an AI coding agent run
+    <code>dotnet build</code>, <code>dotnet test</code>, and git commands against repositories on this
+    host, and manage those repositories (clone, delete, browse, pull/push), without a local .NET
+    toolchain of its own. It exposes an MCP (Model Context Protocol) server so an agent can call these
+    capabilities as typed tools, and this dashboard for an operator to watch runs, browse history, and
+    manage repositories directly.
+</p>
+
+<dl>
+    <dt>Running version</dt>
+    <dd>@VersionInfo.Current</dd>
+</dl>
+
+<h2>License</h2>
+<p>
+    This software is provided "as is", without warranty of any kind, express or implied, including but
+    not limited to the warranties of merchantability, fitness for a particular purpose, and
+    noninfringement. In no event shall the author be liable for any claim, damages, or other liability,
+    whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with
+    the software or the use or other dealings in the software.
+</p>
+
+<h2>Connecting an agent</h2>
+<p>
+    Point an MCP-aware client (Claude Code configured with a remote MCP server) at this host's
+    <code>/mcp</code> endpoint with an <code>Authorization: Bearer &lt;token&gt;</code> header carrying
+    the service's bearer token; tool discovery, calling, and result parsing are handled by the client
+    library itself. The server exposes seven tools:
+</p>
+<pre class="run-output">dotnet_run          - start a `dotnet` command against a repository
+git_run             - start a `git` command against a repository
+read_run_output     - poll a run started by dotnet_run/git_run/clone_repository for incremental
+                      output and its eventual exit code
+cancel_run          - cancel a run that is still in flight
+list_repositories   - list the repositories available on this host
+clone_repository    - clone a new repository onto this host
+transfer_file       - read a file's contents (base64-encoded) from within a named repository</pre>
+<p>
+    <code>dotnet_run</code>/<code>git_run</code>/<code>clone_repository</code> return a run id
+    immediately rather than blocking until the command finishes - poll <code>read_run_output</code>
+    with that run id for incremental output. <code>transfer_file</code> is the one synchronous tool,
+    confined to the named repository's own directory and rejected outright if the file exceeds the
+    configured size limit.
+</p>
