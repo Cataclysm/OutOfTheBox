@@ -144,7 +144,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
         cut.Find("input[placeholder='Repository name']").Input("repository-a");
         cut.WaitForAssertion(() => Assert.DoesNotContain("repository-b", cut.Markup));
 
-        var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");
+        var clearFiltersButton = cut.Find("button[title='Clear filters']");
         clearFiltersButton.Click();
 
         cut.WaitForAssertion(() =>

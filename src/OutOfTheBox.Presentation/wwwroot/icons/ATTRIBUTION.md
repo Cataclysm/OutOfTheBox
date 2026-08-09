@@ -1,0 +1,29 @@
+# Icons
+
+The SVGs in this directory are vendored from [Lucide](https://lucide.dev)
+(https://github.com/lucide-icons/lucide), ISC-licensed - see `LICENSE.txt`.
+Unmodified except that each file already ships with `stroke="currentColor"`,
+which this dashboard relies on to recolor icons via CSS (including the
+green/red completion flash for repository git actions) without editing the
+SVGs themselves.
+
+Vendored subset (dashboard action icons only, not the full icon set):
+
+| File | Used for |
+|---|---|
+| `trash-2.svg` | Delete repository |
+| `download.svg` | Clone repository |
+| `circle-arrow-down.svg` | Pull |
+| `circle-arrow-up.svg` | Push |
+| `chevrons-up.svg` | Force push |
+| `refresh-cw.svg` | Fetch |
+| `eraser.svg` | Clean (`git clean -xdf`) |
+| `git-branch.svg` | Branch-switch control |
+| `list-filter.svg` | Clear filters |
+| `x.svg` | Cancel / close dialog |
+| `check.svg` | Confirm dialog |
+| `loader-circle.svg` | In-flight clone (cancel-clone row state) |
+
+To add another icon, download the matching `<name>.svg` from
+`https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`
+and add a row above.

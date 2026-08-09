@@ -1,0 +1,58 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<dialog @ref="_dialogElement">
+    <div class="dialog-body">
+        <h2>@_title</h2>
+        <p>@_message</p>
+        <div class="dialog-actions">
+            <button type="button" @onclick="CancelAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Cancel
+            </button>
+            <button type="button" class="btn-danger" @onclick="ConfirmAsync">
+                <Icon Name="confirm" CssClass="icon-inline" /> @_confirmLabel
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    private ElementReference _dialogElement;
+    private string _title = string.Empty;
+    private string _message = string.Empty;
+    private string _confirmLabel = "Confirm";
+    private Func<Task>? _onConfirmed;
+
+    /// <summary>
+    /// Opens the dialog with the given title/message, running <paramref name="onConfirmed"/> if the
+    /// operator confirms - per specs/service-dashboard's "Destructive actions require a confirmation
+    /// popup" requirement, replacing the prior in-place button-morph pattern.
+    /// </summary>
+    public async Task ShowAsync(string title, string message, Func<Task> onConfirmed, string confirmLabel = "Confirm")
+    {
+        _title = title;
+        _message = message;
+        _confirmLabel = confirmLabel;
+        _onConfirmed = onConfirmed;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+    }
+
+    private async Task ConfirmAsync()
+    {
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+        var callback = _onConfirmed;
+        _onConfirmed = null;
+
+        if (callback is not null)
+        {
+            await callback();
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        _onConfirmed = null;
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+    }
+}

@@ -33,28 +33,13 @@
             <option value="no-git">Not a git repository</option>
         </select>
     </label>
-    <button type="button" @onclick="ClearFilters">Clear filters</button>
-    <button type="button" @onclick="@(() => _showCloneForm = !_showCloneForm)">@(_showCloneForm ? "Cancel clone" : "Clone repository")</button>
+    <button type="button" class="icon-button" title="Clear filters" @onclick="ClearFilters">
+        <Icon Name="clear-filters" />
+    </button>
+    <button type="button" class="icon-button" title="Clone repository" @onclick="@(() => _cloneDialog!.ShowAsync())">
+        <Icon Name="download" />
+    </button>
 </div>
-
-@if (_showCloneForm)
-{
-    <div class="history-filters">
-        <label>
-            Source URL
-            <input type="text" @bind="_cloneUrl" placeholder="https://example.com/repository.git" />
-        </label>
-        <label>
-            Name
-            <input type="text" @bind="_cloneName" placeholder="new-repository-name" />
-        </label>
-        <button type="button" class="btn-primary" @onclick="SubmitCloneAsync">Start clone</button>
-        @if (_cloneError is not null)
-        {
-            <span class="login-error">@_cloneError</span>
-        }
-    </div>
-}
 
 @if (_summaries is null)
 {
@@ -90,12 +75,29 @@ else
                         <td class="actions" @onclick:stopPropagation="true">
                             @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
                             {
-                                <button type="button" @onclick="@(() => CancelCloneAsync(cloneRunId))">Cancel clone</button>
+                                <button type="button" class="icon-button" title="Cancel clone" @onclick="@(() => CancelCloneAsync(cloneRunId))">
+                                    <Icon Name="close" />
+                                </button>
                             }
                             else
                             {
-                                <button type="button" class="@(_deleteConfirmName == repository.Name ? "btn-danger" : "")" @onclick="@(() => DeleteAsync(repository.Name))">
-                                    @(_deleteConfirmName == repository.Name ? "Confirm delete?" : "Delete")
+                                <button type="button" class="icon-button @FlashClass(repository.Name, "pull")" title="Pull" @onclick="@(() => RunGitActionAsync(repository.Name, "pull", RepositoryManager.PullAsync))">
+                                    <Icon Name="pull" />
+                                </button>
+                                <button type="button" class="icon-button @FlashClass(repository.Name, "push")" title="Push" @onclick="@(() => RunGitActionAsync(repository.Name, "push", RepositoryManager.PushAsync))">
+                                    <Icon Name="push" />
+                                </button>
+                                <button type="button" class="icon-button @FlashClass(repository.Name, "force-push")" title="Force push" @onclick="@(() => ConfirmAndRunAsync(repository.Name, "force-push", "Force push", $"Force-push '{repository.Name}'? This can overwrite the remote's history.", RepositoryManager.ForcePushAsync))">
+                                    <Icon Name="force-push" />
+                                </button>
+                                <button type="button" class="icon-button @FlashClass(repository.Name, "fetch")" title="Fetch" @onclick="@(() => RunGitActionAsync(repository.Name, "fetch", RepositoryManager.FetchAsync))">
+                                    <Icon Name="fetch" />
+                                </button>
+                                <button type="button" class="icon-button @FlashClass(repository.Name, "clean")" title="Clean (git clean -xdf)" @onclick="@(() => ConfirmAndRunAsync(repository.Name, "clean", "Clean", $"Run 'git clean -xdf' on '{repository.Name}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
+                                    <Icon Name="clean" />
+                                </button>
+                                <button type="button" class="icon-button icon-button-danger" title="Delete" @onclick="@(() => ConfirmDeleteAsync(repository.Name))">
+                                    <Icon Name="trash" />
                                 </button>
                             }
                         </td>
@@ -106,22 +108,24 @@ else
     }
 }
 
+<ConfirmDialog @ref="_confirmDialog" />
+<CloneDialog @ref="_cloneDialog" OnCloned="RefreshAsync" />
+
 @code {
     private IReadOnlyList<RepositorySummary>? _summaries;
     private Dictionary<string, Guid> _inFlightClonesByRepositoryName = [];
     private IDisposable? _subscription;
     private IDisposable? _statsSubscription;
-    private bool _showCloneForm;
-    private string _cloneUrl = string.Empty;
-    private string _cloneName = string.Empty;
-    private string? _cloneBranch;
-    private string? _cloneError;
     private string _searchText = string.Empty;
     private bool _activeOnly;
     private string _gitStatusFilter = string.Empty;
-    private string? _deleteConfirmName;
     private SortColumn _sortColumn = SortColumn.Name;
     private bool _sortAscending = true;
+    private ConfirmDialog? _confirmDialog;
+    private CloneDialog? _cloneDialog;
+
+    /// <summary>Per "repositoryName:action" (e.g. "my-repo:pull"), the CSS class briefly applied to that row's icon to report the outcome - no streamed output, per specs/repository-management's "Outcome is shown without a console view" requirement.</summary>
+    private readonly Dictionary<string, string> _flashClasses = [];
 
     private enum SortColumn
     {
@@ -238,46 +242,45 @@ else
         return _sortAscending ? ordered : ordered.Reverse();
     }
 
-    private async Task SubmitCloneAsync()
-    {
-        _cloneError = null;
-        var result = await RepositoryManager.CloneAsync(_cloneUrl, _cloneName, _cloneBranch, CancellationToken.None);
-
-        if (result is RepositoryActionResult.Rejected rejected)
-        {
-            _cloneError = rejected.Reason switch
-            {
-                RepositoryActionRejectionReason.InvalidName => "Invalid name - it must resolve inside the configured root.",
-                RepositoryActionRejectionReason.AlreadyExists => "A repository with that name already exists.",
-                RepositoryActionRejectionReason.Busy => $"Busy - conflicting run {rejected.ConflictingRunId}.",
-                _ => "Rejected.",
-            };
-            return;
-        }
-
-        _showCloneForm = false;
-        _cloneUrl = string.Empty;
-        _cloneName = string.Empty;
-        await RefreshAsync();
-    }
-
     private void CancelCloneAsync(Guid runId) => RunRegistry.TryCancel(runId);
+
+    private Task ConfirmDeleteAsync(string name) =>
+        _confirmDialog!.ShowAsync(
+            "Delete repository",
+            $"Permanently delete '{name}'? This cannot be undone.",
+            () => DeleteAsync(name),
+            confirmLabel: "Delete");
 
     private async Task DeleteAsync(string name)
     {
-        // First click arms confirmation, second click actually deletes - no accidental
-        // single-click deletion, per specs/repository-management's "Deleting requires
-        // confirmation" requirement.
-        if (_deleteConfirmName != name)
-        {
-            _deleteConfirmName = name;
-            return;
-        }
-
-        _deleteConfirmName = null;
         await RepositoryManager.DeleteAsync(name, CancellationToken.None);
         await RefreshAsync();
     }
+
+    private Task ConfirmAndRunAsync(string name, string action, string title, string message, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation) =>
+        _confirmDialog!.ShowAsync(title, message, () => RunGitActionAsync(name, action, operation));
+
+    /// <summary>Runs a pull/push/force-push/fetch/clean action to completion, then flashes that row's icon green/success or red/failure - no streamed output/console, per specs/repository-management's "Dashboard-only pull/push/force-push/fetch/clean actions" requirement.</summary>
+    private async Task RunGitActionAsync(string name, string action, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation)
+    {
+        var result = await operation(name, CancellationToken.None);
+        var key = $"{name}:{action}";
+        _flashClasses[key] = result is RepositoryGitActionResult.Succeeded ? "flash-success" : "flash-fail";
+        StateHasChanged();
+
+        await RefreshAsync();
+
+        _ = ClearFlashAfterDelayAsync(key);
+    }
+
+    private async Task ClearFlashAfterDelayAsync(string key)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(2.5));
+        _flashClasses.Remove(key);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string FlashClass(string name, string action) => _flashClasses.GetValueOrDefault($"{name}:{action}", string.Empty);
 
     // Invariant-culture-formatted - see Status.razor's FormatBytes for why this matters.
     private static string FormatSize(long bytes) => bytes switch
@@ -302,14 +305,21 @@ else
 
         var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";
 
-        if (repository.AheadCount is > 0)
+        if (repository.IsRemoteGone)
         {
-            status += $", ahead {repository.AheadCount}";
+            status += ", remote gone";
         }
-
-        if (repository.BehindCount is > 0)
+        else
         {
-            status += $", behind {repository.BehindCount}";
+            if (repository.AheadCount is > 0)
+            {
+                status += $", ahead {repository.AheadCount}";
+            }
+
+            if (repository.BehindCount is > 0)
+            {
+                status += $", behind {repository.BehindCount}";
+            }
         }
 
         return status;

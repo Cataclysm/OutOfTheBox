@@ -1,0 +1,146 @@
+@using OutOfTheBox.Application.Repositories
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IRepositoryManager RepositoryManager
+
+<dialog @ref="_dialogElement">
+    <div class="dialog-body">
+        <h2>Clone repository</h2>
+        <label>
+            Source URL
+            <input type="text" value="@_url" @oninput="OnUrlChangedAsync" placeholder="https://example.com/repository.git" />
+        </label>
+        <label>
+            Name
+            <input type="text" @bind="_name" placeholder="new-repository-name" />
+        </label>
+        <label>
+            Branch
+            <select @bind="_branch">
+                <option value="">(default branch)</option>
+                @foreach (var branch in _branches)
+                {
+                    <option value="@branch">@branch</option>
+                }
+            </select>
+        </label>
+        @if (_error is not null)
+        {
+            <span class="login-error">@_error</span>
+        }
+        <div class="dialog-actions">
+            <button type="button" @onclick="CancelAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Cancel
+            </button>
+            <button type="button" class="btn-primary" @onclick="SubmitAsync" disabled="@_submitting">
+                <Icon Name="download" CssClass="icon-inline" /> Start clone
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    /// <summary>Raised once a clone has been accepted, so the caller can refresh its list.</summary>
+    [Parameter]
+    public EventCallback OnCloned { get; set; }
+
+    private ElementReference _dialogElement;
+    private string _url = string.Empty;
+    private string _name = string.Empty;
+    private string _branch = string.Empty;
+    private string? _error;
+    private bool _submitting;
+    private IReadOnlyList<string> _branches = [];
+    private CancellationTokenSource? _branchLookupCts;
+
+    /// <summary>Opens the dialog with empty fields, per specs/service-dashboard's "Clone dialog is a popup" requirement.</summary>
+    public async Task ShowAsync()
+    {
+        _url = string.Empty;
+        _name = string.Empty;
+        _branch = string.Empty;
+        _branches = [];
+        _error = null;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+    }
+
+    private async Task OnUrlChangedAsync(ChangeEventArgs e)
+    {
+        _url = e.Value?.ToString() ?? string.Empty;
+
+        // Debounced, not looked up on every keystroke - git ls-remote is a real network round trip
+        // (up to IRepositoryManager.ListRemoteBranchesAsync's own 10s timeout), per
+        // specs/repository-management's "Branches populate after entering a URL" requirement.
+        _branchLookupCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _branchLookupCts = cts;
+        _ = LookupBranchesAfterDelayAsync(_url, cts);
+    }
+
+    private async Task LookupBranchesAfterDelayAsync(string url, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            await InvokeAsync(() =>
+            {
+                _branches = [];
+                StateHasChanged();
+            });
+            return;
+        }
+
+        var branches = await RepositoryManager.ListRemoteBranchesAsync(url, cts.Token);
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await InvokeAsync(() =>
+        {
+            _branches = branches;
+            StateHasChanged();
+        });
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        _submitting = true;
+
+        try
+        {
+            var result = await RepositoryManager.CloneAsync(_url, _name, string.IsNullOrWhiteSpace(_branch) ? null : _branch, CancellationToken.None);
+
+            if (result is RepositoryActionResult.Rejected rejected)
+            {
+                _error = rejected.Reason switch
+                {
+                    RepositoryActionRejectionReason.InvalidName => "Invalid name - it must resolve inside the configured root.",
+                    RepositoryActionRejectionReason.AlreadyExists => "A repository with that name already exists.",
+                    RepositoryActionRejectionReason.Busy => $"Busy - conflicting run {rejected.ConflictingRunId}.",
+                    _ => "Rejected.",
+                };
+                return;
+            }
+
+            await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+            await OnCloned.InvokeAsync();
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task CancelAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+}

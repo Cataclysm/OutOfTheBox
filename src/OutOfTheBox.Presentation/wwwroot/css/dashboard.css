@@ -22,6 +22,7 @@
     --brand-indigo: #4c1d95;
     --brand-violet: #6d28d9;
     --danger: #ff5c5c;
+    --success: #4ade80;
     --gradient-brand: linear-gradient(135deg, var(--accent-2), var(--accent));
     --gradient-header: linear-gradient(120deg, var(--brand-indigo), var(--bg-raised) 70%);
     --radius: 10px;
@@ -85,14 +86,18 @@ h2 {
 .dashboard-content h1 {
     position: relative;
     padding-bottom: 0.6rem;
+    /* Shrinks the h1's own box to its text's rendered width - otherwise (a bare block-level h1)
+       the ::after underline below, using left:0/right:0 the same way .dashboard-nav a::after does,
+       would stretch across the full content column instead of tracking the heading text. */
+    display: inline-block;
 }
 
 .dashboard-content h1::after {
     content: "";
     position: absolute;
     left: 0;
+    right: 0;
     bottom: 0;
-    width: 44px;
     height: 3px;
     border-radius: 2px;
     background: var(--gradient-brand);
@@ -189,6 +194,111 @@ input[type="checkbox"] {
 .btn-danger:hover {
     background: rgba(255, 92, 92, 0.26);
     border-color: var(--danger);
+}
+
+/* Icon-only buttons (repository list/row actions, clone/delete controls, dialog confirm/cancel) -
+   per newreqs.txt's "icons instead of text" instruction: same neutral ghost `button` base as
+   everywhere else in the dashboard, just square instead of text-padded, with the SVG itself
+   (Icon.razor, stroke="currentColor") supplying the glyph. Kept simple/unintrusive (no fill, no
+   background by default) but distinctive via color on hover/focus, matching "icons like other
+   apps" without introducing a whole new visual language. */
+.icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+/* A smaller variant for an icon sitting inline before a text label (dialog buttons) rather than
+   standing alone as the button's entire content (row/toolbar icon buttons). */
+.icon-inline {
+    width: 14px;
+    height: 14px;
+    display: inline-block;
+    vertical-align: -2px;
+    margin-right: 0.35rem;
+}
+
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    color: var(--text-muted);
+}
+
+.icon-button:hover {
+    color: var(--text);
+}
+
+/* The confirmed no-streaming UX for pull/push/force-push/fetch/clean: the icon itself recolors
+   green/red for a few seconds to report the outcome, instead of opening any console/output view -
+   see Repositories.razor's FlashAsync. */
+.icon-button.flash-success {
+    color: var(--success);
+    border-color: var(--success);
+}
+
+.icon-button.flash-fail {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.icon-button.icon-button-danger {
+    color: var(--danger);
+}
+
+.icon-button.icon-button-danger:hover {
+    background: rgba(255, 92, 92, 0.16);
+    border-color: var(--danger);
+}
+
+.icon-button:disabled {
+    color: var(--text-muted);
+}
+
+/* Popup confirmation (delete/force-push/clean) and the clone dialog - both native <dialog>, per
+   newreqs.txt's "confirmation should be a popup" and "clone repo should open a popup dialog"
+   instructions, replacing the prior button-morph and inline-reveal patterns respectively. */
+dialog {
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    color: var(--text);
+    box-shadow: var(--shadow-card);
+    max-width: min(480px, calc(100vw - 2rem));
+}
+
+dialog::backdrop {
+    background: rgba(6, 7, 9, 0.65);
+}
+
+.dialog-body {
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.dialog-body h2 {
+    margin: 0;
+}
+
+.dialog-body label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.25rem;
 }
 
 .dashboard-shell {
