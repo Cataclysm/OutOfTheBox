@@ -23,13 +23,11 @@ See `ServiceOptions` (`src/OutOfTheBox.Application/Configuration/ServiceOptions.
 
 ## Network & transport
 
-The command API (`POST /run`, `POST /run/git`, `POST /files`, `POST /run/{runId}/cancel`,
-`GET /repositories`, `POST /repositories/clone`) and
-the dashboard share the same Kestrel HTTPS endpoint and port (`5443` by default, per
-`appsettings.json`'s `Kestrel:Endpoints:Https:Url`). The bearer token, command arguments/output,
-and the dashboard's cookie session all cross this connection, so the service refuses to start if
-any configured Kestrel endpoint isn't `https://` (see `Program.cs`) — there is no supported way to
-run this service over plain HTTP.
+The MCP server (`/mcp`, MCP Streamable HTTP transport) and the dashboard share the same Kestrel
+HTTPS endpoint and port (`5443` by default, per `appsettings.json`'s `Kestrel:Endpoints:Https:Url`).
+The bearer token, MCP tool call arguments/output, and the dashboard's cookie session all cross this
+connection, so the service refuses to start if any configured Kestrel endpoint isn't `https://` (see
+`Program.cs`) — there is no supported way to run this service over plain HTTP.
 
 ### Certificate
 
@@ -88,9 +86,9 @@ validation outright.
 
 Restrict inbound connections on the configured port to exactly the two clients that need it:
 
-- The sbx sandbox's IP (or IP range), for the command API endpoints (`/run`, `/run/git`,
-  `/files`, `/run/{runId}/cancel`, `/repositories`, `/repositories/clone`) — these all live on the same port as the dashboard, so a
-  port-level firewall rule can't separate "command API access" from "dashboard access" by itself.
+- The sbx sandbox's IP (or IP range), for the MCP server (`/mcp`) — it lives on the same port as the
+  dashboard, so a port-level firewall rule can't separate "MCP access" from "dashboard access" by
+  itself.
 - The operator's own network/IP, for the dashboard.
 
 On Windows, this is a single inbound rule scoped by remote address, e.g.:
@@ -104,31 +102,18 @@ The [production install](#production-install) below already opens this port for 
 address, since the installer doesn't know the sbx sandbox's or operator's IPs at install time) - the
 command above documents narrowing that to specific remote addresses afterward.
 
-### Consuming Server-Sent Events (`/run`, `/run/git`)
+### Connecting an MCP client
 
-`POST /run` and `POST /run/git` respond with `Content-Type: text/event-stream` and flush each
-`stdout`/`stderr` line as it's produced, ending with a `done` (or `error`) event carrying the exit
-code — the connection is a normal chunked HTTP response, not a WebSocket, so any HTTP client works
-as long as it doesn't buffer the full response before returning control to the caller:
-
-- `curl`: pass `-N`/`--no-buffer` (otherwise curl waits for the connection to close before
-  printing anything, defeating the point of streaming output from a long-running command).
-- .NET `HttpClient`: pass `HttpCompletionOption.ResponseHeadersRead` to `SendAsync`, then read the
-  response stream incrementally (e.g. via a `StreamReader` over `content.ReadAsStreamAsync()`)
-  rather than awaiting `ReadAsStringAsync()`, which buffers the entire body first.
-- Any other client: equivalent "don't wait for EOF before consuming bytes" behavior is required.
-
-### Downloading files (`/files`)
-
-`POST /files` is not SSE — the response body is the raw file bytes (with the resolved file's
-actual content type), the same as any ordinary file download. The same non-buffering principle
-still applies for a large file: prefer streaming the response body to disk (e.g. `curl -o
-<file>`, or `HttpClient` + `content.CopyToAsync(fileStream)`) over loading the whole response into
-memory first. A request for a path outside the named repository's own directory (path traversal,
-symlink escape, or an absolute path elsewhere on the host) is rejected before any file is opened —
-per the same two-level path-confinement policy the working-directory resolution already applies to
-`/run`/`/run/git` — with a distinct "confinement violation" outcome, separate from a plain
-"file not found" for a path that's legitimately inside the repository but doesn't exist yet.
+The MCP server needs no special transport handling the way SSE did - an MCP-aware client (Claude
+Code configured with a remote MCP server) handles the Streamable HTTP transport itself. Point it at
+`https://<host>:<port>/mcp` with an `Authorization: Bearer <token>` header; tool discovery, calling,
+and result parsing are all handled by the client library, not something this deployment doc needs to
+walk through. `dotnet_run`/`git_run`/`clone_repository` return a run id immediately - poll
+`read_run_output` for incremental output and the eventual exit code, rather than expecting a single
+call to block until the command finishes. `transfer_file` is the one synchronous tool, returning a
+file's contents (base64-encoded) directly, confined to the named repository's own directory (path
+traversal, symlink escape, or an absolute path elsewhere on the host is rejected before any file is
+opened) and rejected outright if it exceeds the configured size limit, rather than truncated.
 
 ## Production install
 
@@ -254,7 +239,7 @@ The run registry (which run ids are cancellable, which repositories are locked) 
 this applies uniformly to every run kind (`dotnet`/`git` commands, clones, deletes, transfers).
 After any restart (crash-recovery, an upgrade, or a manual restart):
 
-- A `POST /run/{runId}/cancel` for a run id from before the restart returns 404 — the registry
+- A `cancel_run` call for a run id from before the restart is rejected as unknown — the registry
   entry that tracked it is gone.
 - Repositories that were locked (a run in flight against them) before the restart become immediately
   available again — there is no persisted lock state to reconcile.

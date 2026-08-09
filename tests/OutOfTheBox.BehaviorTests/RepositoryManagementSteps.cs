@@ -1,7 +1,5 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using System.Net;
-using System.Net.Http.Headers;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
@@ -21,7 +19,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     private IServiceScope? _scope;
     private RepositoryActionResult? _cloneResult;
     private RepositoryActionResult? _deleteResult;
-    private HttpResponseMessage? _httpResponse;
+    private McpToolCallResult? _gitRunToolCallResult;
     private Guid _inFlightRunId;
     private CancellationTokenSource? _inFlightCts;
     private string _inFlightTargetPath = string.Empty;
@@ -141,23 +139,15 @@ public sealed class RepositoryManagementSteps : IDisposable
     public async Task WhenAGitCommandTargetsThatSamePartiallyClonedRepository()
     {
         using var client = _factory!.CreateClient();
-        var result = await SseTestClient.PostAndReadAllEventsAsync(
-            client,
-            "/run/git",
-            new { arguments = new[] { "status" }, workingDirectory = TargetName },
-            CommandExecutionServiceFactory.TestBearerToken,
-            streaming: true,
-            CancellationToken.None);
-
-        _httpResponse = result.Response;
-        _events = result.Events;
+        _gitRunToolCallResult = await McpTestClient.CallToolAsync(
+            client, "git_run", new { arguments = new[] { "status" }, workingDirectory = TargetName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
     }
 
     [Then(@"the command is rejected as a repository conflict")]
     public void ThenTheCommandIsRejectedAsARepoConflict()
     {
-        var errorEvent = Assert.Single(_events, e => e.Name == "error");
-        Assert.Contains(_inFlightRunId.ToString(), errorEvent.Data);
+        Assert.True(_gitRunToolCallResult!.IsToolError, "Expected git_run to be rejected as a repository conflict.");
+        Assert.Contains(_inFlightRunId.ToString(), _gitRunToolCallResult.ContentText);
     }
 
     [Given(@"an idle repository exists")]
@@ -305,18 +295,6 @@ public sealed class RepositoryManagementSteps : IDisposable
         Assert.True(RunRegistry.IsHeld(_inFlightTargetPath));
     }
 
-    [When(@"a bearer-token caller sends a cancellation request naming the clone's run id")]
-    public async Task WhenABearerTokenCallerSendsACancellationRequestNamingTheCloneSRunId()
-    {
-        using var client = _factory!.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/run/{_inFlightRunId}/cancel");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
-
-        _httpResponse = await client.SendAsync(request, CancellationToken.None);
-    }
-
-    [Then(@"the system responds as if the run id were unknown")]
-    public void ThenTheSystemRespondsAsIfTheRunIdWereUnknown() => Assert.Equal(HttpStatusCode.NotFound, _httpResponse!.StatusCode);
 
     private bool _cancelAccepted;
 
@@ -349,12 +327,10 @@ public sealed class RepositoryManagementSteps : IDisposable
         throw new TimeoutException($"Clone into '{name}' did not reach a terminal state in time.");
     }
 
-    private IReadOnlyList<SseEvent> _events = [];
-
     /// <inheritdoc />
     public void Dispose()
     {
-        _httpResponse?.Dispose();
+        _gitRunToolCallResult?.Response.Dispose();
         _lockedFile?.Dispose();
         _inFlightCts?.Dispose();
         _scope?.Dispose();

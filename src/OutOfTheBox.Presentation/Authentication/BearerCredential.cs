@@ -3,13 +3,10 @@
 namespace OutOfTheBox.Presentation.Authentication;
 
 /// <summary>
-/// Extracts the credential from an <c>Authorization: Bearer &lt;token&gt;</c> header value, shared
-/// by <see cref="BearerAuthenticationFilter"/> (an <see cref="Microsoft.AspNetCore.Http.IEndpointFilter"/>,
-/// usable only on route builders that support endpoint filters) and the MCP endpoint's own
-/// authentication middleware (per <c>mcp-server</c>'s spec) - <c>MapMcp()</c> returns a plain
-/// <see cref="Microsoft.AspNetCore.Builder.IEndpointConventionBuilder"/>, which does not support
-/// <c>AddEndpointFilter</c>, so the MCP route needs middleware instead of a filter, but the same
-/// header-parsing logic either way.
+/// Extracts the credential from an <c>Authorization: Bearer &lt;token&gt;</c> header value - used by
+/// <see cref="McpAuthenticationMiddleware"/> to gate the MCP endpoint (per <c>mcp-server</c>'s spec),
+/// pulled out into its own small class rather than inlined there so the header-parsing logic has
+/// exactly one place to live regardless of which authentication mechanism ends up needing it.
 /// </summary>
 internal static class BearerCredential
 {

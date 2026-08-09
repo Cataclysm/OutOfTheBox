@@ -19,15 +19,12 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// MCP tools for <c>dotnet</c>/<c>git</c> command execution, per <c>mcp-command-execution</c>'s
 /// spec: <c>dotnet_run</c>/<c>git_run</c> start a run and return immediately with a run id (never
 /// blocking for completion, since MCP tool calls are fundamentally request/response);
-/// <c>read_run_output</c> polls it incrementally; <c>cancel_run</c> ends it early. Structurally
-/// parallel to <see cref="OutOfTheBox.Presentation.Execution.RunEndpoints"/> - same
-/// <see cref="RunRegistry"/> lock (shared bidirectionally with the REST API, per this capability's
-/// own "One in-flight command per repository, shared with the REST API" requirement), same
-/// <see cref="IProcessRunner"/> - but writing output into an <see cref="McpRunOutputBuffer"/>
-/// instead of an SSE stream (see <see cref="McpProcessOutputSink"/>), and <c>cancel_run</c> is
-/// deliberately kind-agnostic beyond excluding repository deletes (see its own remarks) rather than
-/// excluding repository clones the way the REST cancel endpoint does, per design.md's "one shared
-/// cancel_run" decision.
+/// <c>read_run_output</c> polls it incrementally; <c>cancel_run</c> ends it early - via the same
+/// <see cref="RunRegistry"/> lock and <see cref="IProcessRunner"/> every other run kind in this
+/// service uses, writing output into an <see cref="McpRunOutputBuffer"/> instead of persisted-only
+/// text (see <see cref="McpProcessOutputSink"/>). <c>cancel_run</c> is deliberately kind-agnostic
+/// beyond excluding repository deletes (see its own remarks) - it accepts a repository clone's run
+/// id too, per design.md's "one shared cancel_run" decision.
 /// </summary>
 [McpServerToolType]
 public sealed class CommandExecutionMcpTools(

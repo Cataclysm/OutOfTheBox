@@ -1,15 +1,15 @@
 ## Purpose
 
-Lets an MCP caller retrieve a single file's contents from within one specific repository's directory tree, with the same two-level path confinement `file-transfer` already applies to the REST API, returned as an MCP tool result instead of a raw HTTP byte stream.
+Lets an MCP caller retrieve a single file's contents from within one specific repository's directory tree, with two-level path confinement (root→repository, then repository→file), returned as a single base64-encoded MCP tool result rather than a streamed byte response - the only file-transfer path this service's sbx-facing interface offers (`file-transfer` originally described the same behavior against a REST API, since removed - see `openspec/changes/sbx-remove-rest-api/`).
 
 ## ADDED Requirements
 
 ### Requirement: transfer_file returns a confined file's contents
-The system SHALL accept a `transfer_file` tool call carrying a repository name and a repository-relative file path, resolve that path under the named repository's directory (itself resolved under the configured root), and return the file's contents as the tool result — applying the same two-level confinement `file-transfer` already requires (root→repository, then repository→file), rejecting a path that would escape either boundary.
+The system SHALL accept a `transfer_file` tool call carrying a repository name and a repository-relative file path, resolve that path under the named repository's directory (itself resolved under the configured root), and return the file's contents as the tool result — applying two-level confinement (root→repository, then repository→file), rejecting a path that would escape either boundary.
 
 #### Scenario: Successful transfer
 - **WHEN** an authenticated caller calls `transfer_file` for a file that exists within the named repository
-- **THEN** the tool call returns that file's full contents
+- **THEN** the tool call returns that file's full contents, alongside the run id it was recorded under (per the "Every transfer is recorded in run history" requirement below) for correlation/debugging
 
 #### Scenario: Path escapes the named repository
 - **WHEN** an authenticated caller calls `transfer_file` with a file path that resolves outside the named repository's own directory (including via `..` traversal or a symlink)
@@ -27,7 +27,7 @@ The system SHALL reject a `transfer_file` call for a file larger than a configur
 - **THEN** the system rejects the call with an error stating the file is too large, and returns no file content
 
 ### Requirement: Every transfer is recorded in run history
-The system SHALL record every `transfer_file` call in run history (per `run-history`), the same way a REST-initiated file transfer already is.
+The system SHALL record every `transfer_file` call in run history (per `run-history`).
 
 #### Scenario: A completed transfer appears in history
 - **WHEN** a `transfer_file` call completes, successfully or with an error

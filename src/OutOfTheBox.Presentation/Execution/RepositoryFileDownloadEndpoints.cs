@@ -12,12 +12,11 @@ namespace OutOfTheBox.Presentation.Execution;
 /// specs/repository-management's "Repository detail provides a file tree browser" requirement.
 /// Deliberately gated by the dashboard's own cookie authentication (<c>RequireAuthorization()</c>,
 /// the same scheme <c>MapRazorComponents&lt;App&gt;()</c> uses) rather than the bearer-token scheme
-/// every sbx-facing endpoint uses - this is a plain browser navigation (an <c>&lt;a href&gt;</c> the
+/// the MCP endpoint uses - this is a plain browser navigation (an <c>&lt;a href&gt;</c> the
 /// operator clicks), which can carry a session cookie but can't attach a bearer `Authorization`
-/// header the way a REST caller can. The route lives under its own <c>/dashboard-files/</c> prefix,
-/// not nested under <c>/repository-management/</c> or <c>/repositories/</c>, so it can never collide
-/// with either the Razor page route or the bearer-token REST surface (per the documented
-/// <c>/repositories</c>-vs-Blazor-page collision precedent in <see cref="RepositoryEndpoints"/>).
+/// header. The route lives under its own <c>/dashboard-files/</c> prefix, not nested under
+/// <c>/repository-management/</c>, so it can never collide with the dashboard's own Razor page route
+/// for the same repository.
 /// </summary>
 public static class RepositoryFileDownloadEndpoints
 {

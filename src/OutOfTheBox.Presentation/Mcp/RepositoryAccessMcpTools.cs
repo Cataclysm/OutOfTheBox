@@ -19,19 +19,19 @@ namespace OutOfTheBox.Presentation.Mcp;
 
 /// <summary>
 /// MCP <c>list_repositories</c>/<c>clone_repository</c> tools, per <c>mcp-repository-access</c>'s
-/// spec - mirroring exactly the REST-reachable subset of <c>repository-management</c> (list and
-/// clone only; delete and every dashboard-only action are never exposed here). <c>list_repositories</c>
-/// reuses <see cref="IRepositoryManager.ListAsync"/> directly, the same cached read
-/// <see cref="OutOfTheBox.Presentation.Execution.RepositoryEndpoints"/>'s REST endpoint already uses.
-/// <c>clone_repository</c> deliberately does NOT reuse <see cref="IRepositoryManager.CloneAsync"/> -
-/// that method's own output sink has no offset-based external polling support, and this capability's
-/// spec requires a clone's progress to be genuinely readable incrementally through <c>read_run_output</c>
-/// (per <c>mcp-command-execution</c>'s capability, shared by design) exactly like a
+/// spec - mirroring exactly the dashboard-external-reachable subset of <c>repository-management</c>
+/// (list and clone only; delete and every dashboard-only action are never exposed here).
+/// <c>list_repositories</c> reuses <see cref="IRepositoryManager.ListAsync"/> directly, the same
+/// cached read the dashboard's own Repositories view uses. <c>clone_repository</c> deliberately does
+/// NOT reuse <see cref="IRepositoryManager.CloneAsync"/> - that method's own output sink has no
+/// offset-based external polling support, and this capability's spec requires a clone's progress to
+/// be genuinely readable incrementally through <c>read_run_output</c> (per
+/// <c>mcp-command-execution</c>'s capability, shared by design) exactly like a
 /// <c>dotnet_run</c>/<c>git_run</c> run - so <c>clone_repository</c> instead mirrors
 /// <c>RepositoryManager.CloneAsync</c>'s own validation/locking/persistence shape directly against
 /// the same <see cref="IProcessRunner"/>/<see cref="McpRunOutputRegistry"/> plumbing
-/// <see cref="CommandExecutionMcpTools"/> uses, rather than duplicating a second, REST-facing path
-/// through <c>IRepositoryManager</c> whose streaming shape doesn't fit here.
+/// <see cref="CommandExecutionMcpTools"/> uses, rather than duplicating a second path through
+/// <c>IRepositoryManager</c> whose streaming shape doesn't fit here.
 /// </summary>
 [McpServerToolType]
 public sealed class RepositoryAccessMcpTools(

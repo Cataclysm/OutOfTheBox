@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using System.Net.Http.Headers;
+using System.Text.Json;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.BehaviorTests.Support;
@@ -16,7 +16,6 @@ public sealed class HostResourceMonitoringSteps : IDisposable
     private CommandExecutionServiceFactory? _factory;
     private IServiceScope? _scope;
     private HttpClient? _inFlightClient;
-    private Task<HttpResponseMessage>? _inFlightTask;
     private Guid _runId;
     private ResourceSnapshot? _snapshot;
     private bool _killAccepted;
@@ -35,19 +34,14 @@ public sealed class HostResourceMonitoringSteps : IDisposable
     public async Task GivenADotnetRunIsInFlightAgainstALongRunningFixture()
     {
         _inFlightClient = Factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/run")
-        {
-            Content = System.Net.Http.Json.JsonContent.Create(new { arguments = new[] { "test" }, workingDirectory = "HangingFixture" }),
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
+        var result = await McpTestClient.CallToolAsync(
+            _inFlightClient, "dotnet_run", new { arguments = new[] { "test" }, workingDirectory = "HangingFixture" }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        Assert.False(result.IsToolError, result.ContentText);
+        _runId = JsonDocument.Parse(result.ContentText!).RootElement.GetProperty("runId").GetGuid();
 
-        _inFlightTask = _inFlightClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
-        var response = await _inFlightTask;
-        _runId = Guid.Parse(response.Headers.GetValues("X-Run-Id").Single());
-
-        // The response headers arrive (per RunEndpoints) after the lock is acquired but before
-        // the spawned dotnet.exe process id is necessarily recorded - poll until RunRegistry
-        // actually has it, rather than assuming.
+        // dotnet_run returns once the run is accepted (lock acquired) but before the spawned
+        // dotnet.exe process id is necessarily recorded - poll until RunRegistry actually has it,
+        // rather than assuming.
         for (var i = 0; i < 100 && !RunRegistry.GetTrackedProcessRoots().Any(r => r.RunId == _runId); i++)
         {
             await Task.Delay(50, CancellationToken.None);

@@ -16,13 +16,12 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// <summary>
 /// MCP <c>transfer_file</c> tool, per <c>mcp-file-transfer</c>'s spec: retrieves a single file's
 /// contents from within one specific repository's directory tree, applying the same two-level path
-/// confinement (root→repository, then repository→file)
-/// <see cref="OutOfTheBox.Presentation.Execution.FileTransferEndpoints"/> already applies for the
-/// REST API. Unlike that endpoint, this tool is a single synchronous request/response - no run id,
-/// no background continuation, no cancellation - since the configured size cap
+/// confinement (root→repository, then repository→file) every other repository-relative-path tool in
+/// this service uses. A single synchronous request/response - no polling, no background
+/// continuation, no cancellation - since the configured size cap
 /// (<see cref="ServiceOptions.McpMaxFileTransferBytes"/>) keeps a transfer small enough to always
-/// complete within one tool call; a REST-style streamed, cancellable, potentially-long-running
-/// transfer has no MCP equivalent to be worth building here.
+/// complete within one tool call; a streamed, cancellable, potentially-long-running transfer has no
+/// MCP equivalent worth building here.
 /// </summary>
 [McpServerToolType]
 public sealed class FileTransferMcpTools(
@@ -81,7 +80,7 @@ public sealed class FileTransferMcpTools(
         {
             var bytes = await File.ReadAllBytesAsync(filePath, CancellationToken.None);
             await RecordAsync(runId, repositoryRoot, path, RunOutcome.Completed, bytes.LongLength);
-            return new McpTransferFileResult(Convert.ToBase64String(bytes), bytes.LongLength);
+            return new McpTransferFileResult(runId, Convert.ToBase64String(bytes), bytes.LongLength);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -114,6 +113,7 @@ public sealed class FileTransferMcpTools(
 }
 
 /// <summary>The result of a successful <c>transfer_file</c> call.</summary>
+/// <param name="RunId">This transfer's id, as recorded in run history - not otherwise needed to use the result, but useful for correlation/debugging, the same way every other MCP tool that touches run history surfaces its run id.</param>
 /// <param name="ContentBase64">The file's contents, base64-encoded.</param>
 /// <param name="SizeBytes">The file's size in bytes (of the raw, non-base64-encoded content).</param>
-public sealed record McpTransferFileResult(string ContentBase64, long SizeBytes);
+public sealed record McpTransferFileResult(Guid RunId, string ContentBase64, long SizeBytes);

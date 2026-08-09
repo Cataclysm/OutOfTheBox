@@ -1,6 +1,6 @@
 ## Purpose
 
-Lets an MCP caller run `dotnet` and `git` commands against a repository checked out on the host, with the same per-repository locking, timeout, and cancellation guarantees `dotnet-command-execution` and `git-command-execution` already give the REST API — but as a start-then-poll pair of tool calls instead of a single request blocking until completion or an SSE stream, since MCP tool calls are fundamentally request/response.
+Lets an MCP caller run `dotnet` and `git` commands against a repository checked out on the host, with per-repository locking, a caller-overridable timeout, and cancellation - as a start-then-poll pair of tool calls, since MCP tool calls are fundamentally request/response, not a blocking call or a persistent stream. (`dotnet-command-execution`/`git-command-execution` originally described the same guarantees against a REST+SSE API, since removed - see `openspec/changes/sbx-remove-rest-api/` - this is now the only interface for this behavior.)
 
 ## ADDED Requirements
 
@@ -30,19 +30,19 @@ The system SHALL accept a `read_run_output` tool call carrying a run id and an o
 - **WHEN** a run's combined stdout/stderr exceeds the configured output size cap
 - **THEN** `read_run_output` reports the run as truncated once the cap is reached, the same distinction `dotnet-command-execution`'s run history already records
 
-### Requirement: One in-flight command per repository, shared with the REST API
-The system SHALL treat an MCP-started `dotnet_run`/`git_run` as contending for the same per-repository lock `dotnet-command-execution` and `git-command-execution` already define, regardless of whether the conflicting in-flight run was started via MCP or via the REST API, and SHALL reject a new MCP-started run targeting an already-busy repository rather than queuing it.
+### Requirement: One in-flight command per repository
+The system SHALL treat an MCP-started `dotnet_run`/`git_run`/`clone_repository` as contending for the same per-repository lock as every other run kind, and SHALL reject a new run targeting an already-busy repository rather than queuing it, regardless of which of those tools is asking.
 
-#### Scenario: MCP run rejected while a REST-started run is in flight
-- **WHEN** a `dotnet` or `git` run started through the REST API is in flight against `repository-a`, and an authenticated MCP caller calls `dotnet_run` or `git_run` against `repository-a`
+#### Scenario: A dotnet_run is rejected while a git_run is in flight for the same repository
+- **WHEN** a `git_run` is in flight against `repository-a`, and an authenticated caller calls `dotnet_run` against `repository-a`
 - **THEN** the tool call is rejected with a conflict error identifying the in-flight run's id, and no new process is started
 
-#### Scenario: REST run rejected while an MCP-started run is in flight
-- **WHEN** a run started through `dotnet_run`/`git_run` is in flight against `repository-a`, and a REST caller starts a command against `repository-a`
-- **THEN** the REST request is rejected with a conflict error identifying the MCP-started run's id, consistent with the shared-lock behavior already required by `dotnet-command-execution`
+#### Scenario: A second dotnet_run for a busy repository is rejected
+- **WHEN** a `dotnet_run` is in flight against `repository-a`, and an authenticated caller calls `dotnet_run` again against `repository-a`
+- **THEN** the tool call is rejected with a conflict error identifying the in-flight run's id, and no new process is started
 
 ### Requirement: Caller may override the execution timeout per call
-The system SHALL accept an optional timeout on `dotnet_run`/`git_run`, apply the configured default when omitted, and clamp any caller-supplied value to the same configured maximum `dotnet-command-execution` already enforces for the REST API.
+The system SHALL accept an optional timeout on `dotnet_run`/`git_run`, apply the configured default when omitted, and clamp any caller-supplied value to a configured maximum.
 
 #### Scenario: Caller-supplied timeout is honored
 - **WHEN** an authenticated caller calls `dotnet_run` with a timeout shorter than the configured default
@@ -53,7 +53,7 @@ The system SHALL accept an optional timeout on `dotnet_run`/`git_run`, apply the
 - **THEN** the system applies the configured maximum instead
 
 ### Requirement: Caller can cancel an in-flight run by its id
-The system SHALL accept a `cancel_run` tool call naming a run id and, if that run is still in flight, terminate its process and release the repository lock it held. `cancel_run` SHALL accept the id of any in-flight `dotnet`/`git` run reachable through this capability, regardless of whether it was started via MCP or via the REST API.
+The system SHALL accept a `cancel_run` tool call naming a run id and, if that run is still in flight, terminate its process and release the repository lock it held. `cancel_run` SHALL accept the id of any in-flight `dotnet`/`git` run reachable through this capability.
 
 #### Scenario: Cancelling an in-flight run
 - **WHEN** an authenticated caller calls `cancel_run` with the id of a run that is still in flight

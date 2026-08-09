@@ -1,6 +1,6 @@
 ## Purpose
 
-Hosts a Model Context Protocol server as a second entry point onto this service's existing capabilities, reachable over the network by the sbx sandbox's Claude Code instance as native MCP tools instead of hand-built HTTP requests, with tool discovery and authentication as the foundation every tool defined by `mcp-command-execution`, `mcp-file-transfer`, and `mcp-repository-access` builds on.
+Hosts a Model Context Protocol server as this service's sbx-facing entry point (alongside the separately-authenticated dashboard), reachable over the network by the sbx sandbox's Claude Code instance as native MCP tools, with tool discovery and authentication as the foundation every tool defined by `mcp-command-execution`, `mcp-file-transfer`, and `mcp-repository-access` builds on.
 
 ## ADDED Requirements
 
@@ -11,8 +11,8 @@ The system SHALL expose an MCP server reachable over the MCP Streamable HTTP tra
 - **WHEN** a caller completes the MCP `initialize` handshake against the service's MCP endpoint
 - **THEN** the server responds with its protocol version and capabilities, and the connection is ready to list and call tools
 
-### Requirement: Every MCP request requires the same bearer credential as the REST API
-The system SHALL require the same bearer credential already used by the bearer-token REST API (per `service-authentication`) on every MCP request, and SHALL reject a request presenting no credential or an invalid one before any tool executes.
+### Requirement: Every MCP request requires the shared bearer credential
+The system SHALL require the shared bearer credential (per `service-authentication`) on every MCP request, and SHALL reject a request presenting no credential or an invalid one before any tool executes.
 
 #### Scenario: Valid bearer token
 - **WHEN** a caller presents the configured bearer credential on an MCP request

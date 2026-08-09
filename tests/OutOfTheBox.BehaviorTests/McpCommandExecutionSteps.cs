@@ -1,7 +1,5 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using OutOfTheBox.BehaviorTests.Support;
 using Reqnroll;
@@ -24,9 +22,8 @@ public sealed class McpCommandExecutionSteps : IDisposable
     private Guid _runId;
     private long _lastOffset;
     private JsonElement _lastReadResult;
-    private HttpClient? _restProbeClient;
-    private HttpResponseMessage? _restInFlightResponse;
-    private SseRunResult? _restSecondRunResult;
+    private Task<McpToolCallResult>? _concurrentTaskA;
+    private Task<McpToolCallResult>? _concurrentTaskB;
 
     private HttpClient Client => _client ??= _factory.CreateClient();
 
@@ -55,9 +52,58 @@ public sealed class McpCommandExecutionSteps : IDisposable
         _runId = ExtractRunId(_toolCallResult);
     }
 
+    [When(@"an authenticated caller starts a git_run ""(.*)"" against ""(.*)""")]
+    public async Task WhenAnAuthenticatedCallerStartsAGitRunAgainst(string subcommand, string fixtureName) =>
+        // No real git repository exists at HangingFixture (it's a plain dotnet fixture) - fine for the
+        // cross-kind locking scenario this backs, since the point is the request never gets far enough
+        // to invoke git.exe at all: it must be rejected by the repository lock first.
+        await StartRunAsync(Client, "git_run", subcommand, fixtureName, timeoutSeconds: null);
+
     [Given(@"an in-flight dotnet_run against ""(.*)"" with a (\d+) second timeout")]
     public async Task GivenAnInFlightDotnetRunAgainstWithATimeout(string fixtureName, int timeoutSeconds) =>
         await StartRunAsync(Client, "dotnet_run", "test", fixtureName, timeoutSeconds);
+
+    [When(@"that run reaches a terminal state")]
+    public async Task WhenThatRunReachesATerminalState() =>
+        await PollUntilTerminalAsync(Client, _runId, TimeSpan.FromSeconds(30));
+
+    [When(@"authenticated dotnet_run calls are started concurrently against ""(.*)"" and ""(.*)""")]
+    public void WhenAuthenticatedDotnetRunCallsAreStartedConcurrentlyAgainst(string fixtureA, string fixtureB)
+    {
+        _concurrentTaskA = StartAndAwaitCompletionAsync(fixtureA);
+        _concurrentTaskB = StartAndAwaitCompletionAsync(fixtureB);
+    }
+
+    [Then(@"both concurrent runs complete independently")]
+    public async Task ThenBothConcurrentRunsCompleteIndependently()
+    {
+        var results = await Task.WhenAll(_concurrentTaskA!, _concurrentTaskB!);
+
+        foreach (var result in results)
+        {
+            Assert.False(result.IsToolError, result.ContentText);
+        }
+    }
+
+    [Then(@"a subsequent dotnet_run against ""(.*)"" is accepted")]
+    public async Task ThenASubsequentDotnetRunAgainstIsAccepted(string fixtureName)
+    {
+        var result = await McpTestClient.CallToolAsync(
+            Client, "dotnet_run", new { arguments = new[] { "test" }, workingDirectory = fixtureName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+
+        Assert.False(result.IsToolError, result.ContentText);
+    }
+
+    private async Task<McpToolCallResult> StartAndAwaitCompletionAsync(string fixtureName)
+    {
+        var startResult = await McpTestClient.CallToolAsync(
+            Client, "dotnet_run", new { arguments = new[] { "test" }, workingDirectory = fixtureName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        Assert.False(startResult.IsToolError, startResult.ContentText);
+
+        var runId = ExtractRunId(startResult);
+        await PollUntilTerminalAsync(Client, runId, TimeSpan.FromSeconds(30));
+        return startResult;
+    }
 
     [Given(@"a dotnet_run against ""(.*)"" has already completed")]
     public async Task GivenADotnetRunAgainstHasAlreadyCompleted(string fixtureName)
@@ -141,52 +187,6 @@ public sealed class McpCommandExecutionSteps : IDisposable
     public void ThenTheMcpCallIsRejected() =>
         Assert.True(_toolCallResult!.JsonRpcError is not null || _toolCallResult.IsToolError, "Expected the MCP call to be rejected.");
 
-    [Given(@"a REST run is in flight against ""(.*)""")]
-    public async Task GivenARestRunIsInFlightAgainst(string fixtureName)
-    {
-        // A dedicated HttpClient, not the shared one the subsequent MCP tool call uses - the same
-        // fix ConcurrencyAndLockingSteps' own remarks already document for the equivalent problem:
-        // this response's body is a still-open, never-fully-drained SSE stream (HangingFixture never
-        // completes on its own), and sharing one HttpClient meant a later request on it blocked
-        // behind this still-open one instead of getting its own.
-        _restProbeClient = _factory.CreateClient();
-
-        // A short caller-supplied timeout, not the factory's 30s default - this run is deliberately
-        // never explicitly cancelled by this scenario (only its rejection of a second, conflicting
-        // request is under test), and its child process otherwise outlives the scenario's own scope
-        // (nothing tears it down when the WebApplicationFactory disposes, since it's detached from
-        // any HTTP request/response lifecycle by then) - a short bound here keeps that orphaned
-        // process, and the delay it causes the test host to actually exit, short too.
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/run")
-        {
-            Content = JsonContent.Create(new { arguments = new[] { "test" }, workingDirectory = fixtureName, timeoutSeconds = 3 }),
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
-
-        _restInFlightResponse = await _restProbeClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
-    }
-
-    [When(@"a REST run is started against ""(.*)""")]
-    public async Task WhenARestRunIsStartedAgainst(string fixtureName) =>
-        _restSecondRunResult = await SseTestClient.PostAndReadAllEventsAsync(
-            Client,
-            "/run",
-            new { arguments = new[] { "--version" }, workingDirectory = fixtureName },
-            CommandExecutionServiceFactory.TestBearerToken,
-            streaming: true,
-            CancellationToken.None);
-
-    [Then(@"the REST run is rejected as a repository conflict")]
-    public void ThenTheRestRunIsRejectedAsARepositoryConflict()
-    {
-        var rejected = _restSecondRunResult!.Events
-            .Where(e => e.Name == "error")
-            .Select(e => JsonDocument.Parse(e.Data))
-            .Any(payload => payload.RootElement.TryGetProperty("runId", out _));
-
-        Assert.True(rejected, "Expected the REST run to be rejected as a repository conflict.");
-    }
-
     private HttpClient GitClientOrDefault => _gitClient ?? Client;
 
     private async Task StartRunAsync(HttpClient client, string toolName, string subcommand, string fixtureName, int? timeoutSeconds)
@@ -245,9 +245,6 @@ public sealed class McpCommandExecutionSteps : IDisposable
     public void Dispose()
     {
         _toolCallResult?.Response.Dispose();
-        _restInFlightResponse?.Dispose();
-        _restSecondRunResult?.Response.Dispose();
-        _restProbeClient?.Dispose();
         _client?.Dispose();
         _factory.Dispose();
         _gitClient?.Dispose();

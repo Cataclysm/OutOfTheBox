@@ -1,9 +1,11 @@
 Feature: Repository Management
-    Mirrors specs/repository-management/spec.md. Repository management has no bearer-token REST
-    surface (it's dashboard-only), so these scenarios call IRepositoryManager directly from a
-    resolved DI scope - the same way Blazor component code-behind would - rather than through HTTP,
-    against a real local git source (reusing GitFixture, the same fixture git-command-execution
-    uses) so `git clone` genuinely runs, not a network-dependent remote URL.
+    Mirrors specs/repository-management/spec.md - full repository management (delete, pull/push/
+    force-push/fetch/clean, branch switching, commit checkout, the file tree browser) is
+    dashboard-only, reachable neither via REST (removed) nor MCP (mcp-repository-access deliberately
+    covers only list/clone). These scenarios call IRepositoryManager directly from a resolved DI
+    scope - the same way Blazor component code-behind would - rather than through HTTP, against a
+    real local git source (reusing GitFixture, the same fixture used elsewhere) so `git clone`
+    genuinely runs, not a network-dependent remote URL.
 
     Scenario: Successful clone
         When an operator clones the fixture repository under a new name
@@ -56,11 +58,6 @@ Feature: Repository Management
         Then the deletion is rejected as a conflict identifying the in-flight run
         And the repository's files are untouched
         And the in-flight run is still running
-
-    Scenario: The REST cancel endpoint does not affect repository-management runs
-        Given a clone into a given name is already in flight
-        When a bearer-token caller sends a cancellation request naming the clone's run id
-        Then the system responds as if the run id were unknown
 
     Scenario: Cancelling a clone from the dashboard
         Given a clone into a given name is already in flight

@@ -10,8 +10,8 @@ namespace OutOfTheBox.BehaviorTests.Support;
 public sealed record McpToolCallResult(HttpResponseMessage Response, JsonElement? JsonRpcError, string? ContentText, bool IsToolError);
 
 /// <summary>
-/// Minimal test-only MCP Streamable HTTP client, mirroring <see cref="SseTestClient"/>'s own
-/// hand-rolled-over-off-the-shelf-library precedent for this project's behavior tests: sends one
+/// Minimal test-only MCP Streamable HTTP client, following this project's established
+/// hand-rolled-over-off-the-shelf-library precedent for its behavior tests: sends one
 /// JSON-RPC request per call to <c>/mcp</c> and parses the single response frame the server sends
 /// back in stateless mode (either a plain JSON body or one <c>event: message</c>/<c>data: {...}</c>
 /// SSE frame - the Streamable HTTP transport may choose either shape per request, so both are

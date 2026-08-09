@@ -1,10 +1,13 @@
 Feature: MCP Command Execution
     Mirrors specs/mcp-command-execution/spec.md, driven against a real running instance of the
     service (Host, via WebApplicationFactory) pointed at the checked-in fixture repositories, so real
-    dotnet.exe/git.exe child processes are genuinely spawned - the same "real process" discipline
-    DotnetCommandExecution.feature/GitCommandExecution.feature already use for the REST API. The
-    cross-interface locking scenarios are this feature's highest-risk coverage - per design.md, MCP
-    and REST share the exact same RunRegistry lock, and that sharing is unverified until proven live.
+    dotnet.exe/git.exe child processes are genuinely spawned. MCP is now this service's only
+    command-execution interface (the REST+SSE API was removed - see
+    openspec/changes/sbx-remove-rest-api/), so this feature also carries the locking/concurrency
+    coverage the old ConcurrencyAndLocking.feature/Cancellation.feature used to provide against REST -
+    dotnet_run/git_run share one RunRegistry lock per repository regardless of which tool (or which
+    kind) is asking, since both funnel through the same internal start/run-to-completion code path,
+    parameterized only by which executable runs.
 
     Scenario: Starting a dotnet command and polling it to completion
         When an authenticated caller starts a dotnet_run "test" against "PassingFixture"
@@ -33,10 +36,11 @@ Feature: MCP Command Execution
         When an authenticated caller starts a dotnet_run against "HangingFixture" with a 3 second timeout
         Then read_run_output eventually reports status "timed out"
 
-    Scenario: Cancelling an in-flight run
+    Scenario: Cancelling an in-flight run kills it and frees the repository
         Given an in-flight dotnet_run against "HangingFixture" with a 30 second timeout
         When the caller calls cancel_run for that run
         Then read_run_output eventually reports status "cancelled"
+        And a subsequent dotnet_run against "HangingFixture" is accepted
 
     Scenario: Cancelling a run that has already finished
         Given a dotnet_run against "PassingFixture" has already completed
@@ -47,12 +51,22 @@ Feature: MCP Command Execution
         When the caller calls cancel_run for an unknown run id
         Then the MCP call is rejected
 
-    Scenario: A dotnet_run is rejected while a REST run is in flight for the same repository
-        Given a REST run is in flight against "HangingFixture"
+    Scenario: Commands against different repositories run in parallel
+        When authenticated dotnet_run calls are started concurrently against "PassingFixture" and "FailingFixture"
+        Then both concurrent runs complete independently
+
+    Scenario: A second dotnet_run for a busy repository is rejected
+        Given an in-flight dotnet_run against "HangingFixture" with a 3 second timeout
         When an authenticated caller starts a dotnet_run "test" against "HangingFixture"
         Then the MCP call is rejected
 
-    Scenario: A REST run is rejected while a dotnet_run is in flight for the same repository
+    Scenario: The repository becomes available again once the in-flight run completes on its own
         Given an in-flight dotnet_run against "HangingFixture" with a 3 second timeout
-        When a REST run is started against "HangingFixture"
-        Then the REST run is rejected as a repository conflict
+        When that run reaches a terminal state
+        And an authenticated caller starts a dotnet_run against "HangingFixture" with a 3 second timeout
+        Then an MCP run id is returned
+
+    Scenario: A git_run is rejected while a dotnet_run is in flight for the same repository
+        Given an in-flight dotnet_run against "HangingFixture" with a 3 second timeout
+        When an authenticated caller starts a git_run "status" against "HangingFixture"
+        Then the MCP call is rejected

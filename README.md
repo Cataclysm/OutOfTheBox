@@ -2,7 +2,7 @@
 
 *(repository/codebase name: `OutOfTheBox`)*
 
-A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet`/`git` commands, transfer files, and list/clone repositories on this host, since the sandbox has no local .NET toolchain.
+A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet`/`git` commands, transfer files, and list/clone repositories on this host, since the sandbox has no local .NET toolchain. Two interfaces only: an MCP server for the sbx-side caller, and a Blazor Server web dashboard for the human operator — no REST API, no client-side skill/doc dependency (MCP tools are self-describing).
 
 ## Status
 
@@ -10,34 +10,36 @@ Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL
 
 ## What it does
 
-- Accepts a `dotnet` or `git` command (arguments + working directory) over HTTP, authenticated by a shared bearer credential, and streams stdout/stderr back over Server-Sent Events as the command runs. The same capability set is also reachable as MCP tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`, `clone_repository`) over the MCP Streamable HTTP transport at `/mcp` — a second, fully additive interface for an MCP-native caller like Claude Code, alongside the REST+SSE API, not a replacement for it. See [`openspec/changes/sbx-mcp-server/`](openspec/changes/sbx-mcp-server/) and the "Calling this service over MCP" section of the skill doc below.
-- Confines execution to a configured root directory; runs against different repositories in parallel, serializes commands against the same repository, and supports cancellation.
-- Transfers a single build-produced file back to the caller, confined to the same repository.
-- Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, pull/push/force-push/fetch/clean, branch switching with auto-tracking, plus REST endpoints for list/clone so the sbx caller can reach those two directly — everything else stays dashboard-only).
+- Accepts a `dotnet` or `git` command (arguments + working directory) as an MCP tool call (`dotnet_run`/`git_run`), authenticated by a shared bearer credential, and returns a run id immediately - the caller polls `read_run_output` for incremental stdout/stderr and the eventual exit code, since MCP tool calls are fundamentally request/response, not a persistent stream. See [`openspec/changes/sbx-mcp-server/`](openspec/changes/sbx-mcp-server/) for the full tool set and design rationale.
+- Confines execution to a configured root directory; runs against different repositories in parallel, serializes commands against the same repository, and supports cancellation (`cancel_run`).
+- Transfers a single file back to the caller (`transfer_file`), confined to the same repository, size-capped since an MCP tool result is a single response payload.
+- Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, pull/push/force-push/fetch/clean, branch switching with auto-tracking, plus MCP tools for list/clone so the sbx caller can reach those two directly — everything else stays dashboard-only).
 - Ships as a self-contained single-file executable, packaged by a WiX Toolset installer (a Burn bootstrapper chaining the .NET SDK/Git for Windows prerequisites ahead of an MSI) with native upgrade/uninstall support.
 
 ## How it works
 
-A caller (normally the sbx-side Claude Code instance, see below) sends an HTTPS request carrying a
-shared bearer token and either a `dotnet`/`git` argument list plus a repository-relative working
-directory, or a request for a specific file inside a repository. The service checks the token, resolves
-the working directory against a configured root directory (rejecting anything that escapes it —
-`../`, an absolute path, a symlink that resolves outside), and, for a command run, spawns
-`dotnet.exe`/`git.exe` directly (no shell, so no shell-injection surface) with that resolved
-directory as its working directory. Commands against different repositories run in parallel; a second
-command against a repository that already has one in flight is rejected outright, not queued, so a caller
-always knows immediately whether its request is actually running.
+A caller (normally the sbx-side Claude Code instance, see below) connects to the MCP server over
+Streamable HTTP at `/mcp`, presenting a shared bearer token on every request, and calls a tool with
+either a `dotnet`/`git` argument list plus a repository-relative working directory, or a request for
+a specific file inside a repository. The service checks the token, resolves the working directory
+against a configured root directory (rejecting anything that escapes it — `../`, an absolute path, a
+symlink that resolves outside), and, for a command run, spawns `dotnet.exe`/`git.exe` directly (no
+shell, so no shell-injection surface) with that resolved directory as its working directory.
+Commands against different repositories run in parallel; a second command against a repository that
+already has one in flight is rejected outright, not queued, so a caller always knows immediately
+whether its request is actually running.
 
-Once a command starts, its `stdout`/`stderr` stream back to the caller incrementally over
-Server-Sent Events as the process produces them (not buffered until it exits), ending with a final
-event carrying the exit code — so a multi-minute `dotnet test` run shows live progress instead of a
-long silent wait. A file-transfer request instead streams a single file's raw bytes back,
-confined to that specific repository's own directory (a second, narrower check than the working-directory
-confinement above). Every run of every kind — `dotnet` command, `git` command, file transfer,
-repository clone, repository delete — is durably recorded to a local SQLite database (arguments or
-file path, timestamps, outcome, full output, and a CPU/RAM time series sampled while it ran), which
-is what the dashboard's History view reads from, and what lets an interrupted run be reconciled to a
-sensible terminal state if the service restarts mid-run.
+`dotnet_run`/`git_run`/`clone_repository` return a run id as soon as the run is accepted, without
+waiting for it to finish — the caller polls `read_run_output` (an offset-based cursor into the run's
+stdout/stderr) as many times as it wants, including after the run has already finished, to see
+incremental progress and the eventual exit code. `transfer_file` is the one synchronous tool - a
+file's contents come back directly in the same call, base64-encoded, since the configured size cap
+keeps a transfer small enough to always complete within one response. Every run of every kind —
+`dotnet` command, `git` command, file transfer, repository clone, repository delete — is durably
+recorded to a local SQLite database (arguments or file path, timestamps, outcome, full output, and a
+CPU/RAM time series sampled while it ran), which is what the dashboard's History view reads from, and
+what lets an interrupted run be reconciled to a sensible terminal state if the service restarts
+mid-run.
 
 ## Architecture
 
@@ -47,7 +49,8 @@ dependency — not even a NuGet package beyond the BCL) ← `Application` wrappi
 interfaces `Infrastructure` implements, like `IProcessRunner` and `IRunRepository`, plus the
 services that orchestrate them — run start/cancel, the per-repository lock registry) ← an outer ring split
 into two genuinely independent slices, `Infrastructure` (real process spawning, WMI, EF Core/SQLite,
-`PerformanceCounter`) and `Presentation` (the minimal API endpoints and the Blazor Server dashboard),
+`PerformanceCounter`) and `Presentation` (the MCP tool definitions, the file-download endpoint, and
+the Blazor Server dashboard),
 which depend inward on `Application` but **never reference each other, with no exception** ← a fifth
 project, `Host`, sitting outside all three rings as the sole composition root: the only project
 referencing both outer-ring slices, wiring them together via dependency injection and running the
@@ -94,38 +97,36 @@ Once logged in, three top-level views are available:
   any commit as a detached HEAD); Files is an Explorer-style expandable tree rooted at the repository,
   supporting download/rename/delete of any file or folder. Both refresh live — the commit graph
   alongside the page's own git-status refresh, the file tree per expanded folder on its own polling
-  interval. Listing and cloning are also reachable via REST (`GET /repositories`,
-  `POST /repositories/clone`), so the sbx-side caller can do those two itself; everything else (delete,
-  pull/push/force-push/fetch/clean, branch switching, commit checkout, the file browser) is
-  dashboard-only, by design — there's no API for any of it.
+  interval. Listing and cloning are also reachable via MCP (`list_repositories`, `clone_repository`),
+  so the sbx-side caller can do those two itself; everything else (delete, pull/push/force-push/
+  fetch/clean, branch switching, commit checkout, the file browser) is dashboard-only, by design —
+  there's no MCP tool for any of it.
 
 ## Running a Claude Code instance in the sbx sandbox
 
-The sbx-side Claude Code instance is the caller this service exists for — it talks to the six REST
-endpoints ([`skills/dotnet-command-service/SKILL.md`](skills/dotnet-command-service/SKILL.md) is the
-authoritative client guide, restating the auth/streaming/cancellation contract with worked `curl`
-examples). To get it working:
+The sbx-side Claude Code instance is the caller this service exists for — it connects as an MCP
+client to the server described above. To get it working:
 
 1. **Have the service installed and running** on a reachable Windows host — see
    [`INSTALL.md`](INSTALL.md). Note the bearer token (auto-generated at install time, shown in the
    installer's config page or resolvable from `HKLM\SOFTWARE\OutOfTheBox` on the host) and the
    host's address/port.
-2. **Copy the skill into the sandbox's Claude Code environment.** The skill is authored and shipped
-   in this repository, but installing it into a *different* machine's environment is a manual step this
-   repository can't do for you — copy the `skills/dotnet-command-service/` directory (containing
-   `SKILL.md`) into wherever the sbx sandbox's Claude Code instance looks for skills.
-3. **Give the sandbox the token and base URL**, however your sandbox setup passes configuration in
-   (e.g. as environment variables) — the skill's own examples assume `$TOKEN` and `$BASE_URL` are
-   available for exactly this.
-4. **Trust the certificate.** If it's self-signed (typical for this deployment shape), the sandbox
-   needs to either pin/trust it explicitly (e.g. `curl --cacert <path-to-cert>`) or the caller needs
-   to have independently verified the connection is otherwise safe — see
-   [`INSTALL.md`](INSTALL.md#certificate).
+2. **Configure the sandbox's Claude Code instance with a remote MCP server**: endpoint
+   `https://<host>:<port>/mcp` (Streamable HTTP transport), with an `Authorization: Bearer <token>`
+   header set to the token from step 1. Exactly how you register a remote MCP server depends on your
+   sandbox's own Claude Code configuration mechanism - nothing repository-specific to copy in, unlike
+   a skill: the seven tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
+   `transfer_file`, `list_repositories`, `clone_repository`) are discovered automatically once
+   connected, each with a self-describing schema.
+3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), the sandbox
+   needs to either pin/trust it explicitly or the caller needs to have independently verified the
+   connection is otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate).
 
-From there, the Claude Code instance in the sandbox can start a `dotnet`/`git` run, stream its
-output, cancel it, pull back a produced file, and list/clone repositories — exactly as documented in
-the skill. Repository *deletion* and the dashboard are both explicitly out of its reach (no REST
-surface for either); those stay operator-only, from the dashboard above.
+From there, the Claude Code instance in the sandbox can start a `dotnet`/`git` run, poll its
+progress, cancel it, pull back a produced file, and list/clone repositories — using the tools
+directly, with no separate client documentation needed. Repository *deletion* and the dashboard are
+both explicitly out of its reach (no MCP tool for either); those stay operator-only, from the
+dashboard above.
 
 ## Documentation
 

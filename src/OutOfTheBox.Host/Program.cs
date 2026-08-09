@@ -92,15 +92,16 @@ builder.Services
     .AddOptions<ServiceOptions>()
     .Bind(builder.Configuration.GetSection(ServiceOptions.SectionName));
 
-// MCP server (sbx-mcp-server) - a second, purely additive entry point onto the same
-// Application-layer ports the REST endpoints below already call (see design.md's "MCP server lives
-// inside Presentation and Host" decision). Stateless mode: every tool call here is already
-// independently bearer-token-authenticated and none of this service's tools need a server-initiated
-// request back to the caller (sampling/elicitation), so there is nothing a stateful MCP session
-// would buy that plain per-call statelessness doesn't already have.
+// MCP server (sbx-mcp-server) - this service's sole command-execution/file-transfer/repository-access
+// entry point for the sbx sandbox caller (the REST+SSE API this originally sat alongside was removed
+// - see openspec/changes/sbx-remove-rest-api/), reached over Streamable HTTP at /mcp. Stateless mode:
+// every tool call here is already independently bearer-token-authenticated and none of this
+// service's tools need a server-initiated request back to the caller (sampling/elicitation), so
+// there is nothing a stateful MCP session would buy that plain per-call statelessness doesn't
+// already have.
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
-    .WithToolsFromAssembly(typeof(RunEndpoints).Assembly);
+    .WithToolsFromAssembly(typeof(CommandExecutionMcpTools).Assembly);
 
 // Process-wide in-memory store of MCP-started runs' output, polled by read_run_output - same
 // singleton-lifetime reasoning as RunRegistry above (Section 2 of sbx-mcp-server).
@@ -214,27 +215,23 @@ try
     app.UseAuthorization();
     app.UseAntiforgery();
 
-    app.MapCommandExecutionEndpoints();
-    app.MapFileTransferEndpoints();
-    app.MapRepositoryEndpoints();
     app.MapRepositoryFileDownloadEndpoints();
     app.MapLoginEndpoints();
     app.MapVersionEndpoint();
 
-    // MCP server (sbx-mcp-server) - same bearer credential every REST command/file/repository
-    // endpoint above already requires, applied to the MCP route itself via middleware (MapMcp's
-    // builder type doesn't support AddEndpointFilter - see McpAuthenticationMiddleware's own
-    // remarks) so an unauthenticated request is rejected before the MCP handshake, tool listing, or
-    // any tool call is processed, per mcp-server's own requirement.
+    // MCP server (sbx-mcp-server) - the same shared bearer token service-authentication has always
+    // used, applied to the MCP route via middleware (MapMcp's builder type doesn't support
+    // AddEndpointFilter - see McpAuthenticationMiddleware's own remarks) so an unauthenticated
+    // request is rejected before the MCP handshake, tool listing, or any tool call is processed, per
+    // mcp-server's own requirement.
     app.UseMcpBearerAuthentication("/mcp");
     app.MapMcp("/mcp");
 
     // RequireAuthorization() applies to this Razor Components route group the same way it's applied
     // directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -
-    // cookie-authenticated, since it's a plain browser navigation, not a bearer-token REST call). The
-    // six bearer-token-protected API endpoints above have no authorization metadata attached at all, so
-    // they're completely unaffected; the dashboard's own Login page opts back out via its
-    // [AllowAnonymous] attribute.
+    // cookie-authenticated, since it's a plain browser navigation). Neither the MCP route above (its
+    // own bearer-token middleware, not ASP.NET Core's cookie-based authorization) nor the dashboard's
+    // own Login page (its [AllowAnonymous] attribute) are affected by this.
     //
     // AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
     // so its @Assets[...] references resolve against the actual hosting app's manifest, per Section

@@ -1,6 +1,6 @@
 ## Purpose
 
-Prevents any network caller other than the trusted sbx sandbox from invoking any of the service's HTTP endpoints on the Windows host — `dotnet` command execution, `git` command execution, file transfer, and cancellation — since the service exposes all of them to a remote, network-reachable caller.
+Prevents any network caller other than the trusted sbx sandbox from invoking the service's MCP server on the Windows host — `dotnet` command execution, `git` command execution, file transfer, and repository list/clone (per `mcp-command-execution`/`mcp-file-transfer`/`mcp-repository-access`) — since the service exposes it to a remote, network-reachable caller. (Originally written against a REST+SSE API, since removed - see `openspec/changes/sbx-remove-rest-api/` - the requirements below were already worded generically enough that only this line needed correcting.)
 
 ## ADDED Requirements
 

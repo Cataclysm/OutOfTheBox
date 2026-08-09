@@ -1,5 +1,7 @@
 # End-to-End Test Plan
 
+**⚠️ Stale interface references**: this plan was written against the bearer-token REST+SSE API, which has since been removed entirely (see `openspec/changes/sbx-remove-rest-api/`) - MCP is now this service's only sbx-facing interface. Every `POST /run`/`POST /run/git`/`POST /files`/`GET /repositories`/`POST /repositories/clone`/`POST /run/{runId}/cancel` reference below needs translating to the equivalent MCP tool call (`dotnet_run`/`git_run`/`transfer_file`/`list_repositories`/`clone_repository`/`cancel_run`) before this plan is actually run - not yet done, tracked as a follow-up rather than blocking the REST-removal work itself.
+
 **Status: planned, not yet executed.** This document describes a full, sandbox-realistic workflow
 test against a real deployed instance of OutOfTheBox — the same shape of session a Claude Code
 instance running in an sbx sandbox would actually drive. It is deliberately **not** run by the

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet build`/`test`/etc. against repos on this host over HTTP (SSE-streamed output), since the sandbox has no local .NET toolchain. Windows-only throughout (Windows Service hosting, `PerformanceCounter`, WMI).
+A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet build`/`test`/etc. against repos on this host over MCP (Streamable HTTP transport), since the sandbox has no local .NET toolchain. A Blazor Server web dashboard is the only other interface (operator-only, cookie-authenticated) - no REST API, no client-side skill doc (MCP tools are self-describing). Windows-only throughout (Windows Service hosting, `PerformanceCounter`, WMI).
 
 The authoritative source for *why* and *what's left* is `openspec/changes/sbx-dotnet-command-service/`: `proposal.md` (what/why), `specs/*/spec.md` (behavior contracts), `design.md` (architecture rationale and every non-obvious technical decision), `tasks.md` (the live, checkbox-tracked implementation plan). Read `design.md` before making a design-level change — it documents *why* each decision was made, including alternatives that were rejected and why.
 

@@ -1,3 +1,5 @@
+**Cross-reference**: this proposal frames MCP as purely additive alongside the REST+SSE API - that was true when written, but the REST API was subsequently removed entirely (see `openspec/changes/sbx-remove-rest-api/`, on explicit request, since this project had no shipped callers yet). MCP is now this service's only sbx-facing interface. The rest of this document is left as-written, as the historical record of why MCP was added in the first place.
+
 ## Why
 
 The sbx sandbox's Claude Code instance drives this service today by constructing raw `curl` commands, backgrounding them, and polling/parsing Server-Sent Events frames from Bash — a mechanics-heavy pattern that exists only because `skills/dotnet-command-service/SKILL.md` has to compensate for the fact that HTTP+SSE isn't something an LLM agent calls natively. Claude Code speaks MCP (Model Context Protocol) natively for tool integration: exposing the same capability as typed MCP tools would let the sbx-side agent call `dotnet`/`git`/file-transfer/repository actions directly, spending far fewer tokens/turns on protocol mechanics and with far less chance of a malformed shell invocation.

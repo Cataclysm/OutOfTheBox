@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+using System.Text.Json;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.BehaviorTests.Support;
 using OutOfTheBox.Domain.Runs;
@@ -10,7 +9,7 @@ using Reqnroll;
 
 namespace OutOfTheBox.BehaviorTests;
 
-/// <summary>Step definitions backing <c>RunHistoryPersistence.feature</c>.</summary>
+/// <summary>Step definitions backing <c>RunHistoryPersistence.feature</c>. Drives completion via MCP tool calls (dotnet_run/git_run/transfer_file) - persistence itself is interface-agnostic, but something has to actually produce a run to persist.</summary>
 [Binding]
 public sealed class RunHistoryPersistenceSteps : IDisposable
 {
@@ -27,17 +26,12 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
         _sqliteFilePath = _factory.SqliteFilePath;
         using var client = _factory.CreateClient();
 
-        var result = await SseTestClient.PostAndReadAllEventsAsync(
-            client,
-            "/run",
-            new { arguments = new[] { "--version" }, workingDirectory = fixtureName },
-            CommandExecutionServiceFactory.TestBearerToken,
-            streaming: true,
-            CancellationToken.None);
+        var start = await McpTestClient.CallToolAsync(
+            client, "dotnet_run", new { arguments = new[] { "--version" }, workingDirectory = fixtureName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        Assert.False(start.IsToolError, start.ContentText);
+        _runId = JsonDocument.Parse(start.ContentText!).RootElement.GetProperty("runId").GetGuid();
 
-        Assert.Contains(result.Events, e => e.Name == "done");
-        _runId = Guid.Parse(result.Response.Headers.GetValues("X-Run-Id").Single());
-        result.Response.Dispose();
+        await PollUntilTerminalAsync(client, _runId);
     }
 
     [When(@"a git run completes against the git fixture")]
@@ -48,17 +42,12 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
         _sqliteFilePath = _factory.SqliteFilePath;
         using var client = _factory.CreateClient();
 
-        var result = await SseTestClient.PostAndReadAllEventsAsync(
-            client,
-            "/run/git",
-            new { arguments = new[] { "status" }, workingDirectory = "GitFixture" },
-            CommandExecutionServiceFactory.TestBearerToken,
-            streaming: true,
-            CancellationToken.None);
+        var start = await McpTestClient.CallToolAsync(
+            client, "git_run", new { arguments = new[] { "status" }, workingDirectory = "GitFixture" }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        Assert.False(start.IsToolError, start.ContentText);
+        _runId = JsonDocument.Parse(start.ContentText!).RootElement.GetProperty("runId").GetGuid();
 
-        Assert.Contains(result.Events, e => e.Name == "done");
-        _runId = Guid.Parse(result.Response.Headers.GetValues("X-Run-Id").Single());
-        result.Response.Dispose();
+        await PollUntilTerminalAsync(client, _runId);
     }
 
     [When(@"a transfer of ""(.*)"" from ""(.*)"" completes")]
@@ -68,15 +57,33 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
         _sqliteFilePath = _factory.SqliteFilePath;
         using var client = _factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/files")
-        {
-            Content = JsonContent.Create(new { repository, path }),
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CommandExecutionServiceFactory.TestBearerToken);
+        var result = await McpTestClient.CallToolAsync(
+            client, "transfer_file", new { repository, path }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        Assert.False(result.IsToolError, result.ContentText);
+        _runId = JsonDocument.Parse(result.ContentText!).RootElement.GetProperty("runId").GetGuid();
+    }
 
-        using var response = await client.SendAsync(request, CancellationToken.None);
-        await response.Content.ReadAsByteArrayAsync();
-        _runId = Guid.Parse(response.Headers.GetValues("X-Run-Id").Single());
+    private static async Task PollUntilTerminalAsync(HttpClient client, Guid runId)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (true)
+        {
+            var result = await McpTestClient.CallToolAsync(
+                client, "read_run_output", new { runId, offset = 0 }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+            Assert.False(result.IsToolError, result.ContentText);
+
+            if (JsonDocument.Parse(result.ContentText!).RootElement.GetProperty("status").GetString() != "running")
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException($"Run {runId} did not reach a terminal state in time.");
+            }
+
+            await Task.Delay(100);
+        }
     }
 
     [When(@"the service is restarted")]
