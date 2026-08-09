@@ -799,7 +799,7 @@ dialog::backdrop {
 }
 
 .back-link {
-    display: inline-block;
+    display: block;
     margin-bottom: 1rem;
     font-size: 0.85rem;
     color: var(--text-muted);
