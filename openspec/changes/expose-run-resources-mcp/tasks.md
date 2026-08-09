@@ -11,9 +11,9 @@
 
 ## 3. Tests
 
-- [ ] 3.1 `mcp-resource-monitoring.feature` (`tests/OutOfTheBox.BehaviorTests/`), Gherkin scenarios transcribed directly from `specs/mcp-resource-monitoring/spec.md`'s `#### Scenario:` blocks, per this repository's established convention (spec and executable test in lockstep). Cover: polling an in-flight run with active samples, an unknown run id being rejected, and a freshly-started run (before the sampler's first tick) returning an empty result rather than an error.
-- [ ] 3.2 Run `dotnet test tests/OutOfTheBox.UnitTests` and `tests/OutOfTheBox.ArchitectureTests` (fast suites) after Section 1 and again after Section 2.
-- [ ] 3.3 Run the full suite including `tests/OutOfTheBox.BehaviorTests` before the final commit of this change.
+- [x] 3.1 `mcp-resource-monitoring.feature` (`tests/OutOfTheBox.BehaviorTests/`), Gherkin scenarios transcribed directly from `specs/mcp-resource-monitoring/spec.md`'s `#### Scenario:` blocks, per this repository's established convention (spec and executable test in lockstep). Cover: polling an in-flight run with active samples, an unknown run id being rejected, and a freshly-started run (before the sampler's first tick) returning an empty result rather than an error.
+- [x] 3.2 Run `dotnet test tests/OutOfTheBox.UnitTests` and `tests/OutOfTheBox.ArchitectureTests` (fast suites) after Section 1 and again after Section 2.
+- [x] 3.3 Run the full suite including `tests/OutOfTheBox.BehaviorTests` before the final commit of this change.
 
 ## 4. Live verification
 

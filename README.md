@@ -115,9 +115,9 @@ client to the server described above. To get it working:
    `https://<host>:<port>/mcp` (Streamable HTTP transport), with an `Authorization: Bearer <token>`
    header set to the token from step 1. Exactly how you register a remote MCP server depends on your
    sandbox's own Claude Code configuration mechanism - nothing repository-specific to copy in, unlike
-   a skill: the seven tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
-   `transfer_file`, `list_repositories`, `clone_repository`) are discovered automatically once
-   connected, each with a self-describing schema.
+   a skill: the eight tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
+   `transfer_file`, `list_repositories`, `clone_repository`, `get_run_resources`) are discovered
+   automatically once connected, each with a self-describing schema.
 3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), the sandbox
    needs to either pin/trust it explicitly or the caller needs to have independently verified the
    connection is otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate).

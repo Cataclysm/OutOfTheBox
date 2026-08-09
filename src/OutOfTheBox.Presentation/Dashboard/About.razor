@@ -35,7 +35,7 @@
     Point an MCP-aware client (Claude Code configured with a remote MCP server) at this host's
     <code>/mcp</code> endpoint with an <code>Authorization: Bearer &lt;token&gt;</code> header carrying
     the service's bearer token; tool discovery, calling, and result parsing are handled by the client
-    library itself. The server exposes seven tools:
+    library itself. The server exposes eight tools:
 </p>
 <pre class="run-output">dotnet_run          - start a `dotnet` command against a repository
 git_run             - start a `git` command against a repository
@@ -44,7 +44,8 @@ read_run_output     - poll a run started by dotnet_run/git_run/clone_repository 
 cancel_run          - cancel a run that is still in flight
 list_repositories   - list the repositories available on this host
 clone_repository    - clone a new repository onto this host
-transfer_file       - read a file's contents (base64-encoded) from within a named repository</pre>
+transfer_file       - read a file's contents (base64-encoded) from within a named repository
+get_run_resources   - poll a run's recent CPU/RAM trend, to judge whether it's hung or still working</pre>
 <p>
     <code>dotnet_run</code>/<code>git_run</code>/<code>clone_repository</code> return a run id
     immediately rather than blocking until the command finishes - poll <code>read_run_output</code>

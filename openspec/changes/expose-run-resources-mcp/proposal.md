@@ -14,7 +14,7 @@ A sbx-side Claude Code agent driving `dotnet_run`/`git_run` remotely can only se
 - `mcp-resource-monitoring`: lets an MCP caller poll a run's recent CPU/RAM trend to distinguish a hung run from a slow-but-working one, mirroring what the dashboard's live resource graphs already show for the same data.
 
 ### Modified Capabilities
-(none - this is purely additive; no existing requirement's behavior changes)
+- `mcp-server`: "Tool discovery lists exactly the tools this service defines" must include `get_run_resources` in its enumerated set - adding a tool is necessarily an observable change to that requirement's own exact-list contract.
 
 ## Impact
 
