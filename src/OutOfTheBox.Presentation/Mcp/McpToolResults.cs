@@ -19,3 +19,20 @@ public sealed record McpReadRunOutputResult(string Status, string Stdout, string
 /// <summary>The result of a <c>cancel_run</c> call - the run's status immediately after the cancellation was requested (may still read "running" until the process actually exits; poll <c>read_run_output</c> to observe the terminal transition).</summary>
 /// <param name="Status">One of <see cref="McpRunStatus"/>'s values.</param>
 public sealed record McpCancelRunResult(string Status);
+
+/// <summary>One resource-usage sample point for a run, per <c>get_run_resources</c>.</summary>
+/// <param name="Timestamp">When this sample was taken.</param>
+/// <param name="CpuPercent">The run's aggregate process-tree CPU utilization at this tick, as a percentage.</param>
+/// <param name="RamBytes">The run's aggregate resident memory at this tick, in bytes.</param>
+public sealed record McpRunResourcePoint(DateTimeOffset Timestamp, double CpuPercent, long RamBytes);
+
+/// <summary>A derived "is this run still doing something" summary over <c>get_run_resources</c>'s returned points - see that tool's own remarks for the idle-threshold rule.</summary>
+/// <param name="LatestCpuPercent">The most recent sample's CPU percentage.</param>
+/// <param name="PeakCpuPercent">The highest CPU percentage observed anywhere in the returned window.</param>
+/// <param name="IdleForSeconds">How long it's been since CPU last exceeded the idle threshold.</param>
+public sealed record McpRunResourceTrend(double LatestCpuPercent, double PeakCpuPercent, double IdleForSeconds);
+
+/// <summary>The result of a <c>get_run_resources</c> call.</summary>
+/// <param name="Points">The run's recent resource-usage samples, oldest first - empty if none have been taken yet (a run just started, or one with nothing left in the trailing window).</param>
+/// <param name="Trend">The derived hung-vs-busy summary, or <see langword="null"/> when <paramref name="Points"/> is empty.</param>
+public sealed record McpGetRunResourcesResult(IReadOnlyList<McpRunResourcePoint> Points, McpRunResourceTrend? Trend);

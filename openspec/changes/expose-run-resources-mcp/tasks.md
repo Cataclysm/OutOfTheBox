@@ -5,9 +5,9 @@
 
 ## 2. `get_run_resources` MCP tool (Presentation)
 
-- [ ] 2.1 Add result record(s) to `McpToolResults.cs` (or a similarly-named new file if that grows unwieldy) matching this project's existing MCP result style - raw sample points plus the derived summary from Task 1, following `McpReadRunOutputResult`'s doc-comment conventions.
-- [ ] 2.2 Add `ResourceMonitoringMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), a new `[McpServerToolType]` class (no explicit DI registration needed - `WithToolsFromAssembly` already scans this assembly) exposing `[McpServerTool] GetRunResourcesAsync(Guid runId)`: look up the run via `IRunRepository.FindByIdAsync` and throw `McpException` for an unknown id (matching `read_run_output`/`cancel_run`'s existing convention exactly), then read `ResourceHistoryBuffer.Get(runId.ToString())` and return its points plus the Task 1 summary (empty/null summary when there are no points, per spec).
-- [ ] 2.3 XML doc comments + `[Description]` attributes on the tool method and its parameter, matching `CommandExecutionMcpTools`'s existing style (tool discovery is self-describing - no separate skill doc to update).
+- [x] 2.1 Add result record(s) to `McpToolResults.cs` (or a similarly-named new file if that grows unwieldy) matching this project's existing MCP result style - raw sample points plus the derived summary from Task 1, following `McpReadRunOutputResult`'s doc-comment conventions.
+- [x] 2.2 Add `ResourceMonitoringMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), a new `[McpServerToolType]` class (no explicit DI registration needed - `WithToolsFromAssembly` already scans this assembly) exposing `[McpServerTool] GetRunResourcesAsync(Guid runId)`: look up the run via `IRunRepository.FindByIdAsync` and throw `McpException` for an unknown id (matching `read_run_output`/`cancel_run`'s existing convention exactly), then read `ResourceHistoryBuffer.Get(runId.ToString())` and return its points plus the Task 1 summary (empty/null summary when there are no points, per spec).
+- [x] 2.3 XML doc comments + `[Description]` attributes on the tool method and its parameter, matching `CommandExecutionMcpTools`'s existing style (tool discovery is self-describing - no separate skill doc to update).
 
 ## 3. Tests
 
