@@ -37,6 +37,11 @@ public sealed class RepositoryManager(
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options) : IRepositoryManager
 {
+    // Unit/record separator control characters delimit ListCommitsAsync's `git log --format` fields -
+    // see that method's own remarks for why, not a printable delimiter a commit subject could contain.
+    private const string LogFieldSeparator = "\x1f";
+    private const string LogRecordSeparator = "\x1e";
+
     /// <inheritdoc />
     public Task<IReadOnlyList<RepositorySummary>> ListAsync(CancellationToken cancellationToken)
     {
@@ -423,6 +428,120 @@ public sealed class RepositoryManager(
         }
 
         return branches;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        {
+            return [];
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        var remoteNames = await GetRemoteNamesAsync(targetPath, cancellationToken);
+
+        // %x1f/%x1e (unit/record separator control characters) delimit fields/records instead of a
+        // printable character like a comma or pipe, which a commit subject could legitimately
+        // contain. %at (author date as a Unix timestamp) is used instead of a formatted date string
+        // so parsing needs no locale/format assumptions.
+        var format = $"%H{LogFieldSeparator}%h{LogFieldSeparator}%P{LogFieldSeparator}%an{LogFieldSeparator}%at{LogFieldSeparator}%D{LogFieldSeparator}%s{LogRecordSeparator}";
+        var output = await RunGitCaptureAsync(
+            targetPath,
+            ["log", "--all", "--topo-order", $"--skip={skip}", $"-n{take}", $"--format={format}"],
+            cancellationToken);
+
+        if (string.IsNullOrEmpty(output))
+        {
+            return [];
+        }
+
+        var commits = new List<CommitSummary>();
+
+        foreach (var record in output.Split(LogRecordSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = record.Split(LogFieldSeparator);
+            if (fields.Length < 7)
+            {
+                continue;
+            }
+
+            var hash = fields[0].Trim();
+            var shortHash = fields[1].Trim();
+            var parents = fields[2].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var authorName = fields[3].Trim();
+            var authorDate = long.TryParse(fields[4].Trim(), out var unixSeconds)
+                ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds)
+                : DateTimeOffset.UnixEpoch;
+            var refs = GitDecorationParser.Parse(fields[5].Trim(), remoteNames);
+            var subject = fields[6].Trim();
+
+            commits.Add(new CommitSummary(hash, shortHash, parents, authorName, authorDate, subject, refs));
+        }
+
+        return commits;
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        if (!Directory.Exists(targetPath))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+        }
+
+        var runId = Guid.NewGuid();
+        using var cancelRequestCts = new CancellationTokenSource();
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        try
+        {
+            var sink = new CapturingOutputSink();
+
+            try
+            {
+                // A plain `git checkout <hash>` against a commit (rather than a branch name) is
+                // exactly what puts the repository into a detached HEAD state - no separate
+                // "--detach" flag needed; GitRepositoryStatsProvider's detached-HEAD detection
+                // (via `git symbolic-ref`) picks this up the next time stats are computed, below.
+                var result = await processRunner.RunAsync(new ProcessRunRequest(["checkout", hash], targetPath, "git"), sink, cancellationToken);
+                if (result.ExitCode != 0)
+                {
+                    return new RepositoryGitActionResult.Failed(sink.Stderr);
+                }
+            }
+            catch (Win32Exception ex)
+            {
+                return new RepositoryGitActionResult.Failed(ex.Message);
+            }
+
+            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
+            statsCache.Set(name, stats);
+            statsEventBus.Publish(name);
+
+            return new RepositoryGitActionResult.Succeeded();
+        }
+        finally
+        {
+            runRegistry.Release(targetPath);
+        }
+    }
+
+    private async Task<HashSet<string>> GetRemoteNamesAsync(string targetPath, CancellationToken cancellationToken)
+    {
+        var output = await RunGitCaptureAsync(targetPath, ["remote"], cancellationToken);
+        return output is null ? [] : new HashSet<string>(SplitNonEmptyLines(output), StringComparer.Ordinal);
     }
 
     /// <summary>

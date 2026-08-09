@@ -76,4 +76,20 @@ public interface IRepositoryManager
     /// fails (unreachable/invalid URL) - failure here never blocks cloning with no explicit branch.
     /// </summary>
     Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists up to <paramref name="take"/> commits (skipping the first <paramref name="skip"/>)
+    /// reachable from any branch or tag (<c>git log --all</c>), most-recent-first, for the detail
+    /// subpage's commit graph. Returns an empty list for an invalid name or a repository that isn't
+    /// a git repository - never throws for those cases.
+    /// </summary>
+    Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Checks out the specific commit <paramref name="hash"/> in the named repository, resulting in
+    /// a detached HEAD there - per specs/repository-management's "A commit can be checked out as a
+    /// detached HEAD" requirement. Lock-guarded like every other mutating repository action; the
+    /// dashboard requires confirmation before calling this given it changes the checked-out state.
+    /// </summary>
+    Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken);
 }
