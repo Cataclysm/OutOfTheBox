@@ -245,6 +245,64 @@ public sealed class RepositoryManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckoutCommitAsync_rejects_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.CheckoutCommitAsync(@"..\evil", "abc123", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task CheckoutCommitAsync_rejects_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.CheckoutCommitAsync("does-not-exist", "abc123", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.NotFound, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task CheckoutCommitAsync_rejects_a_busy_repository_and_never_invokes_git()
+    {
+        var repositoryPath = Path.Combine(_root, "busy-repository");
+        Directory.CreateDirectory(repositoryPath);
+
+        var registry = new RunRegistry();
+        using var cts = new CancellationTokenSource();
+        var conflictingRunId = Guid.NewGuid();
+        registry.TryAcquire(repositoryPath, conflictingRunId, cts, out _);
+
+        var manager = CreateManager(registry);
+
+        var result = await manager.CheckoutCommitAsync("busy-repository", "abc123", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
+        Assert.Equal(conflictingRunId, rejected.ConflictingRunId);
+    }
+
+    [Fact]
+    public async Task ListCommitsAsync_returns_empty_for_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        Assert.Empty(await manager.ListCommitsAsync(@"..\evil", 0, 50, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListCommitsAsync_returns_empty_for_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        Assert.Empty(await manager.ListCommitsAsync("does-not-exist", 0, 50, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task GetCloneSourceUrlAsync_returns_null_for_a_name_that_escapes_the_root()
     {
         var manager = CreateManager(new RunRegistry());
