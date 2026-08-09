@@ -162,13 +162,16 @@ app.UseAntiforgery();
 app.MapCommandExecutionEndpoints();
 app.MapFileTransferEndpoints();
 app.MapRepositoryEndpoints();
+app.MapRepositoryFileDownloadEndpoints();
 app.MapLoginEndpoints();
 app.MapVersionEndpoint();
 
-// RequireAuthorization() applies only to this Razor Components route group - the six
-// bearer-token-protected API endpoints above (and /login, /logout, /version) have no
-// authorization metadata attached at all, so they're completely unaffected; the dashboard's own
-// Login page opts back out via its [AllowAnonymous] attribute.
+// RequireAuthorization() applies to this Razor Components route group the same way it's applied
+// directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -
+// cookie-authenticated, since it's a plain browser navigation, not a bearer-token REST call). The
+// six bearer-token-protected API endpoints above have no authorization metadata attached at all, so
+// they're completely unaffected; the dashboard's own Login page opts back out via its
+// [AllowAnonymous] attribute.
 //
 // AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
 // so its @Assets[...] references resolve against the actual hosting app's manifest, per Section
