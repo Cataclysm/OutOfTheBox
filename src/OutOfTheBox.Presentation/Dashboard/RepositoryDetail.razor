@@ -32,6 +32,44 @@ else
         <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "Computing…")</dd>
         <dt>Git status</dt>
         <dd>@GitStatusText(_summary)</dd>
+        @if (_summary.IsGitRepository)
+        {
+            <dt>Branch</dt>
+            <dd>
+                <select value="@_summary.Branch" @onchange="OnBranchSelectedAsync" disabled="@(_branches.Count == 0)">
+                    @if (_summary.Branch is not null && !_branches.Any(b => !b.IsRemote && b.Name == _summary.Branch))
+                    {
+                        <option value="@_summary.Branch">@_summary.Branch</option>
+                    }
+                    @foreach (var branch in _branches)
+                    {
+                        <option value="@branch.Name">@branch.Name@(branch.IsRemote ? " (remote)" : string.Empty)</option>
+                    }
+                </select>
+                @if (_branchSwitchError is not null)
+                {
+                    <span class="login-error">@_branchSwitchError</span>
+                }
+            </dd>
+            <dt>Clone source</dt>
+            <dd>@(_cloneSourceUrl ?? "Unknown (not cloned through this service, or history since pruned)")</dd>
+            <dt>Remotes</dt>
+            <dd>
+                @if (_summary.Remotes.Count == 0)
+                {
+                    @:None configured
+                }
+                else
+                {
+                    <ul class="remote-list">
+                        @foreach (var remote in _summary.Remotes)
+                        {
+                            <li><strong>@remote.Name</strong>: @remote.Url</li>
+                        }
+                    </ul>
+                }
+            </dd>
+        }
     </dl>
 }
 
@@ -80,6 +118,9 @@ else
     private SortColumn _sortColumn = SortColumn.Started;
     private bool _sortAscending;
     private IDisposable? _statsSubscription;
+    private string? _cloneSourceUrl;
+    private IReadOnlyList<RepositoryBranch> _branches = [];
+    private string? _branchSwitchError;
 
     private enum SortColumn
     {
@@ -102,10 +143,39 @@ else
             ? await RunRepository.ListAsync(new RunQuery { RepositoryPath = resolution.ResolvedPath }, CancellationToken.None)
             : [];
 
+        _cloneSourceUrl = await RepositoryManager.GetCloneSourceUrlAsync(Name, CancellationToken.None);
+        _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
+
         // Otherwise this page, left open on a repository whose stats aren't cached yet, would sit
         // showing "Computing…" forever - unlike Repositories.razor, it has no other event subscription
         // at all to piggyback a refresh onto. See IRepositoryStatsEventBus's own remarks.
         _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
+    }
+
+    private async Task OnBranchSelectedAsync(ChangeEventArgs e)
+    {
+        var branch = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(branch) || branch == _summary?.Branch)
+        {
+            return;
+        }
+
+        _branchSwitchError = null;
+        var result = await RepositoryManager.SwitchBranchAsync(Name, branch, CancellationToken.None);
+
+        if (result is RepositoryGitActionResult.Failed failed)
+        {
+            _branchSwitchError = failed.ErrorMessage ?? "Branch switch failed.";
+        }
+        else if (result is RepositoryGitActionResult.Rejected rejected)
+        {
+            _branchSwitchError = rejected.Reason == RepositoryActionRejectionReason.Busy
+                ? $"Busy - conflicting run {rejected.ConflictingRunId}."
+                : "Rejected.";
+        }
+
+        await RefreshSummaryAsync();
+        _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
     }
 
     private void OnRepositoryStatsChanged(string repositoryName)
@@ -173,14 +243,21 @@ else
 
         var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";
 
-        if (repository.AheadCount is > 0)
+        if (repository.IsRemoteGone)
         {
-            status += $", ahead {repository.AheadCount}";
+            status += ", remote gone";
         }
-
-        if (repository.BehindCount is > 0)
+        else
         {
-            status += $", behind {repository.BehindCount}";
+            if (repository.AheadCount is > 0)
+            {
+                status += $", ahead {repository.AheadCount}";
+            }
+
+            if (repository.BehindCount is > 0)
+            {
+                status += $", behind {repository.BehindCount}";
+            }
         }
 
         return status;

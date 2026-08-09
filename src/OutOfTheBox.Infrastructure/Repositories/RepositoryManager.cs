@@ -587,9 +587,9 @@ public sealed class RepositoryManager(
             using var timeoutCts = new CancellationTokenSource(timeout);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancelRequestCts.Token);
 
-            var cloneArguments = string.IsNullOrWhiteSpace(branch)
-                ? new[] { "clone", url, targetPath }
-                : new[] { "clone", "--branch", branch, url, targetPath };
+            string[] cloneArguments = string.IsNullOrWhiteSpace(branch)
+                ? ["clone", url, targetPath]
+                : ["clone", "--branch", branch, url, targetPath];
 
             try
             {
