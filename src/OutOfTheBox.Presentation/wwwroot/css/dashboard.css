@@ -811,6 +811,9 @@ dialog::backdrop {
 
 /* Sortable, column-aligned lists (History, Repositories, and a repository's own run-history
    sub-list) - replaces the earlier flex-row "card list" markup, which didn't align across rows. */
+/* Auto, not fixed: column widths are meant to track their own content (a short "Idle" badge
+   shouldn't reserve as much room as a timestamp) rather than a fixed guess per column - see
+   .col-shrink below for how that's actually achieved. */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -819,7 +822,15 @@ dialog::backdrop {
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
     overflow: hidden;
-    table-layout: fixed;
+}
+
+/* Pairs with a colgroup <col style="width:1%"> on the same column - table-layout: auto treats
+   that 1% as the lowest-priority width hint, not a hard cap, so the column still expands to fit
+   this cell's own content (nowrap stops it from wrapping to satisfy the 1% hint instead); every
+   column *without* that pairing (there's exactly one per table) ends up absorbing whatever space
+   is left over. The classic "auto-layout flexible column" trick - no JS, no fixed guesses. */
+.col-shrink {
+    white-space: nowrap;
 }
 
 .data-table th, .data-table td {
@@ -875,9 +886,12 @@ dialog::backdrop {
 }
 
 /* Long free-text cell content (repository paths, commands, file paths, URLs) - truncated with an
-   ellipsis rather than wrapping or overflowing the table; the full value is on the title tooltip. */
+   ellipsis rather than wrapping or overflowing the table; the full value is on the title tooltip.
+   No max-width:0 here (that was a table-layout: fixed-only trick to stop content from fighting a
+   colgroup width) - table-layout: auto already gives every column a genuine computed width (the
+   flex column's is whatever .col-shrink's siblings left over), so overflow/text-overflow alone is
+   enough to truncate once a column is actually narrower than its content. */
 .ellipsis {
-    max-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -959,7 +973,11 @@ dd {
     pointer-events: none;
 }
 
-.commit-graph-svg circle {
+/* Scoped to .commit-node specifically, not every <circle> - the merge-point outer ring and the
+   fork-point hollow node both need their own dynamic (per-lane) stroke color set inline via
+   style="stroke:...", which a blanket circle selector here would otherwise clobber (a stylesheet
+   rule always outranks a bare presentation attribute, even a literal one, for the same property). */
+.commit-graph-svg circle.commit-node {
     stroke: var(--bg-raised);
 }
 
@@ -970,6 +988,13 @@ dd {
 .commit-table td {
     padding-top: 0;
     padding-bottom: 0;
+}
+
+/* The row of the commit currently checked out (HEAD, attached or detached) - a light tint, the
+   same accent used for the current-branch pill/ref, just faint enough to read as "you are here"
+   rather than compete with the row's own content. */
+.commit-row-current {
+    background: rgba(236, 72, 153, 0.08);
 }
 
 .commit-graph-cell {
@@ -1025,6 +1050,14 @@ dd {
 .ref-pill-remote:hover {
     background: rgba(109, 40, 217, 0.3);
     border-color: #a78bfa;
+}
+
+/* The branch HEAD currently points to - a stronger fill/border plus a subtle glow than a plain
+   (non-current) local branch pill, so it visibly stands out among several badges on the same row. */
+.ref-pill-current {
+    background: rgba(236, 72, 153, 0.3);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.35);
 }
 
 /* File-change kind badges (commit detail page) - same pill shape as .kind-badge, one tint per

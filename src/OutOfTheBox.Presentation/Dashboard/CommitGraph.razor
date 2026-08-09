@@ -26,23 +26,23 @@ else
             <colgroup>
                 <col style="width:@(_graph!.LaneCount * LaneWidth)px" />
                 <col />
-                <col style="width:10rem" />
-                <col style="width:9rem" />
-                <col style="width:6rem" />
-                <col style="width:4rem" />
+                <col style="width:1%" />
+                <col style="width:1%" />
+                <col style="width:1%" />
+                <col style="width:1%" />
             </colgroup>
             <tbody>
                 @for (var i = 0; i < _commits.Count; i++)
                 {
                     var commit = _commits[i];
-                    <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
+                    <tr class="@(IsCheckedOut(commit) ? "commit-row-current" : null)" @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
                         <td class="commit-graph-cell"></td>
                         <td class="ellipsis" title="@commit.Subject">
                             @foreach (var reference in commit.Refs)
                             {
                                 @if (reference.Kind == CommitRefKind.Tag || reference.IsCurrent)
                                 {
-                                    <span class="ref-pill @RefPillClass(reference.Kind)">
+                                    <span class="ref-pill @RefPillClass(reference.Kind) @(reference.IsCurrent ? "ref-pill-current" : null)">
                                         <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
                                     </span>
                                 }
@@ -56,10 +56,10 @@ else
                             }
                             @commit.Subject
                         </td>
-                        <td class="ellipsis">@commit.AuthorName</td>
-                        <td>@FormatDate(commit.AuthorDate)</td>
-                        <td class="ellipsis" title="@commit.Hash">@commit.ShortHash</td>
-                        <td class="actions">
+                        <td class="col-shrink ellipsis">@commit.AuthorName</td>
+                        <td class="col-shrink">@FormatDate(commit.AuthorDate)</td>
+                        <td class="col-shrink ellipsis" title="@commit.Hash">@commit.ShortHash</td>
+                        <td class="col-shrink actions">
                             <button type="button" class="icon-button" title="Checkout as detached HEAD"
                                     @onclick="@(() => ConfirmCheckoutAsync(commit))" @onclick:stopPropagation="true">
                                 <Icon Name="checkout" />
@@ -98,7 +98,27 @@ else
                     }
                 }
 
-                <circle cx="@LaneX(row.Lane)" cy="@rowMid" r="5" fill="@LaneColor(row.Lane)" stroke-width="2" />
+                var isMerge = IsMergePoint(row);
+                var isFork = IsForkPoint(row);
+
+                @if (isMerge)
+                {
+                    @* An extra outer ring around a merge commit's own dot - multiple parent lines
+                       already fan out below it, but a ring makes the merge point itself
+                       recognizable at a glance instead of only inferable from the line topology. *@
+                    <circle cx="@LaneX(row.Lane)" cy="@rowMid" r="7" fill="none" style="stroke:@LaneColor(row.Lane)" stroke-width="2" />
+                }
+                @if (isFork)
+                {
+                    @* A branch point (this commit has 2+ children in different lanes, i.e. 2+ lanes
+                       converge into it from above) - rendered hollow instead of solid, distinct
+                       from both a plain commit and a merge's outer ring. *@
+                    <circle cx="@LaneX(row.Lane)" cy="@rowMid" r="5" style="fill:var(--bg-sunken);stroke:@LaneColor(row.Lane)" stroke-width="2.5" />
+                }
+                else
+                {
+                    <circle cx="@LaneX(row.Lane)" cy="@rowMid" r="5" class="commit-node" fill="@LaneColor(row.Lane)" stroke-width="2" />
+                }
             }
         </svg>
     </div>
@@ -132,6 +152,18 @@ else
     /// </summary>
     [Parameter]
     public EventCallback OnBranchSwitched { get; set; }
+
+    /// <summary>
+    /// The checked-out commit's short hash when the repository is in a detached-HEAD state, or
+    /// <see langword="null"/> when it's on a branch. A commit's own <see cref="CommitRef.IsCurrent"/>
+    /// already identifies the checked-out commit while attached to a branch (git's own "HEAD ->"
+    /// decoration), but detached HEAD produces no ref decoration on any commit at all - this is the
+    /// only way to still highlight the right row in that state. Comes from the parent's own
+    /// <c>RepositorySummary.Branch</c>, which already holds the short hash instead of a branch name
+    /// while <c>IsDetachedHead</c> is set (see RepositoryDetail.razor's own GitStatusText).
+    /// </summary>
+    [Parameter]
+    public string? DetachedHeadShortHash { get; set; }
 
     private IReadOnlyList<CommitSummary>? _commits;
     private CommitGraphResult? _graph;
@@ -230,6 +262,19 @@ else
         await LoadAsync(Math.Max(PageSize, _commits?.Count ?? PageSize));
         await OnBranchSwitched.InvokeAsync();
     }
+
+    private bool IsCheckedOut(CommitSummary commit) =>
+        commit.Refs.Any(r => r.IsCurrent) ||
+        (DetachedHeadShortHash is not null && string.Equals(commit.ShortHash, DetachedHeadShortHash, StringComparison.OrdinalIgnoreCase));
+
+    // A merge point: 2+ connectors leave this row's own lane (the self/first-parent continuation
+    // plus one per additional parent). A fork point: 2+ connectors arrive into it (the self
+    // continuation plus one per other lane converging here, i.e. this commit has 2+ children in
+    // different lanes). Derived from the already-computed connectors, not commit.ParentHashes.Count
+    // directly, so it stays consistent with whatever the layout actually drew.
+    private static bool IsMergePoint(CommitGraphRow row) => row.Connectors.Count(c => c.FromLane == row.Lane) > 1;
+
+    private static bool IsForkPoint(CommitGraphRow row) => row.Connectors.Count(c => c.ToLane == row.Lane) > 1;
 
     private static string LaneColor(int lane) => LaneColors[lane % LaneColors.Length];
 

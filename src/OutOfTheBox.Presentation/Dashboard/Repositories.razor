@@ -56,30 +56,30 @@ else
     {
         <table class="data-table clickable-rows">
             <colgroup>
-                <col style="width:6rem" />
+                <col style="width:1%" />
                 <col />
-                <col style="width:7rem" />
-                <col style="width:18rem" />
-                <col style="width:19rem" />
+                <col style="width:1%" />
+                <col style="width:1%" />
+                <col style="width:1%" />
             </colgroup>
             <thead>
                 <tr>
-                    <th @onclick="@(() => SortBy(SortColumn.Status))">Status@(SortIndicator(SortColumn.Status))</th>
+                    <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Status))">Status@(SortIndicator(SortColumn.Status))</th>
                     <th @onclick="@(() => SortBy(SortColumn.Name))">Name@(SortIndicator(SortColumn.Name))</th>
-                    <th @onclick="@(() => SortBy(SortColumn.Size))">Size@(SortIndicator(SortColumn.Size))</th>
-                    <th @onclick="@(() => SortBy(SortColumn.GitStatus))">Git status@(SortIndicator(SortColumn.GitStatus))</th>
-                    <th class="not-sortable">Actions</th>
+                    <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Size))">Size@(SortIndicator(SortColumn.Size))</th>
+                    <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.GitStatus))">Git status@(SortIndicator(SortColumn.GitStatus))</th>
+                    <th class="col-shrink not-sortable">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var repository in Sorted(filtered))
                 {
                     <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
-                        <td><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
+                        <td class="col-shrink"><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
                         <td class="ellipsis" title="@repository.Name">@repository.Name</td>
-                        <td>@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
-                        <td class="ellipsis" title="@GitStatusText(repository)">@GitStatusText(repository)</td>
-                        <td class="actions" @onclick:stopPropagation="true">
+                        <td class="col-shrink">@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
+                        <td class="col-shrink ellipsis" title="@GitStatusText(repository)">@GitStatusText(repository)</td>
+                        <td class="col-shrink actions" @onclick:stopPropagation="true">
                             @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
                             {
                                 <button type="button" class="icon-button" title="Cancel clone" @onclick="@(() => CancelCloneAsync(cloneRunId))">

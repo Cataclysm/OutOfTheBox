@@ -46,7 +46,7 @@ else
             <dd>
                 @foreach (var reference in _detail.Refs)
                 {
-                    <span class="ref-pill @RefPillClass(reference.Kind)">
+                    <span class="ref-pill @RefPillClass(reference.Kind) @(reference.IsCurrent ? "ref-pill-current" : null)">
                         <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
                     </span>
                 }
@@ -73,11 +73,15 @@ else
     else
     {
         <table class="data-table">
+            <colgroup>
+                <col style="width:1%" />
+                <col />
+            </colgroup>
             <tbody>
                 @foreach (var file in _detail.Files)
                 {
                     <tr>
-                        <td><span class="kind-badge kind-file@(file.Kind.ToString().ToLowerInvariant())">@FileChangeLabel(file.Kind)</span></td>
+                        <td class="col-shrink"><span class="kind-badge kind-file@(file.Kind.ToString().ToLowerInvariant())">@FileChangeLabel(file.Kind)</span></td>
                         <td class="ellipsis" title="@file.Path">
                             @if (file.OldPath is not null)
                             {

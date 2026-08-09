@@ -58,30 +58,30 @@ else
 {
     <table class="data-table clickable-rows">
         <colgroup>
-            <col style="width:7rem" />
-            <col style="width:9rem" />
-            <col style="width:12rem" />
+            <col style="width:1%" />
+            <col style="width:1%" />
+            <col style="width:1%" />
             <col />
-            <col style="width:11rem" />
+            <col style="width:1%" />
         </colgroup>
         <thead>
             <tr>
-                <th @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Repository))">Repository@(SortIndicator(SortColumn.Repository))</th>
+                <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
+                <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
+                <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Repository))">Repository@(SortIndicator(SortColumn.Repository))</th>
                 <th @onclick="@(() => SortBy(SortColumn.Detail))">Detail@(SortIndicator(SortColumn.Detail))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
+                <th class="col-shrink" @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var run in SortedRuns())
             {
                 <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
-                    <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
-                    <td>@run.Outcome.Label()</td>
-                    <td class="ellipsis" title="@RunDisplay.RepositoryName(run)">@RunDisplay.RepositoryName(run)</td>
+                    <td class="col-shrink"><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
+                    <td class="col-shrink">@run.Outcome.Label()</td>
+                    <td class="col-shrink ellipsis" title="@RunDisplay.RepositoryName(run)">@RunDisplay.RepositoryName(run)</td>
                     <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
-                    <td>@FormatDateTime(run.StartedAt)</td>
+                    <td class="col-shrink">@FormatDateTime(run.StartedAt)</td>
                 </tr>
             }
         </tbody>
