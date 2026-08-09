@@ -88,13 +88,27 @@ else
                 {
                     @if (connector.FromLane == connector.ToLane)
                     {
-                        <line x1="@LaneX(connector.FromLane)" y1="@rowTop" x2="@LaneX(connector.ToLane)" y2="@rowBottom"
+                        @* Row 0's commit has nothing above it depending on it - draw only from its
+                           own dot downward, not a phantom stub from the graph's very top edge. *@
+                        var y1 = i == 0 ? rowMid : rowTop;
+                        <line x1="@LaneX(connector.FromLane)" y1="@y1" x2="@LaneX(connector.ToLane)" y2="@rowBottom"
                               stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
+                    }
+                    else if (connector.ToLane == row.Lane)
+                    {
+                        @* Convergence (fork point): the other lane arrives at this row's top edge
+                           and curves in to meet this commit's own dot, not past it - colored as the
+                           disappearing lane, since the primary lane already has its own straight line. *@
+                        <path d="@CurvePath(LaneX(connector.FromLane), rowTop, LaneX(connector.ToLane), rowMid)"
+                              fill="none" stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
                     }
                     else
                     {
-                        <path d="@CurvePath(LaneX(connector.FromLane), rowTop, LaneX(connector.ToLane), rowBottom, rowMid)"
-                              fill="none" stroke="@LaneColor(Math.Min(connector.FromLane, connector.ToLane))" stroke-width="2.5" stroke-linecap="round" />
+                        @* Divergence (a merge's extra parent): starts at this commit's own dot and
+                           curves out to the new lane's column by this row's bottom edge - colored as
+                           the lane it becomes, since it stays that color for every row below. *@
+                        <path d="@CurvePath(LaneX(connector.FromLane), rowMid, LaneX(connector.ToLane), rowBottom)"
+                              fill="none" stroke="@LaneColor(connector.ToLane)" stroke-width="2.5" stroke-linecap="round" />
                     }
                 }
 
@@ -280,12 +294,15 @@ else
 
     private static int LaneX(int lane) => lane * LaneWidth + LaneWidth / 2;
 
-    // A cubic-bezier S-curve between two lane columns, control points pinned to the row's vertical
-    // midpoint - the standard smoothed shape a branch/merge line takes in tools like Fork or
-    // GitKraken, versus this graph's previous plain diagonal <line>. Same-lane (straight) segments
-    // stay plain <line>s, drawn separately by the caller.
-    private static string CurvePath(int x1, int y1, int x2, int y2, int yMid) =>
-        FormattableString.Invariant($"M{x1},{y1} C{x1},{yMid} {x2},{yMid} {x2},{y2}");
+    // A cubic-bezier S-curve between two lane columns, control points pinned to the segment's own
+    // vertical midpoint (not the full row's) - the standard smoothed shape a branch/merge line takes
+    // in tools like Fork or GitKraken, versus this graph's previous plain diagonal <line>. Same-lane
+    // (straight) segments stay plain <line>s, drawn separately by the caller.
+    private static string CurvePath(int x1, int y1, int x2, int y2)
+    {
+        var yMid = (y1 + y2) / 2;
+        return FormattableString.Invariant($"M{x1},{y1} C{x1},{yMid} {x2},{yMid} {x2},{y2}");
+    }
 
     private static string RefPillClass(CommitRefKind kind) => kind switch
     {

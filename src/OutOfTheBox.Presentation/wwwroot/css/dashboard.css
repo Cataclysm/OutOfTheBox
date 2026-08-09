@@ -981,13 +981,19 @@ dd {
     stroke: var(--bg-raised);
 }
 
+/* height on a <tr>/<td> is only a floor in table layout - a browser will never clip content to
+   honor it, so a row containing a ref-pill or the checkout icon-button can silently render taller
+   than RowHeight, which then drifts the SVG overlay's absolute row-index math out of sync with the
+   real rows. overflow: hidden on the cell is what actually turns that floor into a hard cap. */
 .commit-table tr {
     height: 34px;
 }
 
 .commit-table td {
+    height: 34px;
     padding-top: 0;
     padding-bottom: 0;
+    overflow: hidden;
 }
 
 /* The row of the commit currently checked out (HEAD, attached or detached) - a light tint, the
