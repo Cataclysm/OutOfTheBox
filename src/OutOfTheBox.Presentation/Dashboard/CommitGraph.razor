@@ -20,49 +20,68 @@ else
         <span class="login-error">@_error</span>
     }
 
-    <table class="data-table commit-table">
-        <tbody>
+    <div class="commit-graph-wrapper">
+        <table class="data-table commit-table">
+            <tbody>
+                @for (var i = 0; i < _commits.Count; i++)
+                {
+                    var commit = _commits[i];
+                    <tr>
+                        <td class="commit-graph-cell" style="width:@(_graph!.LaneCount * LaneWidth)px"></td>
+                        <td class="ellipsis commit-subject" title="@commit.Subject">
+                            @foreach (var reference in commit.Refs)
+                            {
+                                <span class="ref-pill @RefPillClass(reference.Kind)">
+                                    <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
+                                </span>
+                            }
+                            @commit.Subject
+                        </td>
+                        <td class="ellipsis">@commit.AuthorName</td>
+                        <td>@FormatDate(commit.AuthorDate)</td>
+                        <td class="ellipsis" title="@commit.Hash">@commit.ShortHash</td>
+                        <td class="actions">
+                            <button type="button" class="icon-button" title="Checkout as detached HEAD" @onclick="@(() => ConfirmCheckoutAsync(commit))">
+                                <Icon Name="checkout" />
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @* One SVG spanning every row, not one per <tr> - row boxes drawn independently could each
+           be a few px taller than RowHeight depending on text metrics, and vertical-align: middle
+           would then center each row's graph inside that extra space, leaving visible gaps between
+           consecutive rows' lines. A single overlay using absolute row-index math (rowIndex *
+           RowHeight) is immune to that - it only needs every <tr> to actually render at exactly
+           RowHeight, which .commit-table tr's own CSS rule guarantees. *@
+        <svg class="commit-graph-svg" width="@(_graph!.LaneCount * LaneWidth)" height="@(_commits.Count * RowHeight)">
             @for (var i = 0; i < _commits.Count; i++)
             {
-                var commit = _commits[i];
-                var row = _graph!.Rows[i];
-                <tr>
-                    <td class="commit-graph-cell">
-                        <svg width="@(_graph.LaneCount * LaneWidth)" height="@RowHeight">
-                            @foreach (var connector in row.Connectors)
-                            {
-                                <line
-                                    x1="@(connector.FromLane * LaneWidth + LaneWidth / 2)"
-                                    y1="0"
-                                    x2="@(connector.ToLane * LaneWidth + LaneWidth / 2)"
-                                    y2="@RowHeight"
-                                    stroke="@LaneColor(Math.Min(connector.FromLane, connector.ToLane))"
-                                    stroke-width="2" />
-                            }
-                            <circle cx="@(row.Lane * LaneWidth + LaneWidth / 2)" cy="@(RowHeight / 2)" r="4" fill="@LaneColor(row.Lane)" />
-                        </svg>
-                    </td>
-                    <td class="ellipsis commit-subject" title="@commit.Subject">
-                        @foreach (var reference in commit.Refs)
-                        {
-                            <span class="ref-pill @RefPillClass(reference.Kind)">
-                                <Icon Name="@(reference.Kind == CommitRefKind.Tag ? "tag" : "branch")" />@reference.Name
-                            </span>
-                        }
-                        @commit.Subject
-                    </td>
-                    <td class="ellipsis">@commit.AuthorName</td>
-                    <td>@FormatDate(commit.AuthorDate)</td>
-                    <td class="ellipsis" title="@commit.Hash">@commit.ShortHash</td>
-                    <td class="actions">
-                        <button type="button" class="icon-button" title="Checkout as detached HEAD" @onclick="@(() => ConfirmCheckoutAsync(commit))">
-                            <Icon Name="checkout" />
-                        </button>
-                    </td>
-                </tr>
+                var row = _graph.Rows[i];
+                var rowTop = i * RowHeight;
+                var rowBottom = rowTop + RowHeight;
+                var rowMid = rowTop + RowHeight / 2;
+
+                @foreach (var connector in row.Connectors)
+                {
+                    @if (connector.FromLane == connector.ToLane)
+                    {
+                        <line x1="@LaneX(connector.FromLane)" y1="@rowTop" x2="@LaneX(connector.ToLane)" y2="@rowBottom"
+                              stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
+                    }
+                    else
+                    {
+                        <path d="@CurvePath(LaneX(connector.FromLane), rowTop, LaneX(connector.ToLane), rowBottom, rowMid)"
+                              fill="none" stroke="@LaneColor(Math.Min(connector.FromLane, connector.ToLane))" stroke-width="2.5" stroke-linecap="round" />
+                    }
+                }
+
+                <circle cx="@LaneX(row.Lane)" cy="@rowMid" r="5" fill="@LaneColor(row.Lane)" stroke-width="2" />
             }
-        </tbody>
-    </table>
+        </svg>
+    </div>
 
     @if (_hasMore)
     {
@@ -74,8 +93,8 @@ else
 
 @code {
     private const int PageSize = 50;
-    private const int RowHeight = 32;
-    private const int LaneWidth = 16;
+    private const int RowHeight = 34;
+    private const int LaneWidth = 20;
 
     private static readonly string[] LaneColors =
     [
@@ -152,6 +171,15 @@ else
     }
 
     private static string LaneColor(int lane) => LaneColors[lane % LaneColors.Length];
+
+    private static int LaneX(int lane) => lane * LaneWidth + LaneWidth / 2;
+
+    // A cubic-bezier S-curve between two lane columns, control points pinned to the row's vertical
+    // midpoint - the standard smoothed shape a branch/merge line takes in tools like Fork or
+    // GitKraken, versus this graph's previous plain diagonal <line>. Same-lane (straight) segments
+    // stay plain <line>s, drawn separately by the caller.
+    private static string CurvePath(int x1, int y1, int x2, int y2, int yMid) =>
+        FormattableString.Invariant($"M{x1},{y1} C{x1},{yMid} {x2},{yMid} {x2},{y2}");
 
     private static string RefPillClass(CommitRefKind kind) => kind switch
     {

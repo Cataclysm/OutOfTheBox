@@ -940,17 +940,42 @@ dd {
     border-bottom-color: var(--accent);
 }
 
-/* Commit graph (repository detail's Commits tab) - lane/connector SVG per row plus branch/tag pills,
-   in the spirit of a git client's graph view (straight-line lanes, not bezier curves - see design.md's
-   "Commit graph" decision for why). */
+/* Commit graph (repository detail's Commits tab) - one absolutely-positioned SVG overlay spanning
+   every row (not one <svg> per <tr>), so connector lines never depend on a per-row SVG's fixed
+   height happening to match that row's actual (text-driven) height - a mismatch there is what
+   previously left visible gaps between rows via vertical-align: middle centering a shorter SVG
+   inside a taller row. .commit-table tr is pinned to an exact RowHeight so the overlay's
+   row-index-based math (rowIndex * RowHeight) lines up with the real rows regardless of table
+   borders/padding. Curved (cubic bezier) lane-change connectors, straight lines for same-lane
+   continuation - a Fork/GitKraken-style graph in spirit, not literal parity with either. */
+.commit-graph-wrapper {
+    position: relative;
+}
+
+.commit-graph-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.commit-graph-svg circle {
+    stroke: var(--bg-raised);
+}
+
+.commit-table tr {
+    height: 34px;
+}
+
+.commit-table td {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 .commit-graph-cell {
     width: 1%;
     white-space: nowrap;
-    padding: 0 0.5rem !important;
-}
-
-.commit-graph-cell svg {
-    display: block;
+    padding: 0 !important;
 }
 
 .commit-subject {
