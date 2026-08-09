@@ -88,11 +88,28 @@ else
                 {
                     @if (connector.FromLane == connector.ToLane)
                     {
-                        @* Row 0's commit has nothing above it depending on it - draw only from its
-                           own dot downward, not a phantom stub from the graph's very top edge. *@
-                        var y1 = i == 0 ? rowMid : rowTop;
-                        <line x1="@LaneX(connector.FromLane)" y1="@y1" x2="@LaneX(connector.ToLane)" y2="@rowBottom"
-                              stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
+                        @if (connector.FromLane == row.Lane)
+                        {
+                            @* This row's own commit: draw only the half(s) that actually connect to
+                               something. Nothing above depends on a new lane's first appearance, so
+                               its line starts at its own dot, not the row's top edge; a lane that
+                               arrived here but has no parent (a root, or the far end of a fork this
+                               row's dot resolves) ends at its own dot too, not the row's bottom edge -
+                               otherwise both dangle a stray stub past the dot with nothing to connect
+                               to. An ordinary mid-lineage commit still gets the full row height. *@
+                            var hasParentBelow = _commits![i].ParentHashes.Count > 0;
+                            var y1 = row.IsNewLane ? rowMid : rowTop;
+                            var y2 = hasParentBelow ? rowBottom : rowMid;
+                            <line x1="@LaneX(connector.FromLane)" y1="@y1" x2="@LaneX(connector.ToLane)" y2="@y2"
+                                  stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
+                        }
+                        else
+                        {
+                            @* An unrelated lane simply passing through this row, untouched by this
+                               row's own commit - always the full row height. *@
+                            <line x1="@LaneX(connector.FromLane)" y1="@rowTop" x2="@LaneX(connector.ToLane)" y2="@rowBottom"
+                                  stroke="@LaneColor(connector.FromLane)" stroke-width="2.5" stroke-linecap="round" />
+                        }
                     }
                     else if (connector.ToLane == row.Lane)
                     {

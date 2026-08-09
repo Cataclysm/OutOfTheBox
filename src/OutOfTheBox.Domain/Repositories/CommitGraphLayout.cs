@@ -11,8 +11,19 @@ namespace OutOfTheBox.Domain.Repositories;
 /// </summary>
 public sealed record CommitGraphConnector(int FromLane, int ToLane);
 
-/// <summary>One row of the commit graph - a single commit's lane assignment plus the lane line segments drawn within its row.</summary>
-public sealed record CommitGraphRow(string Hash, int Lane, IReadOnlyList<CommitGraphConnector> Connectors);
+/// <summary>
+/// One row of the commit graph - a single commit's lane assignment plus the lane line segments drawn
+/// within its row.
+/// </summary>
+/// <param name="Hash">This row's commit hash.</param>
+/// <param name="Lane">The lane this commit is drawn in.</param>
+/// <param name="Connectors">The lane line segments drawn within this row.</param>
+/// <param name="IsNewLane">
+/// Whether nothing above this row was awaiting this commit's hash when it was reached - true for a
+/// lane's own first appearance (nothing above depends on it, so its self-connector line, if any,
+/// should only extend downward from its dot, not up into the row above).
+/// </param>
+public sealed record CommitGraphRow(string Hash, int Lane, IReadOnlyList<CommitGraphConnector> Connectors, bool IsNewLane);
 
 /// <summary>The computed graph for a page of commit history - every row plus the total number of lanes used, so a renderer knows how wide to make the graph column.</summary>
 public sealed record CommitGraphResult(IReadOnlyList<CommitGraphRow> Rows, int LaneCount);
@@ -115,7 +126,7 @@ public static class CommitGraphLayout
             }
 
             maxLaneIndex = Math.Max(maxLaneIndex, lane);
-            rows.Add(new CommitGraphRow(commit.Hash, lane, connectors));
+            rows.Add(new CommitGraphRow(commit.Hash, lane, connectors, isNewLane));
         }
 
         return new CommitGraphResult(rows, maxLaneIndex + 1);

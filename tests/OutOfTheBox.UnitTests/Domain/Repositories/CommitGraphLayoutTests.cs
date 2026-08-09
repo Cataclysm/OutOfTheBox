@@ -39,6 +39,10 @@ public sealed class CommitGraphLayoutTests
 
         Assert.All(result.Rows, row => Assert.Equal(0, row.Lane));
         Assert.All(result.Rows, row => Assert.Equal([new CommitGraphConnector(0, 0)], row.Connectors));
+
+        Assert.True(result.Rows[0].IsNewLane);
+        Assert.False(result.Rows[1].IsNewLane);
+        Assert.False(result.Rows[2].IsNewLane);
     }
 
     [Fact]
@@ -60,18 +64,22 @@ public sealed class CommitGraphLayoutTests
         var d = result.Rows[0];
         Assert.Equal(0, d.Lane);
         Assert.Equal([new CommitGraphConnector(0, 0)], d.Connectors);
+        Assert.True(d.IsNewLane);
 
         var c = result.Rows[1];
         Assert.Equal(1, c.Lane);
         Assert.Equal([new CommitGraphConnector(0, 0), new CommitGraphConnector(1, 1)], c.Connectors);
+        Assert.True(c.IsNewLane);
 
         var b = result.Rows[2];
         Assert.Equal(0, b.Lane);
         Assert.Equal([new CommitGraphConnector(1, 0), new CommitGraphConnector(0, 0)], b.Connectors);
+        Assert.False(b.IsNewLane);
 
         var a = result.Rows[3];
         Assert.Equal(0, a.Lane);
         Assert.Equal([new CommitGraphConnector(0, 0)], a.Connectors);
+        Assert.False(a.IsNewLane);
     }
 
     [Fact]
@@ -93,18 +101,22 @@ public sealed class CommitGraphLayoutTests
         var m = result.Rows[0];
         Assert.Equal(0, m.Lane);
         Assert.Equal([new CommitGraphConnector(0, 0), new CommitGraphConnector(0, 1)], m.Connectors);
+        Assert.True(m.IsNewLane);
 
         var p1 = result.Rows[1];
         Assert.Equal(0, p1.Lane);
         Assert.Equal([new CommitGraphConnector(1, 1), new CommitGraphConnector(0, 0)], p1.Connectors);
+        Assert.False(p1.IsNewLane);
 
         var p2 = result.Rows[2];
         Assert.Equal(1, p2.Lane);
         Assert.Equal([new CommitGraphConnector(0, 0), new CommitGraphConnector(1, 1)], p2.Connectors);
+        Assert.False(p2.IsNewLane);
 
         var x = result.Rows[3];
         Assert.Equal(0, x.Lane);
         Assert.Equal([new CommitGraphConnector(1, 0), new CommitGraphConnector(0, 0)], x.Connectors);
+        Assert.False(x.IsNewLane);
     }
 
     [Fact]
@@ -116,6 +128,24 @@ public sealed class CommitGraphLayoutTests
         Assert.Equal(0, row.Lane);
         Assert.Empty(row.Connectors);
         Assert.Equal(1, result.LaneCount);
+        Assert.True(row.IsNewLane);
+    }
+
+    [Fact]
+    public void A_lane_that_terminates_after_being_awaited_is_not_a_new_lane()
+    {
+        // B is D's parent (awaited, so B.IsNewLane is false) but B itself has no parent - a lane
+        // that arrives and immediately terminates, rather than starting fresh or continuing on.
+        var commits = new[]
+        {
+            Commit("D", ["B"]),
+            Commit("B", []),
+        };
+
+        var result = CommitGraphLayout.Compute(commits);
+
+        Assert.True(result.Rows[0].IsNewLane);
+        Assert.False(result.Rows[1].IsNewLane);
     }
 
     private static CommitSummary Commit(string hash, IReadOnlyList<string> parents) =>
