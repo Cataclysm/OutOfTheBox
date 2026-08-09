@@ -10,6 +10,7 @@ using OutOfTheBox.Presentation.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Presentation.Execution;
@@ -24,6 +25,9 @@ namespace OutOfTheBox.Presentation.Execution;
 /// </summary>
 public static class FileTransferEndpoints
 {
+    /// <summary>Pure marker type supplying this class's logger category name - same reasoning as <see cref="RunEndpoints"/>'s own private <c>LogCategory</c>, a static endpoint class with no instance to hang a logger category off of.</summary>
+    private sealed class LogCategory;
+
     /// <summary>Maps <c>POST /files</c>, requiring a valid bearer credential.</summary>
     public static IEndpointRouteBuilder MapFileTransferEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -40,7 +44,8 @@ public static class FileTransferEndpoints
         IRunRepository runRepository,
         IRunEventBus runEventBus,
         IOptions<ServiceOptions> options,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        ILogger<LogCategory> logger)
     {
         var runId = Guid.NewGuid();
         var response = httpContext.Response;
@@ -137,6 +142,7 @@ public static class FileTransferEndpoints
                 await runRepository.UpdateAsync(run, CancellationToken.None);
                 runEventBus.Publish(new RunEvent(runId, RunKind.FileTransfer, RunEventType.Terminal, repositoryRoot));
                 await response.WriteAsJsonAsync(new { reason = "failed", detail = ex.Message });
+                logger.LogError(ex, "Failed to open file for transfer: {FilePath} (run {RunId}).", filePath, runId);
                 return;
             }
 
@@ -174,6 +180,7 @@ public static class FileTransferEndpoints
                     run.CompletedAt = DateTimeOffset.UtcNow;
                     run.Outcome = RunOutcome.Cancelled;
                     run.Stderr = ex.Message;
+                    logger.LogWarning(ex, "Connection reset mid-transfer for run {RunId} ({FilePath}).", runId, filePath);
                 }
 
                 await runRepository.UpdateAsync(run, CancellationToken.None);

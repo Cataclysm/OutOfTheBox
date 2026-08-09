@@ -19,6 +19,8 @@ using OutOfTheBox.Presentation.Execution;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Serilog;
+using Serilog.Events;
 using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +38,35 @@ builder.Host.UseWindowsService();
 var dataDirectory = Environment.GetEnvironmentVariable("OUTOFTHEBOX_DATA_DIR")
     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OutOfTheBox");
 builder.Configuration.AddJsonFile(Path.Combine(dataDirectory, "appsettings.json"), optional: true, reloadOnChange: true);
+
+// File+console logging (Section 25) - the log file lives in the data directory (same folder as the
+// SQLite file), which the installer already grants the service account full control over, so no new
+// permissioning is needed. Global minimum is Warning - deliberately coarser than the framework's own
+// default Information level, so EF Core's per-query SQL logging and Kestrel's per-connection chatter
+// never reach the file (per direct instruction: "not gigabytes of logs, just the stuff that really
+// matters"). Two narrow overrides restore Information for this app's own code (OutOfTheBox.*, where
+// every remaining Information-level call site is a low-frequency lifecycle event, not a per-request
+// one) and for Microsoft.Hosting.Lifetime specifically (the framework's own "Now listening on.../
+// Application started/Application stopping" messages - cheap, and valuable for correlating "when did
+// this happen" in a bug report). Errors from *any* category (including framework ones, e.g. an
+// unhandled request exception ASP.NET Core's own diagnostics middleware logs at Error) still pass
+// the global Warning floor without needing an explicit override.
+builder.Host.UseSerilog((_, _, configuration) => configuration
+    .MinimumLevel.Warning()
+    .MinimumLevel.Override("OutOfTheBox", LogEventLevel.Information)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        Path.Combine(dataDirectory, "logs", "outofthebox-.log"),
+        rollingInterval: RollingInterval.Day,
+        // Belt-and-suspenders volume cap on top of the Warning floor above: a 10MB/file cap plus
+        // rolling onto a new file past that limit, and only the most recent 14 files kept, bounds
+        // total disk usage even if something logs far more than expected on a given day.
+        fileSizeLimitBytes: 10 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
+        retainedFileCountLimit: 14,
+        shared: true));
 
 // Require HTTPS on every configured Kestrel endpoint (Section 16, per design.md's Transport
 // decision): the bearer token, command arguments/output, and the dashboard's cookie session all
@@ -131,59 +162,77 @@ builder.Services.AddHostedService<HostResourceSamplerService>();
 // circuit that created it.
 builder.Services.AddScoped<IChartInterop, ChartInterop>();
 
-var app = builder.Build();
-
-// Applying migrations, enabling WAL, and reconciling interrupted runs must happen before the app
-// starts accepting requests - a request handled before the schema exists (or before a `Running`
-// row from a prior process is relabeled `Interrupted`) would see an inconsistent database.
-using (var startupScope = app.Services.CreateScope())
+// Wrapped so a fatal startup failure (a failed migration, a DI resolution error, ...) is captured
+// in the log file before the process exits - not just left to whatever ephemeral console window or
+// Windows Service crash dialog would otherwise be the only trace of it. Log.Fatal, not
+// logger.LogCritical from an injected ILogger<T>, since a failure this early may have happened
+// before or during builder.Build() itself, i.e. before DI has anything to inject - UseSerilog
+// already set the static Serilog.Log.Logger as a side effect above, so it's available regardless.
+try
 {
-    var dbContext = startupScope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
-    dbContext.Database.Migrate();
-    dbContext.Database.ExecuteSql($"PRAGMA journal_mode=WAL;");
+    var app = builder.Build();
 
-    var runRepository = startupScope.ServiceProvider.GetRequiredService<IRunRepository>();
-    await runRepository.ReconcileInterruptedAsync(CancellationToken.None);
+    // Applying migrations, enabling WAL, and reconciling interrupted runs must happen before the app
+    // starts accepting requests - a request handled before the schema exists (or before a `Running`
+    // row from a prior process is relabeled `Interrupted`) would see an inconsistent database.
+    using (var startupScope = app.Services.CreateScope())
+    {
+        var dbContext = startupScope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
+        dbContext.Database.Migrate();
+        dbContext.Database.ExecuteSql($"PRAGMA journal_mode=WAL;");
+
+        var runRepository = startupScope.ServiceProvider.GetRequiredService<IRunRepository>();
+        await runRepository.ReconcileInterruptedAsync(CancellationToken.None);
+    }
+
+    // Serves static content (dashboard.css, the vendored Chart.js/interop script, and the
+    // framework-provided blazor.web.js, all referenced via @Assets[...] in App.razor rather than
+    // hardcoded paths - required for MapStaticAssets to resolve them at all, not just for
+    // fingerprinted caching) before authentication - none of it needs a login, and the dashboard's
+    // own login page itself needs its stylesheet before the operator has a session. Without this,
+    // every static asset 404s even though the files are physically present in the build/publish
+    // output - there is no other middleware in this pipeline that serves them.
+    app.MapStaticAssets();
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseAntiforgery();
+
+    app.MapCommandExecutionEndpoints();
+    app.MapFileTransferEndpoints();
+    app.MapRepositoryEndpoints();
+    app.MapRepositoryFileDownloadEndpoints();
+    app.MapLoginEndpoints();
+    app.MapVersionEndpoint();
+
+    // RequireAuthorization() applies to this Razor Components route group the same way it's applied
+    // directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -
+    // cookie-authenticated, since it's a plain browser navigation, not a bearer-token REST call). The
+    // six bearer-token-protected API endpoints above have no authorization metadata attached at all, so
+    // they're completely unaffected; the dashboard's own Login page opts back out via its
+    // [AllowAnonymous] attribute.
+    //
+    // AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
+    // so its @Assets[...] references resolve against the actual hosting app's manifest, per Section
+    // 15's Chart.js work) - MapRazorComponents<App>() only scans App's own assembly for @page
+    // components by default, and every routable page (Status, Repositories, History, Login, ...) still lives
+    // in Presentation.
+    app.MapRazorComponents<App>()
+        .AddInteractiveServerRenderMode()
+        .AddAdditionalAssemblies(typeof(Status).Assembly)
+        .RequireAuthorization();
+
+    app.Run();
 }
-
-// Serves static content (dashboard.css, the vendored Chart.js/interop script, and the
-// framework-provided blazor.web.js, all referenced via @Assets[...] in App.razor rather than
-// hardcoded paths - required for MapStaticAssets to resolve them at all, not just for
-// fingerprinted caching) before authentication - none of it needs a login, and the dashboard's
-// own login page itself needs its stylesheet before the operator has a session. Without this,
-// every static asset 404s even though the files are physically present in the build/publish
-// output - there is no other middleware in this pipeline that serves them.
-app.MapStaticAssets();
-
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseAntiforgery();
-
-app.MapCommandExecutionEndpoints();
-app.MapFileTransferEndpoints();
-app.MapRepositoryEndpoints();
-app.MapRepositoryFileDownloadEndpoints();
-app.MapLoginEndpoints();
-app.MapVersionEndpoint();
-
-// RequireAuthorization() applies to this Razor Components route group the same way it's applied
-// directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -
-// cookie-authenticated, since it's a plain browser navigation, not a bearer-token REST call). The
-// six bearer-token-protected API endpoints above have no authorization metadata attached at all, so
-// they're completely unaffected; the dashboard's own Login page opts back out via its
-// [AllowAnonymous] attribute.
-//
-// AddAdditionalAssemblies is required now that App lives in Host rather than Presentation (moved
-// so its @Assets[...] references resolve against the actual hosting app's manifest, per Section
-// 15's Chart.js work) - MapRazorComponents<App>() only scans App's own assembly for @page
-// components by default, and every routable page (Status, Repositories, History, Login, ...) still lives
-// in Presentation.
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode()
-    .AddAdditionalAssemblies(typeof(Status).Assembly)
-    .RequireAuthorization();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "OutOfTheBox terminated unexpectedly during startup.");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 /// <summary>
 /// Marker partial class merged with the compiler-generated top-level-statements entry point,

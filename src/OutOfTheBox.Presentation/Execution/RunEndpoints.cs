@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Presentation.Execution;
@@ -19,6 +20,14 @@ namespace OutOfTheBox.Presentation.Execution;
 /// <summary>Maps the command-execution HTTP endpoint(s).</summary>
 public static class RunEndpoints
 {
+    /// <summary>
+    /// Pure marker type supplying <see cref="RunEndpoints"/>'s logger category name - a static class
+    /// can't itself be used as an <see cref="ILogger{TCategoryName}"/> type argument (CS0718), and
+    /// this is a minimal-API endpoint class, not a service with its own DI-constructed instance to
+    /// hang a category off of.
+    /// </summary>
+    private sealed class LogCategory;
+
     /// <summary>
     /// Maps <c>POST /run</c> (<c>dotnet</c>), <c>POST /run/git</c> (<c>git</c>), and
     /// <c>POST /run/{runId}/cancel</c> (shared by both), all requiring a valid bearer credential.
@@ -29,12 +38,12 @@ public static class RunEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapCommandExecutionEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("dotnet", RunKind.DotnetCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext))
+        endpoints.MapPost("/run", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext, ILogger<LogCategory> logger) =>
+                HandleStartRunAsync("dotnet", RunKind.DotnetCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext, logger))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
-        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext) =>
-                HandleStartRunAsync("git", RunKind.GitCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext))
+        endpoints.MapPost("/run/git", (StartRunRequest body, IWorkingDirectoryResolver workingDirectoryResolver, IProcessRunner processRunner, RunRegistry runRegistry, IRunRepository runRepository, IRunEventBus runEventBus, IOptions<ServiceOptions> options, HttpContext httpContext, ILogger<LogCategory> logger) =>
+                HandleStartRunAsync("git", RunKind.GitCommand, body, workingDirectoryResolver, processRunner, runRegistry, runRepository, runEventBus, options, httpContext, logger))
             .AddEndpointFilter<BearerAuthenticationFilter>();
 
         endpoints.MapPost("/run/{runId:guid}/cancel", HandleCancelRunAsync)
@@ -53,7 +62,8 @@ public static class RunEndpoints
         IRunRepository runRepository,
         IRunEventBus runEventBus,
         IOptions<ServiceOptions> options,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        ILogger<LogCategory> logger)
     {
         var runId = Guid.NewGuid();
         var response = httpContext.Response;
@@ -185,6 +195,7 @@ public static class RunEndpoints
                 run.Stderr = AppendDetail(sink.Stderr, ex.Message);
                 run.Truncated = sink.Truncated;
                 run.Outcome = RunOutcome.Cancelled;
+                logger.LogWarning(ex, "Connection reset mid-run for {Kind} run {RunId} against {RepositoryRoot}.", kind, runId, repositoryRoot);
             }
             catch (Win32Exception ex)
             {
@@ -199,6 +210,7 @@ public static class RunEndpoints
                 run.Outcome = RunOutcome.Failed;
                 run.Stderr = ex.Message;
                 await writer.WriteErrorAsync("failed", CancellationToken.None, detail: ex.Message);
+                logger.LogError(ex, "{Executable} failed to start for {Kind} run {RunId} against {RepositoryRoot}.", executable, kind, runId, repositoryRoot);
             }
 
             await runRepository.UpdateAsync(run, CancellationToken.None);
