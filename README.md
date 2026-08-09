@@ -89,10 +89,15 @@ Once logged in, three top-level views are available:
   — the last two require an explicit popup confirmation, and none of the five stream output; the
   triggering icon just flashes green or red to report the outcome. A repository's detail page adds its
   clone source URL, full remote list, and a branch-switch dropdown (switching to a remote-only branch
-  auto-creates its local tracking branch). Listing and cloning are also reachable via REST
-  (`GET /repositories`, `POST /repositories/clone`), so the sbx-side caller can do those two itself;
-  everything else (delete, pull/push/force-push/fetch/clean, branch switching) is dashboard-only, by
-  design — there's no API for any of it.
+  auto-creates its local tracking branch), plus a **Commits**/**Files** tab group (only one visible at
+  a time): Commits is a branch-aware commit graph (lane/connector lines, branch and tag pills, checkout
+  any commit as a detached HEAD); Files is an Explorer-style expandable tree rooted at the repository,
+  supporting download/rename/delete of any file or folder. Both refresh live — the commit graph
+  alongside the page's own git-status refresh, the file tree per expanded folder on its own polling
+  interval. Listing and cloning are also reachable via REST (`GET /repositories`,
+  `POST /repositories/clone`), so the sbx-side caller can do those two itself; everything else (delete,
+  pull/push/force-push/fetch/clean, branch switching, commit checkout, the file browser) is
+  dashboard-only, by design — there's no API for any of it.
 
 ## Running a Claude Code instance in the sbx sandbox
 
