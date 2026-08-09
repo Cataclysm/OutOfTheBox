@@ -1,4 +1,5 @@
 @using System.Text
+@using Markdig
 @using Microsoft.JSInterop
 @using OutOfTheBox.Application.Repositories
 @inject IRepositoryFileBrowser FileBrowser
@@ -21,11 +22,22 @@
         }
         else if (_kind == PreviewKind.Text)
         {
-            <pre class="run-output file-preview-text">@_text</pre>
+            @if (_html is not null)
+            {
+                <div class="markdown-preview">@((MarkupString)_html)</div>
+            }
+            else
+            {
+                <pre class="run-output file-preview-text">@_text</pre>
+            }
             @if (_truncated)
             {
                 <p class="empty-state">Preview truncated to the first @FormatSize(PreviewMaxBytes) - download the file for the rest.</p>
             }
+        }
+        else
+        {
+            <p class="empty-state">No preview available for this file.</p>
         }
         <div class="dialog-actions">
             <button type="button" @onclick="CloseAsync">
@@ -38,27 +50,33 @@
 @code {
     private const long PreviewMaxBytes = 1024 * 1024;
 
-    // Extension-based only, per design: no magic-byte sniffing, no attempt to preview anything
-    // outside these two kinds - a file this doesn't recognize simply isn't offered a preview at all
-    // (see CanPreview, checked by the caller before ever showing this dialog).
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico",
-    };
+    // How much of the file to read before deciding what it is - large enough to catch a magic
+    // number/enough text to judge, small enough to stay cheap even for a huge file. The same
+    // ballpark git itself samples to decide "is this binary" (a NUL byte anywhere in the sample).
+    private const int SniffSampleBytes = 8000;
 
-    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".txt", ".md", ".cs", ".csproj", ".sln", ".slnx", ".json", ".xml", ".yml", ".yaml", ".css",
-        ".js", ".ts", ".jsx", ".tsx", ".html", ".htm", ".csv", ".log", ".config", ".gitignore",
-        ".gitattributes", ".editorconfig", ".props", ".targets", ".razor", ".cshtml", ".py", ".rb",
-        ".go", ".rs", ".java", ".c", ".h", ".cpp", ".hpp", ".sh", ".ps1", ".bat", ".ini", ".toml",
-        ".sql", ".wxs", ".wxi", ".wxl",
-    };
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] Gif87Signature = "GIF87a"u8.ToArray();
+    private static readonly byte[] Gif89Signature = "GIF89a"u8.ToArray();
+    private static readonly byte[] BmpSignature = "BM"u8.ToArray();
+    private static readonly byte[] IcoSignature = [0x00, 0x00, 0x01, 0x00];
+    private static readonly byte[] RiffSignature = "RIFF"u8.ToArray();
+    private static readonly byte[] WebpSignature = "WEBP"u8.ToArray();
 
-    private static readonly HashSet<string> ExtensionlessTextNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Dockerfile", "LICENSE", "README", "Makefile", "CHANGELOG",
-    };
+    // Rejects any byte that isn't valid UTF-8 instead of silently substituting U+FFFD (the BCL's
+    // default Encoding.UTF8 behavior) - substitution would make binary data look like "text with a
+    // few odd characters" instead of correctly failing the text sniff below.
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        // A cloned repository's own Markdown is not trusted content - without this, a malicious
+        // README (raw <script>/event-handler HTML) previewed by an operator would execute in their
+        // authenticated dashboard session. Formatting is still fully supported; only raw HTML
+        // passthrough is disabled.
+        .DisableHtml()
+        .Build();
 
     private enum PreviewKind
     {
@@ -71,59 +89,63 @@
     private string _name = string.Empty;
     private string _imageUrl = string.Empty;
     private string _text = string.Empty;
+    private string? _html;
     private bool _truncated;
     private bool _loading;
     private string? _error;
     private PreviewKind _kind;
 
-    /// <summary>Whether <paramref name="name"/> is a file type this dialog knows how to preview - callers should skip opening it entirely otherwise.</summary>
-    public static bool CanPreview(string name) => Classify(name) != PreviewKind.Unsupported;
-
-    private static PreviewKind Classify(string name)
-    {
-        var extension = Path.GetExtension(name);
-
-        if (ImageExtensions.Contains(extension))
-        {
-            return PreviewKind.Image;
-        }
-
-        if (TextExtensions.Contains(extension) || (extension.Length == 0 && ExtensionlessTextNames.Contains(name)))
-        {
-            return PreviewKind.Text;
-        }
-
-        return PreviewKind.Unsupported;
-    }
-
-    /// <summary>Opens the dialog and loads a preview for the given file - an image renders via its existing download URL, text is read directly (capped, with a truncation note past that cap).</summary>
+    /// <summary>
+    /// Opens the dialog and loads a preview for the given file. What kind of preview - text, image,
+    /// or none - is decided from the file's actual content (magic bytes for images, a binary/text
+    /// sniff for everything else), not its extension, so a mislabeled or extensionless file still
+    /// previews correctly. The one exception is Markdown rendering specifically: there is no reliable
+    /// way to detect "this text is meant as Markdown" from content alone, so a `.md`/`.markdown` name
+    /// is what decides whether text renders as formatted HTML instead of a plain preformatted block.
+    /// </summary>
     public async Task ShowAsync(string repositoryName, string relativePath, string name, string downloadUrl)
     {
         _name = name;
-        _kind = Classify(name);
         _error = null;
         _text = string.Empty;
+        _html = null;
         _truncated = false;
-        _loading = _kind == PreviewKind.Text;
+        _kind = PreviewKind.Unsupported;
+        _loading = true;
         StateHasChanged();
         await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+
+        var resolvedPath = await FileBrowser.ResolveConfinedFilePathAsync(repositoryName, relativePath, CancellationToken.None);
+        if (resolvedPath is null)
+        {
+            _error = "File not found.";
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            _kind = await ClassifyAsync(resolvedPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _error = "Failed to read file - it may be locked by another process.";
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
 
         if (_kind == PreviewKind.Image)
         {
             _imageUrl = downloadUrl;
+            _loading = false;
             StateHasChanged();
             return;
         }
 
         if (_kind != PreviewKind.Text)
         {
-            return;
-        }
-
-        var resolvedPath = await FileBrowser.ResolveConfinedFilePathAsync(repositoryName, relativePath, CancellationToken.None);
-        if (resolvedPath is null)
-        {
-            _error = "File not found.";
             _loading = false;
             StateHasChanged();
             return;
@@ -144,6 +166,11 @@
                 _text = Encoding.UTF8.GetString(buffer, 0, read);
                 _truncated = true;
             }
+
+            if (name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
+            {
+                _html = Markdown.ToHtml(_text, MarkdownPipeline);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -152,6 +179,87 @@
 
         _loading = false;
         StateHasChanged();
+    }
+
+    private static async Task<PreviewKind> ClassifyAsync(string filePath)
+    {
+        byte[] sample;
+        int read;
+        await using (var stream = File.OpenRead(filePath))
+        {
+            sample = new byte[SniffSampleBytes];
+            read = await stream.ReadAsync(sample.AsMemory());
+        }
+
+        var sampleSpan = sample.AsSpan(0, read);
+
+        if (LooksLikeRasterImage(sampleSpan))
+        {
+            return PreviewKind.Image;
+        }
+
+        if (!LooksLikeText(sampleSpan, out var decodedSample))
+        {
+            return PreviewKind.Unsupported;
+        }
+
+        return LooksLikeSvg(decodedSample!) ? PreviewKind.Image : PreviewKind.Text;
+    }
+
+    private static bool LooksLikeRasterImage(ReadOnlySpan<byte> sample) =>
+        StartsWith(sample, PngSignature)
+        || StartsWith(sample, JpegSignature)
+        || StartsWith(sample, Gif87Signature)
+        || StartsWith(sample, Gif89Signature)
+        || StartsWith(sample, BmpSignature)
+        || StartsWith(sample, IcoSignature)
+        || (sample.Length >= 12 && StartsWith(sample, RiffSignature) && sample.Slice(8, 4).SequenceEqual(WebpSignature));
+
+    private static bool StartsWith(ReadOnlySpan<byte> sample, ReadOnlySpan<byte> signature) =>
+        sample.Length >= signature.Length && sample[..signature.Length].SequenceEqual(signature);
+
+    // The same heuristic git itself uses to decide "is this binary": a NUL byte anywhere in the
+    // sample is treated as decisive, since no common text encoding legitimately produces one. Beyond
+    // that, the sample must be valid UTF-8 outright (not merely "mostly printable") - anything else
+    // is presumed binary rather than guessed at.
+    private static bool LooksLikeText(ReadOnlySpan<byte> sample, out string? decoded)
+    {
+        if (sample.IsEmpty)
+        {
+            decoded = string.Empty;
+            return true;
+        }
+
+        if (sample.IndexOf((byte)0) >= 0)
+        {
+            decoded = null;
+            return false;
+        }
+
+        try
+        {
+            decoded = StrictUtf8.GetString(sample);
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            decoded = null;
+            return false;
+        }
+    }
+
+    // SVG is XML text, not a binary format with a magic number - detected as "text that opens with
+    // an <svg> root element" (an optional XML prolog first is fine) rather than by extension.
+    private static bool LooksLikeSvg(string sampleText)
+    {
+        var trimmed = sampleText.TrimStart();
+        if (trimmed.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase))
+        {
+            var svgIndex = trimmed.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
+            return svgIndex is >= 0 and < 500;
+        }
+
+        return trimmed.StartsWith("<svg", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);

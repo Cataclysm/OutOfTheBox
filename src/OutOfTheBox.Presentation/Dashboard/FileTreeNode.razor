@@ -143,13 +143,11 @@
 
         if (!IsDirectory)
         {
-            // Nothing happens for a file type FilePreviewDialog doesn't know how to render (per its
-            // own CanPreview) - not every click needs to do something.
-            if (FilePreviewDialog.CanPreview(Name))
-            {
-                await RequestPreview.InvokeAsync(new FilePreviewRequest(RepositoryName, RelativePath, Name, DownloadUrl));
-            }
-
+            // Always requested, even for a file FilePreviewDialog turns out not to be able to render -
+            // what it actually is can only be known by reading its content, which is FilePreviewDialog's
+            // own job (it shows "No preview available" itself rather than this node pre-guessing from
+            // the file's name).
+            await RequestPreview.InvokeAsync(new FilePreviewRequest(RepositoryName, RelativePath, Name, DownloadUrl));
             return;
         }
 

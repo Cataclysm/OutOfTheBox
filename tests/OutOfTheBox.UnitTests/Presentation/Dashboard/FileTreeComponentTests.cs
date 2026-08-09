@@ -22,6 +22,15 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// </summary>
 public sealed class FileTreeComponentTests : BunitContext, IDisposable
 {
+    // Just the magic-number prefix each format needs to be recognized - FilePreviewDialog's sniff
+    // never validates that the rest of the file is a well-formed image, so a full real image isn't
+    // needed to exercise it.
+    private static readonly byte[] PngMagicBytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D];
+
+    // A NUL byte is the classic binary signal (the same one git itself uses) - guaranteed to fail
+    // the text sniff regardless of what follows it.
+    private static readonly byte[] TrueBinaryBytes = [0x00, 0x01, 0x02, 0xFF, 0xFE, 0x10];
+
     private readonly string _repositoryRoot = Directory.CreateTempSubdirectory("filetree-tests-").FullName;
 
     public FileTreeComponentTests()
@@ -49,7 +58,7 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     [Fact]
     public void Clicking_an_image_file_row_opens_the_preview_dialog_with_an_img_tag()
     {
-        File.WriteAllText(Path.Combine(_repositoryRoot, "pixel.png"), "not real image bytes - classification is by extension only");
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "pixel.png"), PngMagicBytes);
 
         var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
         cut.WaitForAssertion(() => Assert.Contains("pixel.png", cut.Markup));
@@ -64,18 +73,71 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
-    public void Clicking_an_unsupported_file_type_row_does_not_crash_or_open_a_dialog()
+    public void An_image_previews_correctly_even_with_a_text_extension()
     {
-        File.WriteAllText(Path.Combine(_repositoryRoot, "data.bin"), "binary-ish content");
+        // The actual point of content-based classification: the name lies, the bytes don't.
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "not-really-text.txt"), PngMagicBytes);
 
         var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
-        cut.WaitForAssertion(() => Assert.Contains("data.bin", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("not-really-text.txt", cut.Markup));
 
         cut.Find(".file-tree-row").Click();
 
-        // Nothing to WaitForAssertion on (no async work is ever kicked off for an unsupported type) -
-        // a direct check is correct here, not a race. The real regression this guards is the click
-        // not throwing at all (an uncaught exception here fails the test on its own).
+        cut.WaitForAssertion(() => Assert.Contains("<img", cut.Markup));
+    }
+
+    [Fact]
+    public void Plain_text_previews_correctly_even_with_an_image_extension()
+    {
+        File.WriteAllText(Path.Combine(_repositoryRoot, "not-really.png"), "just plain text, not image bytes");
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("not-really.png", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain("<img", cut.Markup);
+            Assert.Contains("just plain text, not image bytes", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void A_Markdown_file_renders_as_formatted_HTML_with_raw_HTML_disabled()
+    {
+        File.WriteAllText(
+            Path.Combine(_repositoryRoot, "notes.md"),
+            "# Heading\n\nSome **bold** text.\n\n<script>alert(1)</script>");
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("notes.md", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("markdown-preview", cut.Markup);
+            Assert.Contains("<h1", cut.Markup);
+            Assert.Contains("<strong>bold</strong>", cut.Markup);
+            // DisableHtml() must actually be in effect - a cloned repository's README is not trusted
+            // content, and a real <script> element here would be a stored-XSS hole into the
+            // operator's authenticated dashboard session.
+            Assert.DoesNotContain("<script>", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void Clicking_a_truly_binary_file_row_shows_no_preview_available()
+    {
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "data.dat"), TrueBinaryBytes);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("data.dat", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("No preview available", cut.Markup));
         Assert.DoesNotContain("<img", cut.Markup);
         Assert.DoesNotContain("run-output", cut.Markup);
     }
@@ -97,17 +159,17 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     [Fact]
     public void Clicking_delete_on_a_file_opens_the_confirm_dialog_without_crashing()
     {
-        File.WriteAllText(Path.Combine(_repositoryRoot, "data.bin"), "binary-ish content");
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "data.dat"), TrueBinaryBytes);
 
         var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
-        cut.WaitForAssertion(() => Assert.Contains("data.bin", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("data.dat", cut.Markup));
 
         // The delete button's own click has @onclick:stopPropagation, matching the real DOM shape -
         // this is the exact path that crashed the circuit before the EventCallback-bubbling fix, via
         // the pre-existing ConfirmDialogRef parameter this change also replaced.
         cut.Find("button[title=Delete]").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Permanently delete 'data.bin'", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("Permanently delete 'data.dat'", cut.Markup));
     }
 
     /// <inheritdoc />

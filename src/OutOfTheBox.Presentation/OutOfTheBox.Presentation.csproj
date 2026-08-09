@@ -24,6 +24,10 @@
          (ModelContextProtocol.AspNetCore) is referenced only from Host, the composition root,
          matching the Serilog precedent above this project already established. -->
     <PackageReference Include="ModelContextProtocol" />
+    <!-- Renders a Markdown file's preview (FilePreviewDialog.ShowAsync) to HTML - HTML passthrough is
+         disabled via MarkdownPipeline's DisableHtml(), since a cloned repository's own Markdown could
+         otherwise carry a stored-XSS payload into the operator's dashboard session. -->
+    <PackageReference Include="Markdig" />
   </ItemGroup>
 
 </Project>
