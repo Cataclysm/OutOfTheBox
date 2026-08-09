@@ -23,13 +23,21 @@ else
 
     <div class="commit-graph-wrapper">
         <table class="data-table commit-table clickable-rows">
+            <colgroup>
+                <col style="width:@(_graph!.LaneCount * LaneWidth)px" />
+                <col />
+                <col style="width:10rem" />
+                <col style="width:9rem" />
+                <col style="width:6rem" />
+                <col style="width:4rem" />
+            </colgroup>
             <tbody>
                 @for (var i = 0; i < _commits.Count; i++)
                 {
                     var commit = _commits[i];
                     <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
-                        <td class="commit-graph-cell" style="width:@(_graph!.LaneCount * LaneWidth)px"></td>
-                        <td class="ellipsis commit-subject" title="@commit.Subject">
+                        <td class="commit-graph-cell"></td>
+                        <td class="ellipsis" title="@commit.Subject">
                             @foreach (var reference in commit.Refs)
                             {
                                 @if (reference.Kind == CommitRefKind.Tag || reference.IsCurrent)
@@ -116,6 +124,14 @@ else
     /// <summary>Which repository's commit history to show.</summary>
     [Parameter, EditorRequired]
     public string RepositoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Raised after a branch-switch attempt from a commit's ref pill (regardless of outcome) - the
+    /// parent page's own branch dropdown/summary has no other way to learn about a switch triggered
+    /// from here, since it isn't the one that called <see cref="IRepositoryManager.SwitchBranchAsync"/>.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnBranchSwitched { get; set; }
 
     private IReadOnlyList<CommitSummary>? _commits;
     private CommitGraphResult? _graph;
@@ -212,6 +228,7 @@ else
         };
 
         await LoadAsync(Math.Max(PageSize, _commits?.Count ?? PageSize));
+        await OnBranchSwitched.InvokeAsync();
     }
 
     private static string LaneColor(int lane) => LaneColors[lane % LaneColors.Length];

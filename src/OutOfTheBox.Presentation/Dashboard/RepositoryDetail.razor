@@ -72,68 +72,64 @@ else
         }
     </dl>
 
-    @if (_summary.IsGitRepository)
-    {
-        <div class="tab-group">
+    <div class="tab-group">
+        @if (_summary.IsGitRepository)
+        {
             <button type="button" class="tab-button @(_activeTab == DetailTab.Commits ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.Commits)">Commits</button>
-            <button type="button" class="tab-button @(_activeTab == DetailTab.Files ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.Files)">Files</button>
-        </div>
+        }
+        <button type="button" class="tab-button @(_activeTab == DetailTab.Files ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.Files)">Files</button>
+        <button type="button" class="tab-button @(_activeTab == DetailTab.History ? "active" : "")" @onclick="@(() => _activeTab = DetailTab.History)">History</button>
+    </div>
 
-        @if (_activeTab == DetailTab.Commits)
-        {
-            <CommitGraph RepositoryName="@Name" />
-        }
-        else
-        {
-            <FileTree RepositoryName="@Name" />
-        }
+    @if (_activeTab == DetailTab.Commits && _summary.IsGitRepository)
+    {
+        <CommitGraph RepositoryName="@Name" OnBranchSwitched="RefreshBranchStateAsync" />
+    }
+    else if (_activeTab == DetailTab.Files)
+    {
+        <FileTree RepositoryName="@Name" />
     }
     else
     {
-        <h2>Files</h2>
-        <FileTree RepositoryName="@Name" />
+        @if (_runs is null)
+        {
+            <p>Loading...</p>
+        }
+        else if (_runs.Count == 0)
+        {
+            <p class="empty-state">No runs recorded against this repository yet.</p>
+        }
+        else
+        {
+            <table class="data-table clickable-rows">
+                <colgroup>
+                    <col style="width:7rem" />
+                    <col style="width:9rem" />
+                    <col />
+                    <col style="width:11rem" />
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
+                        <th @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
+                        <th @onclick="@(() => SortBy(SortColumn.Detail))">Detail@(SortIndicator(SortColumn.Detail))</th>
+                        <th @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in SortedRuns())
+                    {
+                        <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
+                            <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
+                            <td>@run.Outcome.Label()</td>
+                            <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
+                            <td>@FormatDateTime(run.StartedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     }
-}
-
-<h2>Run history</h2>
-
-@if (_runs is null)
-{
-    <p>Loading...</p>
-}
-else if (_runs.Count == 0)
-{
-    <p class="empty-state">No runs recorded against this repository yet.</p>
-}
-else
-{
-    <table class="data-table clickable-rows">
-        <colgroup>
-            <col style="width:7rem" />
-            <col style="width:9rem" />
-            <col />
-            <col style="width:11rem" />
-        </colgroup>
-        <thead>
-            <tr>
-                <th @onclick="@(() => SortBy(SortColumn.Kind))">Kind@(SortIndicator(SortColumn.Kind))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Outcome))">Outcome@(SortIndicator(SortColumn.Outcome))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Detail))">Detail@(SortIndicator(SortColumn.Detail))</th>
-                <th @onclick="@(() => SortBy(SortColumn.Started))">Started@(SortIndicator(SortColumn.Started))</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var run in SortedRuns())
-            {
-                <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
-                    <td><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
-                    <td>@run.Outcome.Label()</td>
-                    <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
-                    <td>@FormatDateTime(run.StartedAt)</td>
-                </tr>
-            }
-        </tbody>
-    </table>
 }
 
 @code {
@@ -155,6 +151,7 @@ else
     {
         Commits,
         Files,
+        History,
     }
 
     private enum SortColumn
@@ -169,6 +166,16 @@ else
     protected override async Task OnInitializedAsync()
     {
         await RefreshSummaryAsync();
+
+        // Commits isn't a valid tab for a non-git repository - the tab-group never renders that
+        // button for one, so the default active tab needs to move too, or the content area would
+        // fall through to History (the last @else branch) with no button showing as active. Only
+        // done once, here, not on every later stats-triggered RefreshSummaryAsync - otherwise an
+        // operator on the History tab would get silently kicked back the next time stats refresh.
+        if (_summary is not null && !_summary.IsGitRepository)
+        {
+            _activeTab = DetailTab.Files;
+        }
 
         // Reuses the same RunQuery/IRunRepository.ListAsync mechanism the History view's list uses
         // (per task 13.14), pre-filtered to this repository's resolved path - the route only carries the
@@ -209,6 +216,17 @@ else
                 : "Rejected.";
         }
 
+        await RefreshBranchStateAsync();
+    }
+
+    // Re-fetches both the summary (its Branch/IsDirty/... drive the <dl>) and the branch list (the
+    // dropdown's own <option>s) together - a switch that checks out a remote branch for the first
+    // time creates a new local tracking branch _branches doesn't know about yet, so refreshing only
+    // the summary would leave the dropdown's option list stale even though its selected value still
+    // shows correctly (via the synthetic fallback option below). Called after every branch switch,
+    // regardless of whether it was triggered from this page's own dropdown or a commit graph badge.
+    private async Task RefreshBranchStateAsync()
+    {
         await RefreshSummaryAsync();
         _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
     }

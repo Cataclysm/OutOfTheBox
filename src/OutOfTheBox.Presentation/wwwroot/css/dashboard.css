@@ -973,13 +973,8 @@ dd {
 }
 
 .commit-graph-cell {
-    width: 1%;
     white-space: nowrap;
     padding: 0 !important;
-}
-
-.commit-subject {
-    max-width: 480px;
 }
 
 .ref-pill {
