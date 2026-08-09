@@ -2,6 +2,7 @@
 
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Infrastructure.Execution;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Execution;
@@ -40,7 +41,7 @@ public sealed class WorkingDirectoryResolverTests : IDisposable
     }
 
     private WorkingDirectoryResolver CreateResolver() =>
-        new(Options.Create(new ServiceOptions { RootDirectory = _root }));
+        new(Options.Create(new ServiceOptions { RootDirectory = _root }), NullLogger<WorkingDirectoryResolver>.Instance);
 
     [Fact]
     public void Resolve_allows_a_valid_subdirectory()

@@ -5,6 +5,7 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Repositories;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
@@ -258,5 +259,5 @@ public sealed class RepositoryFileBrowserTests : IDisposable
     }
 
     private RepositoryFileBrowser CreateBrowser(RunRegistry runRegistry) =>
-        new(new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root })), runRegistry);
+        new(new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root }), NullLogger<WorkingDirectoryResolver>.Instance), runRegistry, NullLogger<RepositoryFileBrowser>.Instance);
 }

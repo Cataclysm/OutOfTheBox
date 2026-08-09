@@ -10,6 +10,7 @@ using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
@@ -31,7 +32,7 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
         // querying - a real resolver backed by the same root every test's fake repository paths
         // (`C:\repositories\...`) already assume, matching RepositoriesComponentTests' own pattern.
         var options = Options.Create(new ServiceOptions { RootDirectory = @"C:\repositories" });
-        Services.AddSingleton<IWorkingDirectoryResolver>(new WorkingDirectoryResolver(options));
+        Services.AddSingleton<IWorkingDirectoryResolver>(new WorkingDirectoryResolver(options, NullLogger<WorkingDirectoryResolver>.Instance));
     }
 
     [Fact]

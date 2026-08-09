@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Infrastructure.Execution;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Execution;
 
@@ -19,7 +20,7 @@ public sealed class InstalledToolVersionsProviderTests
     [Fact]
     public async Task GetVersionsAsync_reports_both_tools_plausible_versions()
     {
-        var provider = new InstalledToolVersionsProvider();
+        var provider = new InstalledToolVersionsProvider(NullLogger<InstalledToolVersionsProvider>.Instance);
 
         var versions = await provider.GetVersionsAsync(CancellationToken.None);
 
@@ -31,7 +32,7 @@ public sealed class InstalledToolVersionsProviderTests
     [Fact]
     public async Task GetVersionsAsync_caches_the_result_across_calls()
     {
-        var provider = new InstalledToolVersionsProvider();
+        var provider = new InstalledToolVersionsProvider(NullLogger<InstalledToolVersionsProvider>.Instance);
 
         var first = await provider.GetVersionsAsync(CancellationToken.None);
         var second = await provider.GetVersionsAsync(CancellationToken.None);

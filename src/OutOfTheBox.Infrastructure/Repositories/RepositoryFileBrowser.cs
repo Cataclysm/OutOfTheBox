@@ -5,11 +5,12 @@ using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.PathConfinement;
 using OutOfTheBox.Domain.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
 
 /// <inheritdoc cref="IRepositoryFileBrowser" />
-public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirectoryResolver, RunRegistry runRegistry) : IRepositoryFileBrowser
+public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirectoryResolver, RunRegistry runRegistry, ILogger<RepositoryFileBrowser> logger) : IRepositoryFileBrowser
 {
     /// <inheritdoc />
     public Task<IReadOnlyList<RepositoryFileEntry>> ListDirectoryAsync(string repositoryName, string relativePath, CancellationToken cancellationToken)
@@ -42,18 +43,23 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
                 catch (IOException)
                 {
                     // Deleted/moved mid-enumeration (e.g. a build running concurrently) - skip it
-                    // rather than fail the whole listing for one transient entry.
+                    // rather than fail the whole listing for one transient entry. Not logged - this
+                    // is routine and could repeat once per entry in a directory undergoing heavy
+                    // concurrent writes, exactly the per-request log noise this file's other new
+                    // logging deliberately avoids.
                 }
                 catch (UnauthorizedAccessException)
                 {
                 }
             }
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-        }
-        catch (UnauthorizedAccessException)
-        {
+            // Unlike a single transient entry above, the whole listing failing outright (e.g. the
+            // folder itself denies access) means the operator sees an empty folder with no
+            // indication anything went wrong - worth a trace, and low-frequency enough (once per
+            // failed listing, not once per entry) not to be noise.
+            logger.LogWarning(ex, "Failed to list directory {ResolvedDirectory} for repository '{RepositoryName}'.", resolvedDirectory, repositoryName);
         }
 
         // Folders first, then alphabetical within each group - the conventional Explorer-style sort.
@@ -110,6 +116,7 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            logger.LogError(ex, "Failed to delete {ResolvedPath} in repository '{RepositoryName}'.", resolvedPath, repositoryName);
             return new RepositoryFileActionResult.Failed(ex.Message);
         }
         finally
@@ -185,6 +192,7 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            logger.LogError(ex, "Failed to rename {ResolvedPath} to '{NewName}' in repository '{RepositoryName}'.", resolvedPath, newName, repositoryName);
             return new RepositoryFileActionResult.Failed(ex.Message);
         }
         finally

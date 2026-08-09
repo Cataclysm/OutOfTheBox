@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using OutOfTheBox.Application.Execution;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Execution;
 
@@ -17,20 +18,20 @@ namespace OutOfTheBox.Infrastructure.Execution;
 /// <see cref="Lazy{T}"/>, the standard thread-safe pattern for a cached async value computed at
 /// most once.
 /// </remarks>
-public sealed class InstalledToolVersionsProvider : IInstalledToolVersionsProvider
+public sealed class InstalledToolVersionsProvider(ILogger<InstalledToolVersionsProvider> logger) : IInstalledToolVersionsProvider
 {
-    private readonly Lazy<Task<InstalledToolVersions>> _cached = new(() => ComputeAsync());
+    private readonly Lazy<Task<InstalledToolVersions>> _cached = new(ComputeAsyncFactory(logger));
 
     /// <inheritdoc />
     public Task<InstalledToolVersions> GetVersionsAsync(CancellationToken cancellationToken) => _cached.Value;
 
-    private static async Task<InstalledToolVersions> ComputeAsync()
+    private static Func<Task<InstalledToolVersions>> ComputeAsyncFactory(ILogger<InstalledToolVersionsProvider> logger) => async () =>
     {
-        var dotnetVersion = await RunVersionCommandAsync("dotnet", "--version");
-        var gitVersion = await RunVersionCommandAsync("git", "--version");
+        var dotnetVersion = await RunVersionCommandAsync("dotnet", "--version", logger);
+        var gitVersion = await RunVersionCommandAsync("git", "--version", logger);
 
         return new InstalledToolVersions(dotnetVersion, StripGitVersionPrefix(gitVersion));
-    }
+    };
 
     // "git --version" prints "git version 2.43.0.windows.1" - stripped down to just "2.43.0.windows.1"
     // so it displays the same shape as dotnet's own version-only output ("10.0.100").
@@ -42,7 +43,7 @@ public sealed class InstalledToolVersionsProvider : IInstalledToolVersionsProvid
             : rawOutput;
     }
 
-    private static async Task<string?> RunVersionCommandAsync(string executable, string argument)
+    private static async Task<string?> RunVersionCommandAsync(string executable, string argument, ILogger<InstalledToolVersionsProvider> logger)
     {
         try
         {
@@ -67,9 +68,15 @@ public sealed class InstalledToolVersionsProvider : IInstalledToolVersionsProvid
 
             return process.ExitCode == 0 ? output.Trim() : null;
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            // Not on PATH / not installed.
+            // Not on PATH / not installed for *this process's* account - worth a trace since this
+            // codebase has already chased a real bug where the tool genuinely was installed but
+            // unreachable specifically for the service account's PATH/environment (see
+            // GitRepositoryStatsProvider's own remarks on the same failure shape), which this
+            // dashboard-facing version probe would otherwise report identically to "not installed at
+            // all" with no way to tell the two apart.
+            logger.LogWarning(ex, "{Executable} --version failed to start.", executable);
             return null;
         }
     }

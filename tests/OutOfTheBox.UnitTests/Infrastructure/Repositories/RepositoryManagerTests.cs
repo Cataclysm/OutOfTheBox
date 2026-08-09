@@ -373,7 +373,7 @@ public sealed class RepositoryManagerTests : IDisposable
 
     private RepositoryManager CreateManager(RunRegistry runRegistry, IRunRepository? runRepository = null, RepositoryStatsCache? statsCache = null) =>
         new(
-            new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root })),
+            new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root }), NullLogger<WorkingDirectoryResolver>.Instance),
             runRegistry,
             runRepository ?? new EfRunRepository(_dbContextFactory.CreateContext()),
             new NoOpRunEventBus(),

@@ -50,7 +50,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
 
         var options = Options.Create(new ServiceOptions { RootDirectory = _root, DefaultExecutionTimeoutSeconds = 5, OutputCapBytes = 1024 * 1024 });
         var repositoryManager = new RepositoryManager(
-            new WorkingDirectoryResolver(options),
+            new WorkingDirectoryResolver(options, NullLogger<WorkingDirectoryResolver>.Instance),
             _runRegistry,
             new EfRunRepository(_dbContextFactory.CreateContext()),
             _runEventBus,
