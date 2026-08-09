@@ -122,16 +122,24 @@ The system SHALL let the operator filter the Repositories view by active/idle st
 - **WHEN** an operator types text into the Repositories search box
 - **THEN** the visible list narrows to repositories whose name matches that text
 
-### Requirement: Repositories view provides clone and delete controls
-The system SHALL provide a control to clone a new repository (prompting for a source URL and a name) and, per listed repository, a control to delete it — both invoking `repository-management`'s corresponding actions, with delete requiring an explicit confirmation step before it proceeds given its irreversibility.
+### Requirement: Repositories view provides clone, delete, and per-repository git action controls, all as icons
+The system SHALL provide a control to clone a new repository (opening a popup dialog prompting for a source URL, a name, and — once the URL is entered — a branch dropdown per `repository-management`) and, per listed repository, controls for delete, pull, push, force-push, fetch, and clean — all invoking `repository-management`'s corresponding actions. Every one of these list/row controls SHALL be rendered as an icon (not a text label), using recognizable iconography consistent with common practice (e.g. a trash can for delete), styled to match the dashboard's existing dark, minimal aesthetic. Destructive or irreversible actions (delete, force-push, clean) SHALL require an explicit confirmation step, presented as a popup dialog, before proceeding — not by the control itself changing state/label in place.
 
 #### Scenario: Cloning from the dashboard
-- **WHEN** an operator uses the clone control with a valid URL and an available name
+- **WHEN** an operator opens the clone dialog, enters a valid URL and an available name, and optionally selects a branch
 - **THEN** the clone starts, appears as an in-flight run in the Status view, and the new repository appears in the Repositories list once complete
 
-#### Scenario: Deleting requires confirmation
-- **WHEN** an operator selects the delete control for a repository
-- **THEN** the system requires an explicit confirmation before removing anything, rather than deleting immediately on the first click
+#### Scenario: Clone dialog is a popup, not an inline reveal
+- **WHEN** an operator opens the clone control
+- **THEN** the clone form appears as a popup dialog overlaying the page, rather than an inline section unhidden below the toolbar
+
+#### Scenario: Destructive actions require a confirmation popup
+- **WHEN** an operator selects delete, force-push, or clean for a repository
+- **THEN** the system shows a confirmation popup dialog and only proceeds if the operator explicitly confirms in that dialog, rather than the control itself morphing into a confirm state on first click
+
+#### Scenario: List and row controls are icons
+- **WHEN** an operator views the Repositories list
+- **THEN** every action (clone, delete, pull, push, force-push, fetch, clean) is represented by an icon rather than a text-labeled button
 
 ### Requirement: Current-status view includes host and process resource monitoring
 The system SHALL surface `host-resource-monitoring` data (host CPU/RAM, service RAM, spawned-process list with kill action) alongside in-flight run status, grouped so that a run's spawned processes are shown associated with that run rather than in an undifferentiated flat list.
