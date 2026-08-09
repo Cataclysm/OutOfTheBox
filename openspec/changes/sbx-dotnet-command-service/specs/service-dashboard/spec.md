@@ -141,6 +141,21 @@ The system SHALL provide a control to clone a new repository (opening a popup di
 - **WHEN** an operator views the Repositories list
 - **THEN** every action (clone, delete, pull, push, force-push, fetch, clean) is represented by an icon rather than a text-labeled button
 
+### Requirement: Repository detail's commit graph and file tree update on a live cadence, and use icons consistent with the rest of the dashboard
+The system SHALL refresh a repository detail page's commit graph whenever that repository's git status is otherwise refreshed (the same live-update signal driving its git-status/branch display), so new commits, checkouts, or branch changes made elsewhere become visible without a manual reload. The system SHALL refresh an expanded file-tree folder's contents on its own bounded interval while it remains expanded, independent of other expanded folders, rather than re-walking the entire tree on every refresh. Both the commit graph (checkout, branch/tag pills) and the file tree (folder/file, download, rename, delete) SHALL use icons consistent with the rest of the dashboard's iconography, not text labels.
+
+#### Scenario: Commit graph reflects a change made elsewhere
+- **WHEN** a repository's HEAD or branch changes (e.g. via a pull, a branch switch, or a commit made outside the dashboard) while its detail page is open
+- **THEN** the commit graph updates to reflect the change without the operator reloading the page
+
+#### Scenario: An expanded folder reflects a change made elsewhere
+- **WHEN** a file is added, removed, or renamed inside a currently-expanded folder by something other than the file browser itself (e.g. a build, a checkout)
+- **THEN** that folder's displayed contents update within its own polling interval, without the operator needing to collapse and re-expand it
+
+#### Scenario: Commit graph and file tree controls are icons
+- **WHEN** an operator views a repository's detail page
+- **THEN** the checkout action, and the file tree's download/rename/delete actions, are all represented by icons rather than text labels
+
 ### Requirement: Current-status view includes host and process resource monitoring
 The system SHALL surface `host-resource-monitoring` data (host CPU/RAM, service RAM, spawned-process list with kill action) alongside in-flight run status, grouped so that a run's spawned processes are shown associated with that run rather than in an undifferentiated flat list.
 

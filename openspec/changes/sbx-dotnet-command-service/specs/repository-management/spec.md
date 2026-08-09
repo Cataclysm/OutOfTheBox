@@ -148,8 +148,61 @@ The system SHALL let an operator cancel an in-flight repository clone from the d
 - **WHEN** a bearer-token caller sends a cancellation request naming a repository clone's run id to `POST /run/{runId}/cancel`
 - **THEN** the system responds as if the run id were unknown, rather than cancelling the clone
 
+### Requirement: Repository detail shows a branch-aware commit graph
+The system SHALL show, on a repository's detail subpage, its commit history as a graph — a lane/connector visualization reflecting branch and merge topology, not a flat chronological list — with each commit showing its short hash, author, date, subject, and the names of any branches or tags pointing at it. The graph SHALL cover commits reachable from any branch (not just the currently checked-out one), paginated rather than loading unbounded history at once.
+
+#### Scenario: Viewing the commit graph
+- **WHEN** an operator opens a repository's detail subpage
+- **THEN** they see a commit graph with lane/connector lines reflecting the repository's actual branch and merge structure, most-recent-first
+
+#### Scenario: Commits carrying branch or tag names are labeled
+- **WHEN** a commit is the tip of a branch or has a tag pointing at it
+- **THEN** the graph shows that branch/tag name directly on the commit, distinguishing a local branch, a remote-tracking branch, and a tag from one another
+
+#### Scenario: Loading more history
+- **WHEN** an operator has viewed the initially-loaded page of commits and wants to see older ones
+- **THEN** the system loads the next page of commit history rather than having loaded the entire history up front
+
+### Requirement: A commit can be checked out as a detached HEAD
+The system SHALL let an operator check out any commit shown in the graph, resulting in a detached HEAD at that commit, requiring explicit confirmation before proceeding given it changes the repository's checked-out state. The system SHALL distinguish a detached HEAD from a normal branch checkout wherever git status is displayed (repository list and detail), rather than showing the literal ref name `HEAD` as if it were a branch.
+
+#### Scenario: Checking out a commit
+- **WHEN** an operator selects checkout on a specific commit in the graph
+- **THEN** the system requires confirmation, then checks out that commit, and the repository's git status subsequently shows a detached HEAD at that commit rather than a branch name
+
+#### Scenario: Detached HEAD is shown distinctly
+- **WHEN** a repository's HEAD is detached
+- **THEN** its git status summary (in both the repository list and its detail page) indicates the detached state and the commit it's at, not the raw literal value git itself would report for an unnamed ref
+
+### Requirement: Repository detail provides a file tree browser
+The system SHALL provide, on a repository's detail subpage, a tree-structured, expandable/collapsible view of that repository's files and folders (rooted at the repository's own directory), in the spirit of a desktop file-manager tree. Folders SHALL be collapsed by default below the top level and load their contents on first expansion rather than the whole tree being loaded up front. Per file or folder, the operator SHALL be able to download (files only), rename, or delete (files and folders, folders recursively) — delete SHALL require explicit confirmation given its irreversibility; rename SHALL not. The system SHALL NOT expose creating new files/folders or uploading content through this browser.
+
+#### Scenario: Expanding a folder
+- **WHEN** an operator expands a collapsed folder in the tree
+- **THEN** the system loads and displays that folder's immediate contents, without having pre-loaded the rest of the repository's tree
+
+#### Scenario: Downloading a file
+- **WHEN** an operator selects download on a file in the tree
+- **THEN** the system transfers that file's exact bytes back to the operator's browser as a download
+
+#### Scenario: Renaming a file or folder
+- **WHEN** an operator renames a file or folder to a new name within the same parent directory
+- **THEN** the system renames it on disk and the tree reflects the new name, without requiring a confirmation step
+
+#### Scenario: Deleting a file or folder requires confirmation
+- **WHEN** an operator selects delete on a file or folder
+- **THEN** the system requires explicit confirmation before removing it (recursively, for a folder) from disk
+
+#### Scenario: File-browser operations are confined to the repository
+- **WHEN** any file-browser operation (list, download, rename, delete) is requested with a path that would resolve outside the named repository's own directory
+- **THEN** the system rejects the request without performing any filesystem operation, the same confinement guarantee `file-transfer` provides for the sbx-facing API
+
+#### Scenario: The repository root itself cannot be renamed or deleted through the file browser
+- **WHEN** a rename or delete request targets the repository's own root (an empty relative path)
+- **THEN** the system rejects it — removing or renaming a repository is `repository-management`'s own dedicated deletion action, not a file-browser operation
+
 ### Requirement: Deletion and the new git operations are reachable only from the authenticated dashboard; listing and cloning are also REST-reachable
-The system SHALL expose repository listing and cloning as bearer-token REST endpoints (`GET /repositories`, `POST /repositories/clone`) reachable by the sbx sandbox caller, per `dotnet-command-execution`'s authentication model — this was deliberately widened after this requirement's original "dashboard-only" scope (see `design.md`). Deletion, and the pull/push/force-push/fetch/clean/branch-switch actions added by this capability, SHALL NOT be exposed as REST endpoints — they remain available only as authenticated in-process operations within the Blazor dashboard, gated by the same dashboard authentication as everything else in `service-dashboard`. This keeps every irreversible or history-rewriting action (delete, force-push, clean) behind a human operator's explicit dashboard confirmation, unreachable to an sbx caller that "might misuse it."
+The system SHALL expose repository listing and cloning as bearer-token REST endpoints (`GET /repositories`, `POST /repositories/clone`) reachable by the sbx sandbox caller, per `dotnet-command-execution`'s authentication model — this was deliberately widened after this requirement's original "dashboard-only" scope (see `design.md`). Deletion, the pull/push/force-push/fetch/clean/branch-switch actions, the commit graph and commit checkout, and the file tree browser's download/rename/delete SHALL NOT be exposed as bearer-token REST endpoints — they remain available only as authenticated in-process operations (or, for file download specifically, a dashboard-cookie-authenticated endpoint distinct from the bearer-token API surface) within the Blazor dashboard, gated by the same dashboard authentication as everything else in `service-dashboard`. This keeps every irreversible or history-rewriting action (delete, force-push, clean, file delete, commit checkout) behind a human operator's explicit dashboard confirmation, unreachable to an sbx caller that "might misuse it."
 
 #### Scenario: List and clone are REST-reachable
 - **WHEN** a caller presents a valid bearer credential to `GET /repositories` or `POST /repositories/clone`
