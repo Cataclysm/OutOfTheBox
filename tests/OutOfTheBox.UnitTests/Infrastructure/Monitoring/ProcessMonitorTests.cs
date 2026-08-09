@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Infrastructure.Monitoring;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Monitoring;
 
@@ -19,7 +20,7 @@ public sealed class ProcessMonitorTests
     [Fact]
     public async Task KillAsync_rejects_a_pid_when_nothing_is_tracked()
     {
-        var monitor = new ProcessMonitor(new RunRegistry());
+        var monitor = new ProcessMonitor(new RunRegistry(), NullLogger<ProcessMonitor>.Instance);
 
         // No tracked roots at all - must reject before ever touching WMI/Process.GetProcessById,
         // regardless of what pid/StartTime is supplied.
@@ -43,7 +44,7 @@ public sealed class ProcessMonitorTests
         registry.TryAcquire(@"C:\repositories\example", runId, cts, out _);
         registry.SetProcessId(runId, fakeRootProcessId);
 
-        var monitor = new ProcessMonitor(registry);
+        var monitor = new ProcessMonitor(registry, NullLogger<ProcessMonitor>.Instance);
 
         var killed = await monitor.KillAsync(Environment.ProcessId, DateTime.UtcNow, CancellationToken.None);
 

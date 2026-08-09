@@ -8,6 +8,7 @@ using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OutOfTheBox.Application.Configuration;
 
@@ -132,18 +133,38 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         Assert.Empty(await sampleRepository.GetSeriesAsync(deleteId, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task TickAsync_swallows_a_sampling_failure_instead_of_throwing()
+    {
+        // Regression test for the same bug class already found and fixed twice for the
+        // repository-stats sampler: an exception escaping a BackgroundService's ExecuteAsync stops
+        // the entire host by default. This sampler's real IResourceSampler (WMI/PerformanceCounter)
+        // is at least as fragile in the wild, so TickAsync must never let a sampling failure
+        // propagate, regardless of cause.
+        var service = CreateService(new ThrowingResourceSampler());
+
+        await service.TickAsync(CancellationToken.None);
+    }
+
     private HostResourceSamplerService CreateService(IResourceSampler sampler) => new(
         Options.Create(new ServiceOptions { ResourceSamplerIntervalSeconds = 3 }),
         sampler,
         new InMemoryResourceEventBus(),
         new InMemoryRunEventBus(),
         new ResourceHistoryBuffer(new SystemClock()),
-        _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>());
+        _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>(),
+        NullLogger<HostResourceSamplerService>.Instance);
 
     private sealed class FakeResourceSampler(ResourceSnapshot snapshot) : IResourceSampler
     {
         public ResourceSnapshot Snapshot { get; set; } = snapshot;
 
         public Task<ResourceSnapshot> SampleAsync(CancellationToken cancellationToken) => Task.FromResult(Snapshot);
+    }
+
+    private sealed class ThrowingResourceSampler : IResourceSampler
+    {
+        public Task<ResourceSnapshot> SampleAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Simulated PerformanceCounter/WMI failure.");
     }
 }

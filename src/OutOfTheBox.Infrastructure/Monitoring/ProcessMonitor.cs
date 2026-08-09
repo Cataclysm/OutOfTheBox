@@ -4,12 +4,13 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Monitoring;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Monitoring;
 
 /// <inheritdoc cref="IProcessMonitor" />
 [SupportedOSPlatform("windows")]
-public sealed class ProcessMonitor(RunRegistry runRegistry) : IProcessMonitor
+public sealed class ProcessMonitor(RunRegistry runRegistry, ILogger<ProcessMonitor> logger) : IProcessMonitor
 {
     /// <inheritdoc />
     public async Task<bool> KillAsync(int processId, DateTime expectedStartTime, CancellationToken cancellationToken)
@@ -23,7 +24,21 @@ public sealed class ProcessMonitor(RunRegistry runRegistry) : IProcessMonitor
         // A fresh WMI walk, not the last-sampled snapshot - kills are rare, operator-triggered
         // actions, so re-verifying scope from scratch here is cheap relative to the certainty it
         // buys, per design.md's "Kill scope enforcement" decision.
-        var allProcesses = await WmiProcessTree.GetAllProcessesAsync(cancellationToken);
+        IReadOnlyDictionary<int, WmiProcessInfo> allProcesses;
+        try
+        {
+            allProcesses = await WmiProcessTree.GetAllProcessesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Without this, a broken WMI service would surface only as an unhandled exception in
+            // the Blazor circuit handling the operator's kill click - visible as "something broke,"
+            // but with no indication why. Fails the kill attempt (matching every other "couldn't
+            // verify scope, refuse to kill" path's false return) rather than propagating.
+            logger.LogError(ex, "Failed to enumerate processes via WMI while attempting to kill process {ProcessId}.", processId);
+            return false;
+        }
+
         var descendantsByRoot = WmiProcessTree.DiscoverDescendants(allProcesses, [.. trackedRoots.Select(r => r.ProcessId)]);
 
         var isInScope = descendantsByRoot.Values.Any(tree => tree.Contains(processId));

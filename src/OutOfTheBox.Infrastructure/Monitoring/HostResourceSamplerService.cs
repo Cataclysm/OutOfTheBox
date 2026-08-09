@@ -7,6 +7,7 @@ using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Infrastructure.Monitoring;
@@ -27,7 +28,8 @@ public sealed class HostResourceSamplerService(
     IResourceEventBus resourceEventBus,
     IRunEventBus runEventBus,
     ResourceHistoryBuffer historyBuffer,
-    IServiceScopeFactory serviceScopeFactory) : BackgroundService
+    IServiceScopeFactory serviceScopeFactory,
+    ILogger<HostResourceSamplerService> logger) : BackgroundService
 {
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -65,8 +67,30 @@ public sealed class HostResourceSamplerService(
     /// Runs exactly one sample-persist-publish cycle. Public (like <c>CliProcessRunner.BuildStartInfo</c>)
     /// so tests can exercise one tick's persistence/host-tagging logic directly, without waiting on
     /// the real <see cref="PeriodicTimer"/>-driven loop <see cref="ExecuteAsync"/> normally drives it with.
+    /// Never throws for a sampling failure (see the try/catch inside) - this is a
+    /// <see cref="BackgroundService"/> ticking every few seconds, and an exception escaping
+    /// <see cref="ExecuteAsync"/> stops the entire host by default
+    /// (<c>BackgroundServiceExceptionBehavior.StopHost</c>), the same class of bug already found and
+    /// fixed twice for the repository-stats sampler - this sampler's own WMI/PerformanceCounter
+    /// dependencies (see <see cref="HostResourceSampler"/>) are at least as fragile in the wild.
     /// </summary>
     public async Task TickAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await TickCoreAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to sample host/process resources this tick.");
+        }
+    }
+
+    private async Task TickCoreAsync(CancellationToken cancellationToken)
     {
         var snapshot = await resourceSampler.SampleAsync(cancellationToken);
 
