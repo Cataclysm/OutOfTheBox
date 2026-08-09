@@ -15,6 +15,9 @@
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
+    <!-- MCP Streamable HTTP hosting (sbx-mcp-server) - AddMcpServer()/WithHttpTransport()/MapMcp(),
+         composition-root-only like the Serilog packages above. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <!-- Design-time only, same reasoning as Infrastructure's own reference: `dotnet ef` requires
          the *startup* project to reference this package too, not just the project containing the
          DbContext, in order to run `dotnet ef migrations add`. -->

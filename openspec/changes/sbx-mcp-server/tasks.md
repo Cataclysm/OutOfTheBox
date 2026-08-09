@@ -1,8 +1,8 @@
 ## 1. Package Setup
 
-- [ ] 1.1 Pin an exact stable `ModelContextProtocol` + `ModelContextProtocol.AspNetCore` version in `Directory.Packages.props` (resolve design.md's "exact version to pin" open question against whatever is current and stable at implementation time)
-- [ ] 1.2 Reference `ModelContextProtocol` from `Presentation` and `ModelContextProtocol.AspNetCore` from `Host` only, matching the existing composition-root-only pattern used for Serilog
-- [ ] 1.3 Wire a minimal `AddMcpServer().WithHttpTransport()` / `app.MapMcp()` in `Host`'s `Program.cs` with zero tools registered yet, and confirm `dotnet build` + a live `initialize` handshake against the running service succeeds before adding any real tool
+- [x] 1.1 Pin an exact stable `ModelContextProtocol` + `ModelContextProtocol.AspNetCore` version in `Directory.Packages.props` (resolve design.md's "exact version to pin" open question against whatever is current and stable at implementation time) - pinned 2.1.0 (current stable as of implementation; both packages share one version by the SDK's own convention)
+- [x] 1.2 Reference `ModelContextProtocol` from `Presentation` and `ModelContextProtocol.AspNetCore` from `Host` only, matching the existing composition-root-only pattern used for Serilog
+- [x] 1.3 Wire a minimal `AddMcpServer().WithHttpTransport()` / `app.MapMcp()` in `Host`'s `Program.cs` with zero tools registered yet, and confirm `dotnet build` + a live `initialize` handshake against the running service succeeds before adding any real tool - verified live via curl: `initialize` returns 200 with a valid bearer token, 401 without one, and `tools/list` correctly reports unavailable with zero tools registered (the SDK doesn't advertise the tools capability until at least one tool exists). Discovered `MapMcp()` returns a plain `IEndpointConventionBuilder`, not a `RouteHandlerBuilder`, so it can't take `.AddEndpointFilter<T>()` the way the REST endpoints do - added `McpAuthenticationMiddleware`/`BearerCredential` (reusing the exact same `CredentialComparer` the REST filter already uses) as middleware instead
 
 ## 2. Shared Run-Output Buffering
 

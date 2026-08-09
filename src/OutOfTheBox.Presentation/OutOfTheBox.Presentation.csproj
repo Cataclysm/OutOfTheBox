@@ -18,4 +18,12 @@
     <ProjectReference Include="..\OutOfTheBox.Domain\OutOfTheBox.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- MCP tool definitions (sbx-mcp-server) - core protocol/attribute types only ([McpServerTool],
+         McpException, ...), no ASP.NET Core hosting concerns. The HTTP transport itself
+         (ModelContextProtocol.AspNetCore) is referenced only from Host, the composition root,
+         matching the Serilog precedent above this project already established. -->
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
 </Project>

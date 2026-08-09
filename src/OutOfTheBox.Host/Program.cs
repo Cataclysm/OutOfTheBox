@@ -13,6 +13,7 @@ using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.Host;
+using OutOfTheBox.Presentation.Authentication;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.Presentation.Execution;
@@ -89,6 +90,16 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services
     .AddOptions<ServiceOptions>()
     .Bind(builder.Configuration.GetSection(ServiceOptions.SectionName));
+
+// MCP server (sbx-mcp-server) - a second, purely additive entry point onto the same
+// Application-layer ports the REST endpoints below already call (see design.md's "MCP server lives
+// inside Presentation and Host" decision). Stateless mode: every tool call here is already
+// independently bearer-token-authenticated and none of this service's tools need a server-initiated
+// request back to the caller (sampling/elicitation), so there is nothing a stateful MCP session
+// would buy that plain per-call statelessness doesn't already have.
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithToolsFromAssembly(typeof(RunEndpoints).Assembly);
 
 // Infrastructure implementations registered against Application's ports - this file (plus
 // DependencyInjection-style extension methods, if it grows large enough to warrant them) is the
@@ -204,6 +215,14 @@ try
     app.MapRepositoryFileDownloadEndpoints();
     app.MapLoginEndpoints();
     app.MapVersionEndpoint();
+
+    // MCP server (sbx-mcp-server) - same bearer credential every REST command/file/repository
+    // endpoint above already requires, applied to the MCP route itself via middleware (MapMcp's
+    // builder type doesn't support AddEndpointFilter - see McpAuthenticationMiddleware's own
+    // remarks) so an unauthenticated request is rejected before the MCP handshake, tool listing, or
+    // any tool call is processed, per mcp-server's own requirement.
+    app.UseMcpBearerAuthentication("/mcp");
+    app.MapMcp("/mcp");
 
     // RequireAuthorization() applies to this Razor Components route group the same way it's applied
     // directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -

@@ -17,15 +17,10 @@ namespace OutOfTheBox.Presentation.Authentication;
 /// </summary>
 public sealed class BearerAuthenticationFilter(IOptions<ServiceOptions> options) : IEndpointFilter
 {
-    private const string BearerPrefix = "Bearer ";
-
     /// <inheritdoc />
     public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var header = context.HttpContext.Request.Headers.Authorization.ToString();
-        var provided = header.StartsWith(BearerPrefix, StringComparison.Ordinal)
-            ? header[BearerPrefix.Length..]
-            : null;
+        var provided = BearerCredential.FromHeader(context.HttpContext.Request.Headers.Authorization.ToString());
 
         if (!CredentialComparer.Matches(provided, options.Value.BearerToken))
         {
