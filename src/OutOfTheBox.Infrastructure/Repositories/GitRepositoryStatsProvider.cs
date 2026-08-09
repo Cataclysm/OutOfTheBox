@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Text;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
 
@@ -15,7 +16,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// is captured into a plain string via a throwaway <see cref="IProcessOutputSink"/>, not streamed
 /// or persisted anywhere.
 /// </remarks>
-public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : IRepositoryStatsProvider
+public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILogger<GitRepositoryStatsProvider> logger) : IRepositoryStatsProvider
 {
     private static readonly TimeSpan GitInvocationTimeout = TimeSpan.FromSeconds(10);
 
@@ -180,7 +181,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
         {
             return null;
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
             // git.exe unreachable for the process's account/PATH (e.g. a service account whose
             // environment doesn't resolve it) - treated the same as "this git invocation produced
@@ -188,7 +189,11 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
             // escaped RecomputeOneAsync/RecomputeAllAsync (which only caught
             // OperationCanceledException) and crashed RepositoryStatsSampler's BackgroundService -
             // which by default (BackgroundServiceExceptionBehavior.StopHost) stops the whole host,
-            // silently ending every future stats update, not just this one repository's.
+            // silently ending every future stats update, not just this one repository's. Logged
+            // (not just swallowed) because this exact "stats silently stop updating" bug was
+            // previously diagnosable only by reading code, not logs - a repeat occurrence (this
+            // repository or a different one) should be visible to the operator, not invisible.
+            logger.LogWarning(ex, "git {Arguments} failed to start in {WorkingDirectory} while sampling repository stats.", string.Join(' ', arguments), workingDirectory);
             return null;
         }
     }

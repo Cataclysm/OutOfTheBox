@@ -12,6 +12,7 @@ using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
@@ -386,7 +387,8 @@ public sealed class RepositoryManagerTests : IDisposable
                 RootDirectory = _root,
                 DefaultExecutionTimeoutSeconds = 5,
                 OutputCapBytes = 1024 * 1024,
-            }));
+            }),
+            NullLogger<RepositoryManager>.Instance);
 
     private sealed class NoOpRunEventBus : IRunEventBus
     {

@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Infrastructure.Repositories;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
 
@@ -35,7 +36,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
     [Fact]
     public async Task ComputeAsync_reports_a_non_git_directory_without_invoking_git()
     {
-        var provider = new GitRepositoryStatsProvider(new UnreachableProcessRunner());
+        var provider = new GitRepositoryStatsProvider(new UnreachableProcessRunner(), NullLogger<GitRepositoryStatsProvider>.Instance);
 
         var stats = await provider.ComputeAsync(_root, CancellationToken.None);
 
@@ -55,7 +56,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
         // previously propagated straight out of this method, which - left uncaught two layers up in
         // RepositoryStatsSampler - crashed the whole BackgroundService (and, by default, the host).
         Directory.CreateDirectory(Path.Combine(_root, ".git"));
-        var provider = new GitRepositoryStatsProvider(new Win32ExceptionProcessRunner());
+        var provider = new GitRepositoryStatsProvider(new Win32ExceptionProcessRunner(), NullLogger<GitRepositoryStatsProvider>.Instance);
 
         var status = await provider.ComputeGitStatusAsync(_root, CancellationToken.None);
 

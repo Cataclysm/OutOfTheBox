@@ -11,6 +11,7 @@ using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
@@ -35,7 +36,8 @@ public sealed class RepositoryManager(
     RepositoryStatsCache statsCache,
     IRepositoryStatsEventBus statsEventBus,
     IServiceScopeFactory serviceScopeFactory,
-    IOptions<ServiceOptions> options) : IRepositoryManager
+    IOptions<ServiceOptions> options,
+    ILogger<RepositoryManager> logger) : IRepositoryManager
 {
     // Unit/record separator control characters delimit ListCommitsAsync's `git log --format` fields -
     // see that method's own remarks for why, not a printable delimiter a commit subject could contain.
@@ -373,9 +375,7 @@ public sealed class RepositoryManager(
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
-            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
-            statsCache.Set(name, stats);
-            statsEventBus.Publish(name);
+            await RefreshStatsAsync(name, targetPath);
 
             return new RepositoryGitActionResult.Succeeded();
         }
@@ -526,9 +526,7 @@ public sealed class RepositoryManager(
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
-            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
-            statsCache.Set(name, stats);
-            statsEventBus.Publish(name);
+            await RefreshStatsAsync(name, targetPath);
 
             return new RepositoryGitActionResult.Succeeded();
         }
@@ -542,6 +540,33 @@ public sealed class RepositoryManager(
     {
         var output = await RunGitCaptureAsync(targetPath, ["remote"], cancellationToken);
         return output is null ? [] : new HashSet<string>(SplitNonEmptyLines(output), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Recomputes and caches+publishes stats for the named repository, catching and logging (not
+    /// throwing) any failure - shared by every call site that refreshes stats immediately after a
+    /// mutating action already succeeded (clone, pull/push/force-push/fetch/clean, branch switch,
+    /// commit checkout). A stats-refresh failure here must never make the action itself look like it
+    /// failed (the git operation already succeeded on disk by the time this runs), and - for
+    /// <see cref="RunCloneToCompletionAsync"/> specifically, a fire-and-forget continuation nothing
+    /// awaits - must never silently propagate out and skip the Terminal event publish that follows.
+    /// </summary>
+    private async Task RefreshStatsAsync(string name, string targetPath)
+    {
+        try
+        {
+            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
+            statsCache.Set(name, stats);
+            statsEventBus.Publish(name);
+        }
+        catch (Exception ex)
+        {
+            // Logged, not just swallowed - a repository whose stats never update after an action
+            // that visibly succeeded is otherwise indistinguishable from "nothing is wrong, it just
+            // hasn't ticked yet," which is exactly what made this class of bug hard to diagnose the
+            // first time around.
+            logger.LogWarning(ex, "Failed to refresh stats for repository '{Name}' at {TargetPath} after a repository action completed.", name, targetPath);
+        }
     }
 
     /// <summary>
@@ -598,9 +623,7 @@ public sealed class RepositoryManager(
 
             // Recompute+publish immediately, the same as a clone's completion already does - so the
             // row reflects the result without waiting for the next background sampler tick.
-            var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
-            statsCache.Set(name, stats);
-            statsEventBus.Publish(name);
+            await RefreshStatsAsync(name, targetPath);
 
             return new RepositoryGitActionResult.Succeeded();
         }
@@ -761,12 +784,17 @@ public sealed class RepositoryManager(
             // permanently stuck showing "Computing…" (StatsComputed still false at snapshot time)
             // until some unrelated event elsewhere triggered another refresh. Ordering this first
             // means the snapshot the Terminal event triggers always already has the fresh stats.
+            // RefreshStatsAsync catches and logs rather than throwing - critical here specifically,
+            // since this whole method is a fire-and-forget continuation (line ~139: `_ =
+            // RunCloneToCompletionAsync(...)`, nothing awaits it). Before RefreshStatsAsync existed,
+            // an exception here propagated straight out uncaught, silently skipping the Terminal
+            // event publish below and leaving the freshly-cloned repository stuck at "Computing…"
+            // until RepositoryStatsSampler's own next tick happened to succeed where this didn't -
+            // found on real-machine use, the same "stats never update" symptom this codebase has
+            // now chased down twice.
             if (run.Outcome == RunOutcome.Completed)
             {
-                var stats = await statsProvider.ComputeAsync(targetPath, CancellationToken.None);
-                var name = Path.GetFileName(targetPath);
-                statsCache.Set(name, stats);
-                statsEventBus.Publish(name);
+                await RefreshStatsAsync(Path.GetFileName(targetPath), targetPath);
             }
 
             runEventBus.Publish(new RunEvent(run.Id, RunKind.RepositoryClone, RunEventType.Terminal, targetPath));

@@ -4,6 +4,7 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Repositories;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
@@ -48,7 +49,8 @@ public sealed class RepositoryStatsSamplerTests : IDisposable
             new ThrowsForOneRepositoryStatsProvider("bad-repo"),
             statsCache,
             new InMemoryRunEventBus(),
-            statsEventBus);
+            statsEventBus,
+            NullLogger<RepositoryStatsSampler>.Instance);
 
         // Would previously never return at all for "bad-repo" the way an unhandled exception in a
         // real BackgroundService.ExecuteAsync loop wouldn't - here it must simply complete.

@@ -4,6 +4,7 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Repositories;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
@@ -22,7 +23,8 @@ public sealed class RepositoryStatsSampler(
     IRepositoryStatsProvider statsProvider,
     RepositoryStatsCache statsCache,
     IRunEventBus runEventBus,
-    IRepositoryStatsEventBus statsEventBus) : BackgroundService
+    IRepositoryStatsEventBus statsEventBus,
+    ILogger<RepositoryStatsSampler> logger) : BackgroundService
 {
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -164,10 +166,13 @@ public sealed class RepositoryStatsSampler(
         catch (OperationCanceledException)
         {
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Skip this repository for this tick; the next tick (of whichever cadence), or the next
-            // event-driven recompute, tries again.
+            // event-driven recompute, tries again. Logged, not just swallowed - a repository whose
+            // stats never update is otherwise indistinguishable from "nothing is wrong, it just
+            // hasn't ticked yet" from the dashboard alone.
+            logger.LogWarning(ex, "Failed to recompute stats for repository at {RepositoryPath}.", repositoryPath);
         }
     }
 }

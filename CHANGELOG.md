@@ -45,6 +45,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - Repository stats silently stopping forever after computing once at startup: a `git.exe` invocation failure (e.g. unreachable for the service account's PATH) inside the background stats sampler was left uncaught, which - since an unhandled exception in a `BackgroundService` stops the entire host by default - could silently kill the whole service, not just the sampler. One repository's stats computation failing can no longer affect any other repository or the sampler itself, let alone the host
 - The page-title underline (Status/History/Repositories and their detail subpages) now tracks the heading text's actual width instead of a fixed 44px unrelated to the text
+- A repository's stats could still, in one remaining shape, silently fail to refresh after a successful clone, pull/push/force-push/fetch/clean, branch switch, or commit checkout - none of the four immediate post-action stats refreshes had an exception guard, and the clone path's (a fire-and-forget continuation) additionally skipped its own completion signal on failure. All four now share one guarded refresh helper; this subsystem also gained its first application-level logging (`ILogger<T>`, surfaced via the Windows Event Log when hosted as a service) so a future occurrence is diagnosable without reading code
 
 ### In progress
 

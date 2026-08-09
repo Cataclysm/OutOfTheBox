@@ -15,6 +15,7 @@ using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
@@ -58,7 +59,8 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
             _statsCache,
             _repositoryStatsEventBus,
             _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>(),
-            options);
+            options,
+            NullLogger<RepositoryManager>.Instance);
 
         Services.AddSingleton<IRepositoryManager>(repositoryManager);
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
