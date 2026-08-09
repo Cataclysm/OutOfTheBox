@@ -34,11 +34,11 @@
 
 ## 7. Live verification
 
-- [ ] 7.1 Start the real `Host`, call `get_environment_info` over a raw MCP call, and confirm the returned dotnet/git versions, SDK list, and NuGet sources genuinely match this host's actual installed state (cross-check against `dotnet --list-sdks`/`dotnet nuget list source` run directly in a shell) - not just that the call succeeds structurally.
-- [ ] 7.2 Lock a real file open (a second process or an explicit `FileStream`), call `get_file_lock_info` for it over a raw MCP call, and confirm the real locking process id is correctly reported. Confirm an unlocked file returns an empty list, and a nonexistent/escaping path is rejected.
-- [ ] 7.3 Confirm `RmEndSession` is genuinely being called even on an error path (no session handle leak) - inspect for repeated calls in a row without failure.
+- [x] 7.1 Start the real `Host`, call `get_environment_info` over a raw MCP call, and confirm the returned dotnet/git versions, SDK list, and NuGet sources genuinely match this host's actual installed state (cross-check against `dotnet --list-sdks`/`dotnet nuget list source` run directly in a shell) - not just that the call succeeds structurally.
+- [x] 7.2 Lock a real file open (a second process or an explicit `FileStream`), call `get_file_lock_info` for it over a raw MCP call, and confirm the real locking process id is correctly reported. Confirm an unlocked file returns an empty list, and a nonexistent/escaping path is rejected.
+- [x] 7.3 Confirm `RmEndSession` is genuinely being called even on an error path (no session handle leak) - inspect for repeated calls in a row without failure.
 
 ## 8. Wrap-up
 
-- [ ] 8.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
-- [ ] 8.2 Commit and push. Do not archive this change (or the still-unarchived `expose-run-resources-mcp`) as part of implementation - archiving is a separate, deliberate step.
+- [x] 8.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
+- [x] 8.2 Commit and push. Do not archive this change (or the still-unarchived `expose-run-resources-mcp`) as part of implementation - archiving is a separate, deliberate step.
