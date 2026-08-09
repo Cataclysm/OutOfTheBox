@@ -107,10 +107,24 @@ else
 
     private CommitDetail? _detail;
     private bool _loading = true;
+    private string? _loadedKey;
 
+    // OnParametersSetAsync, not OnInitializedAsync: clicking a parent-commit link navigates from
+    // this route to itself with a different Hash, which Blazor resolves by reusing the existing
+    // component instance rather than creating a new one - OnInitializedAsync only runs once per
+    // instance, so it would never see the new Hash. OnParametersSetAsync runs on every navigation.
     /// <inheritdoc />
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        var key = $"{Name}/{Hash}";
+        if (key == _loadedKey)
+        {
+            return;
+        }
+
+        _loadedKey = key;
+        _loading = true;
+        _detail = null;
         _detail = await RepositoryManager.GetCommitDetailAsync(Name, Hash, CancellationToken.None);
         _loading = false;
     }

@@ -19,7 +19,7 @@ At minimum you'll need to set:
 - `OutOfTheBox:RootDirectory` — the absolute path repositories will be resolved under
 - `OutOfTheBox:BearerToken` — the shared credential callers must present
 
-See `ServiceOptions` (`src/OutOfTheBox.Application/Configuration/ServiceOptions.cs`) for the full configuration surface (timeouts, output cap, SQLite path — some of these aren't wired up to real behavior yet; check `openspec/changes/sbx-dotnet-command-service/tasks.md` for current status).
+See `ServiceOptions` (`src/OutOfTheBox.Application/Configuration/ServiceOptions.cs`) for the full configuration surface (timeouts, output cap, SQLite path, MCP file-transfer size cap).
 
 ## Network & transport
 

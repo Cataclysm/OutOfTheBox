@@ -35,21 +35,27 @@
     Point an MCP-aware client (Claude Code configured with a remote MCP server) at this host's
     <code>/mcp</code> endpoint with an <code>Authorization: Bearer &lt;token&gt;</code> header carrying
     the service's bearer token; tool discovery, calling, and result parsing are handled by the client
-    library itself. The server exposes eight tools:
+    library itself. The server exposes ten tools:
 </p>
-<pre class="run-output">dotnet_run          - start a `dotnet` command against a repository
-git_run             - start a `git` command against a repository
-read_run_output     - poll a run started by dotnet_run/git_run/clone_repository for incremental
-                      output and its eventual exit code
-cancel_run          - cancel a run that is still in flight
-list_repositories   - list the repositories available on this host
-clone_repository    - clone a new repository onto this host
-transfer_file       - read a file's contents (base64-encoded) from within a named repository
-get_run_resources   - poll a run's recent CPU/RAM trend, to judge whether it's hung or still working</pre>
+<pre class="run-output">dotnet_run           - start a `dotnet` command against a repository
+git_run              - start a `git` command against a repository
+read_run_output      - poll a run started by dotnet_run/git_run/clone_repository for incremental
+                       output and its eventual exit code
+cancel_run           - cancel a run that is still in flight
+list_repositories    - list the repositories available on this host
+clone_repository     - clone a new repository onto this host
+transfer_file        - read a file's contents (base64-encoded) from within a named repository
+get_run_resources    - poll a run's recent CPU/RAM trend, to judge whether it's hung or still working
+get_environment_info - inspect this host's installed dotnet/git toolchain, SDKs, workloads, NuGet
+                       sources, and disk space
+get_file_lock_info   - find which process(es) have a file open, to diagnose a Windows "file in use"
+                       build/test failure</pre>
 <p>
     <code>dotnet_run</code>/<code>git_run</code>/<code>clone_repository</code> return a run id
     immediately rather than blocking until the command finishes - poll <code>read_run_output</code>
-    with that run id for incremental output. <code>transfer_file</code> is the one synchronous tool,
-    confined to the named repository's own directory and rejected outright if the file exceeds the
-    configured size limit.
+    with that run id for incremental output. <code>transfer_file</code>,
+    <code>get_environment_info</code>, and <code>get_file_lock_info</code> are synchronous;
+    <code>transfer_file</code> and <code>get_file_lock_info</code> are confined to the named
+    repository's own directory, and <code>transfer_file</code> is rejected outright if the file
+    exceeds the configured size limit.
 </p>

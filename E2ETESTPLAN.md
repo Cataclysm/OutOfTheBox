@@ -1,14 +1,12 @@
 # End-to-End Test Plan
 
-**⚠️ Stale interface references**: this plan was written against the bearer-token REST+SSE API, which has since been removed entirely (see `openspec/changes/sbx-remove-rest-api/`) - MCP is now this service's only sbx-facing interface. Every `POST /run`/`POST /run/git`/`POST /files`/`GET /repositories`/`POST /repositories/clone`/`POST /run/{runId}/cancel` reference below needs translating to the equivalent MCP tool call (`dotnet_run`/`git_run`/`transfer_file`/`list_repositories`/`clone_repository`/`cancel_run`) before this plan is actually run - not yet done, tracked as a follow-up rather than blocking the REST-removal work itself.
-
 **Status: planned, not yet executed.** This document describes a full, sandbox-realistic workflow
 test against a real deployed instance of OutOfTheBox — the same shape of session a Claude Code
-instance running in an sbx sandbox would actually drive. It is deliberately **not** run by the
-session that wrote it: the operator will install the latest build first, then run this plan
-themselves (or hand it to a fresh sbx-side agent with only the [Claude Code skill](openspec/changes/sbx-dotnet-command-service/)
-and this document as context, per the "succeeds without needing to read the specs directly" bar
-already established in `tasks.md` §18.11/19.15).
+instance running in an sbx sandbox would actually drive, calling the MCP server directly (there is
+no client-side skill/doc to hand it - every tool is self-describing, see `README.md`'s "Running a
+Claude Code instance in the sbx sandbox"). It is deliberately **not** run by the session that wrote
+it: the operator will install the latest build first, then run this plan themselves (or hand it to a
+fresh sbx-side agent, configured per that README section, with only this document as context).
 
 This plan supersedes nothing in `tasks.md` §19 (End-to-End Verification) — it's a superset, written
 as an actually-runnable script/checklist rather than a list of things to eyeball, and it specifically
@@ -17,16 +15,16 @@ pull/push/force-push/fetch/clean, clone branch selection, branch-switch, icon/di
 
 ## Scope split: what an sbx agent can automate vs. what needs a human + browser
 
-This matters because half of what §22 added is **dashboard-only, with no REST surface** (per direct
+This matters because half of what §22 added is **dashboard-only, with no MCP tool** (per direct
 instruction — pull/push/force-push/fetch/clean, branch-switch, and repository deletion are all
-unreachable to an sbx caller by design). An automated agent following only the REST API cannot
+unreachable to an sbx caller by design). An automated agent following only the MCP tools cannot
 exercise those directly; it can only exercise their *effects* indirectly (e.g. running `git push`
-itself via `POST /run/git` and confirming the dashboard reflects it), or by treating the equivalent
+itself via `git_run` and confirming the dashboard reflects it), or by treating the equivalent
 generic `git` subcommand as a stand-in.
 
-- **Phases 1–7**: fully automatable by an sbx agent using only `POST /run`, `POST /run/git`,
-  `POST /files`, `POST /run/{runId}/cancel`, `GET /repositories`, `POST /repositories/clone`, and the
-  bearer credential — no browser needed.
+- **Phases 1–7**: fully automatable by an sbx agent using only the MCP tools (`dotnet_run`,
+  `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`,
+  `clone_repository`) over the bearer-authenticated `/mcp` endpoint — no browser needed.
 - **Phase 8**: requires a human operator with a browser (or a browser-automation tool the agent has
   been explicitly given). Listed separately so an sbx-only run can still produce a complete report for
   Phases 1–7 and flag Phase 8 as "not executed in this environment" rather than silently skipping it.
@@ -54,59 +52,72 @@ generic `git` subcommand as a stand-in.
      for BDD scenarios — reuse that pattern if scripting this instead of doing it by hand). Using a
      **local** bare remote (rather than only GitHub) is what makes Phase 3's push/pull/fetch steps
      possible without depending on external network access or write credentials to a public host.
-5. A recording mechanism for the report (see "Report format" below) — timestamps, request/response
-   bodies or SSE transcripts, and pass/fail per step.
+5. A recording mechanism for the report (see "Report format" below) — timestamps, tool call
+   arguments/results, and pass/fail per step.
 
 ## Phase 1 — Connectivity and authentication
 
-1.1. `GET /repositories` with no credential → expect `401`.
-1.2. `GET /repositories` with a valid credential → expect `200` and a JSON array (possibly empty).
-1.3. `GET /version` (or equivalent) → confirm the reported version matches what the dashboard's
-     Status view shows (cross-check requires Phase 8, but the API-side value is recorded here).
+1.1. Open a Streamable HTTP MCP session against `https://<host>:<port>/mcp` with no `Authorization`
+     header (or a wrong bearer token) → expect the connection/request to be rejected (`401`).
+1.2. Same, with the correct `Authorization: Bearer <token>` header → expect the session to establish
+     and tool discovery (the client library's own initialize/list-tools handshake) to succeed, listing
+     all ten tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`,
+     `list_repositories`, `clone_repository`, `get_run_resources`, `get_environment_info`,
+     `get_file_lock_info`).
+1.3. Call `list_repositories` with no arguments → expect a well-formed (possibly empty) result array.
 
-**Pass criteria**: 1.1 rejects, 1.2/1.3 succeed with well-formed JSON.
+**Pass criteria**: 1.1 rejects, 1.2/1.3 succeed.
 
 ## Phase 2 — Repository clone, with an explicit branch
 
-2.1. `POST /repositories/clone` with `{ "url": "<seed remote>", "name": "e2e-test-repo", "branch":
-     "feature/e2e" }`. Record the returned `runId`.
-2.2. Poll `GET /repositories` until `e2e-test-repo` appears with `statsComputed: true` (bounded wait —
+2.1. Call `clone_repository` with `{ "url": "<seed remote>", "name": "e2e-test-repo", "branch":
+     "feature/e2e" }`. Record the returned `runId`, then poll `read_run_output` (starting at offset 0)
+     until its `status` reaches a terminal state - confirm it's `completed`, not `failed`/`timedOut`.
+2.2. Poll `list_repositories` until `e2e-test-repo` appears with `statsComputed: true` (bounded wait —
      fail if not observed within `DefaultExecutionTimeoutSeconds`).
 2.3. Confirm the cloned repository's reported `branch` is `feature/e2e`, **not** the remote's default
      branch — this is the direct test of §22.12's `--branch` clone support.
-2.4. Attempt a second clone into the same name → expect a rejection (`already-exists`), and confirm
-     nothing about the first clone changed.
+2.4. Attempt a second `clone_repository` into the same name → expect the call to be rejected
+     (`McpException`, "already exists"), and confirm nothing about the first clone changed.
 2.5. Attempt a clone with a name that would resolve outside the configured root (e.g. `../escape`) →
      expect a validation rejection, and confirm no directory was created.
 
 **Pass criteria**: 2.1–2.3 succeed and the branch matches; 2.4/2.5 are both cleanly rejected.
 
-## Phase 3 — Git operations via `POST /run/git`
+## Phase 3 — Git operations via `git_run`
 
-All of these target `e2e-test-repo` and use the SSE streaming contract (`stdout`/`stderr`/`done`/
-`error` events) documented in the Claude Code skill.
+All of these target `e2e-test-repo` and use the start-then-poll contract every `dotnet_run`/`git_run`
+call shares: the tool call itself returns `{ runId, status: "running" }` immediately, then
+`read_run_output(runId, offset)` is polled (0 for the first call, each result's `nextOffset` after
+that) until `status` reaches a terminal state, at which point `stdout`/`stderr`/`exitCode` are
+complete.
 
-3.1. `git status --porcelain` → expect a clean tree immediately after clone.
+3.1. `git_run` with `{ "arguments": ["status", "--porcelain"], "workingDirectory": "e2e-test-repo" }`
+     → expect a clean tree (empty stdout) immediately after clone.
 3.2. Modify a tracked file (e.g. via a `dotnet` file-producing step, or by having the agent write to
      a file inside the repo through its own sandbox tooling if the repo is otherwise shared — if the
      agent has no direct filesystem access to the host, substitute `git commit --allow-empty -m
-     "e2e change"` to produce a divergent commit instead) → `git status --porcelain` again → expect a
-     dirty/ahead result.
-3.3. `git add -A && git commit -m "e2e change"` (two separate `POST /run/git` calls, or one via
-     `git commit -am` if nothing new needs staging).
-3.4. `git push` → confirm it succeeds against the local bare remote from the Prerequisites step.
-3.5. `git fetch` then `git status --porcelain -b` (or `git rev-list --left-right --count
-     @{upstream}...HEAD`) → confirm ahead/behind now reads `0`/`0` post-push.
-3.6. `git branch -r` → confirm `origin/main` and `origin/feature/e2e` are both visible.
-3.7. `git checkout main` then `git checkout feature/e2e` → confirm both succeed (exercises the same
-     checkout mechanics §22.15's dashboard branch-switch uses internally, via the generic passthrough
-     rather than the dashboard-only endpoint).
-3.8. `git clean -ndf` (dry-run, **not** `-xdf`) → confirm it reports what *would* be removed without
-     an sbx-triggered agent ever running the real destructive `clean -xdf` (that stays dashboard-only
-     by design — see Phase 8.6).
+     "e2e change"` to produce a divergent commit instead) → re-run 3.1's `git status --porcelain` →
+     expect a dirty/ahead result.
+3.3. `git_run` with `["add", "-A"]` then `["commit", "-m", "e2e change"]` (two separate calls, or one
+     `["commit", "-am", "e2e change"]` if nothing new needs staging).
+3.4. `git_run` with `["push"]` → confirm it succeeds against the local bare remote from the
+     Prerequisites step.
+3.5. `git_run` with `["fetch"]` then `["status", "--porcelain", "-b"]` (or `["rev-list",
+     "--left-right", "--count", "@{upstream}...HEAD"]`) → confirm ahead/behind now reads `0`/`0`
+     post-push.
+3.6. `git_run` with `["branch", "-r"]` → confirm `origin/main` and `origin/feature/e2e` are both
+     visible.
+3.7. `git_run` with `["checkout", "main"]` then `["checkout", "feature/e2e"]` → confirm both succeed
+     (exercises the same checkout mechanics §22.15's dashboard branch-switch uses internally, via the
+     generic passthrough rather than the dashboard-only action).
+3.8. `git_run` with `["clean", "-ndf"]` (dry-run, **not** `-xdf`) → confirm it reports what *would* be
+     removed without an sbx-triggered agent ever running the real destructive `clean -xdf` (that stays
+     dashboard-only by design — see Phase 8.6).
 
-**Pass criteria**: every step's SSE stream ends `done` with exit code 0 except where a non-zero exit
-is the expected outcome (none in this phase); 3.5's ahead/behind matches expectations after push.
+**Pass criteria**: every step's `read_run_output` eventually reaches `status: "completed"` with exit
+code 0 except where a non-zero exit is the expected outcome (none in this phase); 3.5's ahead/behind
+matches expectations after push.
 
 ## Phase 4 — `dotnet build` / `dotnet test`
 
@@ -115,34 +126,40 @@ Run these against `e2e-test-repo` if it's a .NET project, or clone one of this r
 `FailingFixture` to confirm failure is reported correctly, **not** `HangingFixture` here — that one's
 deliberately for the cancellation test in Phase 6, not this phase).
 
-4.1. `POST /run` with `{ "arguments": ["build"], "workingDirectory": "<repo>" }` → expect success
-     (or the fixture's known outcome) with full stdout/stderr captured.
-4.2. `POST /run` with `{ "arguments": ["test"], "workingDirectory": "<repo>" }` → same.
-4.3. Confirm both runs show up in the dashboard's History (cross-referenced with Phase 8, but the
-     REST-visible half — `GET` on run history, if exposed, or at minimum the returned `runId`s being
-     resolvable — is recorded here).
+4.1. `dotnet_run` with `{ "arguments": ["build"], "workingDirectory": "<repo>" }` → poll
+     `read_run_output` to completion → expect success (or the fixture's known outcome) with full
+     stdout/stderr captured.
+4.2. `dotnet_run` with `{ "arguments": ["test"], "workingDirectory": "<repo>" }` → same.
+4.3. Confirm both runs show up in the dashboard's History, keyed by the `runId`s recorded above
+     (cross-referenced with Phase 8, but the two `runId`s to look for are recorded here). If the build
+     failed unexpectedly, call `get_environment_info` and/or `get_file_lock_info` (for a suspicious
+     output file) to rule out an environment/file-lock cause before treating it as a real regression.
+4.4. Confirm `get_run_resources(runId)` for one of the two runs (called while it's still running, or
+     immediately after) returns a non-empty CPU/RAM sample series rather than an empty result.
 
 **Pass criteria**: exit codes and stdout/stderr match what running the same commands locally against
-the same fixture would produce.
+the same fixture would produce; 4.4 returns real samples.
 
 ## Phase 5 — File transfer
 
-5.1. After Phase 4.1 produces build output, `POST /files` requesting a known output file (e.g. a
-     `.dll` under `bin/`) → confirm the returned bytes match the file on disk exactly (byte-for-byte
-     comparison, not just a size check).
-5.2. Attempt a path-escape request (e.g. `../../Windows/System32/some.dll`) → expect rejection
-     without any bytes transferred.
+5.1. After Phase 4.1 produces build output, `transfer_file` with `{ "repository": "<repo>", "path":
+     "<path to a known output file, e.g. a .dll under bin/>" }` → base64-decode `contentBase64` and
+     confirm the bytes match the file on disk exactly (byte-for-byte comparison, not just a size
+     check).
+5.2. Attempt a path-escape request (e.g. `path: "../../Windows/System32/some.dll"`) → expect the call
+     to be rejected without any bytes transferred.
 
 **Pass criteria**: 5.1's bytes match exactly; 5.2 is cleanly rejected with no partial transfer.
 
 ## Phase 6 — Cancellation
 
 6.1. Clone (or reuse) a repository containing `HangingFixture`'s shape (`Task.Delay(Timeout.Infinite)`)
-     and start `POST /run` with `["test"]` against it.
-6.2. Confirm the run is visible as in-flight, then `POST /run/{runId}/cancel`.
-6.3. Confirm the SSE stream ends with a `cancelled` outcome and the repository's lock is released
-     immediately after (a subsequent unrelated command against the same repository should succeed
-     right away, not be rejected as busy).
+     and start `dotnet_run` with `["test"]` against it.
+6.2. Confirm the run is visible as in-flight (`read_run_output` reports `status: "running"`), then
+     call `cancel_run(runId)`.
+6.3. Poll `read_run_output` until `status` reaches `cancelled`, and confirm the repository's lock is
+     released immediately after (a subsequent unrelated `git_run` against the same repository should
+     succeed right away, not be rejected as busy).
 
 **Pass criteria**: cancellation is prompt (bounded wait, not "eventually"), and the lock release is
 verified by a follow-up command succeeding.
@@ -152,7 +169,7 @@ verified by a follow-up command succeeding.
 This phase specifically targets the root-caused sampler crash (`tasks.md` 22.1) and the two-cadence
 split (22.2) — the original complaint that motivated this whole change.
 
-7.1. Immediately after Phase 3's push/commit activity, poll `GET /repositories` at a short interval
+7.1. Immediately after Phase 3's push/commit activity, poll `list_repositories` at a short interval
      (e.g. every 2s) and record the wall-clock time at which `e2e-test-repo`'s reported `branch`/
      `isDirty`/`aheadCount`/`behindCount` fields change to reflect the new state. This should happen
      within roughly one `RepositoryGitStatusIntervalSeconds` (default 10s) of the underlying change,
@@ -163,17 +180,17 @@ split (22.2) — the original complaint that motivated this whole change.
      7.1's git-status update, confirming the two cadences are actually decoupled and not just one
      interval renamed.
 7.3. Leave the service running for at least 2× the size interval with no activity against any
-     repository, and confirm the service is still responsive (`GET /repositories` still returns
-     `200`) — this is the direct regression test for the crash-the-whole-host bug: previously, a
-     single git invocation failure anywhere in the sweep could silently kill the entire host, and the
-     *next* poll here would simply fail to connect at all.
+     repository, and confirm the service is still responsive (`list_repositories` still succeeds) —
+     this is the direct regression test for the crash-the-whole-host bug: previously, a single git
+     invocation failure anywhere in the sweep could silently kill the entire host, and the *next* call
+     here would simply fail to connect at all.
 
 **Pass criteria**: 7.1 updates within ~1 fast interval; 7.2 updates within ~1 slow interval and is
 visibly slower than 7.1; 7.3 shows the service still alive and responsive throughout.
 
 ## Phase 8 — Dashboard-only manual verification (human + browser required)
 
-Everything below has no REST equivalent and must be checked visually in a real browser session
+Everything below has no MCP tool and must be checked visually in a real browser session
 against the live dashboard. Each item references the `tasks.md` §22 task it verifies.
 
 8.1. **Icons, not text** (22.19): open the Repositories view; confirm clone/delete/pull/push/
@@ -210,7 +227,9 @@ against the live dashboard. Each item references the `tasks.md` §22 task it ver
 8.10. **Title underline** (22.20): visually confirm the underline beneath "Repositories"/"History"/
       "Status"/a repository-detail heading spans exactly the heading text's width, the same way the
       top navigation's underline already does, on at least two headings of different lengths.
-8.11. **Version display**: confirm the dashboard's displayed version matches Phase 1.3's API value.
+8.11. **Version display**: confirm the dashboard's About page shows a version number and that it
+      matches the build actually installed (e.g. the installer's own displayed version at install
+      time, or `artifacts/publish/OutOfTheBox.Host/OutOfTheBox.Host.exe`'s file version).
 
 **Pass criteria**: every sub-item visually confirmed exactly as described; note any visual glitch,
 misalignment, or icon that doesn't match its action even if functionally correct.
@@ -218,7 +237,7 @@ misalignment, or icon that doesn't match its action even if functionally correct
 ## Cleanup
 
 - Delete `e2e-test-repo` (and any other repositories created during the run) via the dashboard, and
-  confirm via `GET /repositories` that it's gone.
+  confirm via `list_repositories` that it's gone.
 - Remove the local bare remote and seed clone from the Prerequisites step (`C:\temp\e2e-remote.git`,
   `C:\temp\e2e-seed`) if they were created solely for this run.
 - Confirm no stray `git`/`dotnet` processes remain (Status view's process list, or Task Manager).
@@ -228,7 +247,7 @@ misalignment, or icon that doesn't match its action even if functionally correct
 The completed run should produce a single report containing, per phase:
 
 - Pass/fail per numbered step (not just per phase).
-- For REST steps: request sent, response/SSE transcript received, and timing.
+- For MCP steps: tool call sent (name + arguments), result received, and timing.
 - For Phase 7: the actual measured wall-clock delay for each freshness check, not just "it worked."
 - For Phase 8: a one-line note per item (confirmed / not confirmed / discrepancy found), since these
   can't carry a machine-checkable transcript the way Phases 1–7 can.

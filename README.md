@@ -6,13 +6,14 @@ A Windows-hosted service that lets a Claude Code instance running in a remote sb
 
 ## Status
 
-Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL.md)); only manual end-to-end verification on a real, clean Windows machine remains (Section 19 of `tasks.md`, and the newer full workflow plan in [`E2ETESTPLAN.md`](E2ETESTPLAN.md)). See [`openspec/changes/sbx-dotnet-command-service/tasks.md`](openspec/changes/sbx-dotnet-command-service/tasks.md) for the current checklist and [`design.md`](openspec/changes/sbx-dotnet-command-service/design.md) for the full architecture rationale.
+Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL.md)); only manual end-to-end verification on a real, clean Windows machine remains (see the newer full workflow plan in [`E2ETESTPLAN.md`](E2ETESTPLAN.md)). See [`openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md) for that original checklist and [`design.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/design.md) for the full architecture rationale; later work lives in its own `openspec/changes/<name>/` (in-flight) or `openspec/changes/archive/` (merged) directories.
 
 ## What it does
 
-- Accepts a `dotnet` or `git` command (arguments + working directory) as an MCP tool call (`dotnet_run`/`git_run`), authenticated by a shared bearer credential, and returns a run id immediately - the caller polls `read_run_output` for incremental stdout/stderr and the eventual exit code, since MCP tool calls are fundamentally request/response, not a persistent stream. See [`openspec/changes/sbx-mcp-server/`](openspec/changes/sbx-mcp-server/) for the full tool set and design rationale.
+- Accepts a `dotnet` or `git` command (arguments + working directory) as an MCP tool call (`dotnet_run`/`git_run`), authenticated by a shared bearer credential, and returns a run id immediately - the caller polls `read_run_output` for incremental stdout/stderr and the eventual exit code, since MCP tool calls are fundamentally request/response, not a persistent stream. See [`openspec/changes/archive/2026-08-09-sbx-mcp-server/`](openspec/changes/archive/2026-08-09-sbx-mcp-server/) for the full tool set and design rationale.
 - Confines execution to a configured root directory; runs against different repositories in parallel, serializes commands against the same repository, and supports cancellation (`cancel_run`).
 - Transfers a single file back to the caller (`transfer_file`), confined to the same repository, size-capped since an MCP tool result is a single response payload.
+- Lets the caller diagnose Windows-specific failures itself: `get_run_resources` (a run's recent CPU/RAM trend, to judge whether it's hung or still working), `get_environment_info` (installed dotnet/git toolchain, SDKs, workloads, NuGet sources, disk space), and `get_file_lock_info` (which process(es) have a file open, for a "file in use" build/test failure).
 - Persists run history (command, output, outcome, resource usage) to SQLite, browsable via a live-updating Blazor Server dashboard alongside host/process resource monitoring and repository management (list/clone/delete, pull/push/force-push/fetch/clean, branch switching with auto-tracking, plus MCP tools for list/clone so the sbx caller can reach those two directly — everything else stays dashboard-only).
 - Ships as a self-contained single-file executable, packaged by a WiX Toolset installer (a Burn bootstrapper chaining the .NET SDK/Git for Windows prerequisites ahead of an MSI) with native upgrade/uninstall support.
 
@@ -115,9 +116,10 @@ client to the server described above. To get it working:
    `https://<host>:<port>/mcp` (Streamable HTTP transport), with an `Authorization: Bearer <token>`
    header set to the token from step 1. Exactly how you register a remote MCP server depends on your
    sandbox's own Claude Code configuration mechanism - nothing repository-specific to copy in, unlike
-   a skill: the eight tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
-   `transfer_file`, `list_repositories`, `clone_repository`, `get_run_resources`) are discovered
-   automatically once connected, each with a self-describing schema.
+   a skill: the ten tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
+   `transfer_file`, `list_repositories`, `clone_repository`, `get_run_resources`,
+   `get_environment_info`, `get_file_lock_info`) are discovered automatically once connected, each
+   with a self-describing schema.
 3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), the sandbox
    needs to either pin/trust it explicitly or the caller needs to have independently verified the
    connection is otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate).
@@ -135,4 +137,4 @@ dashboard above.
 - [`CHANGELOG.md`](CHANGELOG.md) — what's changed, release by release
 - [`E2ETESTPLAN.md`](E2ETESTPLAN.md) — a full sandbox-realistic end-to-end workflow test plan (not yet executed) to run against a real deployed instance
 - [`CLAUDE.md`](CLAUDE.md) — project conventions and quick-reference for AI-assisted development in this repository
-- [`openspec/changes/sbx-dotnet-command-service/`](openspec/changes/sbx-dotnet-command-service/) — the full proposal, specs, design, and task checklist this project is being built from
+- [`openspec/`](openspec/) — `specs/` for the current canonical behavior contracts, `changes/` for each change's own proposal/specs/design/tasks (in-flight or, once merged, under `changes/archive/`)
