@@ -28,9 +28,9 @@
 
 ## 6. Tests
 
-- [ ] 6.1 `mcp-environment-info.feature` and `mcp-file-lock-diagnostics.feature` (`tests/OutOfTheBox.BehaviorTests/`), Gherkin scenarios transcribed from each spec's `#### Scenario:` blocks, against a real running `Host`. The file-lock scenarios need a real locked file - reuse the locking pattern `RepositoryManagementSteps.GivenAFileInsideThatRepositoryIsLockedOpen` already establishes (open a `FileStream` with `FileShare.Read`, no `Delete` flag) rather than inventing a new one.
+- [x] 6.1 `mcp-environment-info.feature` and `mcp-file-lock-diagnostics.feature` (`tests/OutOfTheBox.BehaviorTests/`), Gherkin scenarios transcribed from each spec's `#### Scenario:` blocks, against a real running `Host`. The file-lock scenarios need a real locked file - reuse the locking pattern `RepositoryManagementSteps.GivenAFileInsideThatRepositoryIsLockedOpen` already establishes (open a `FileStream` with `FileShare.Read`, no `Delete` flag) rather than inventing a new one.
 - [x] 6.2 Run `dotnet test tests/OutOfTheBox.UnitTests` and `tests/OutOfTheBox.ArchitectureTests` (fast suites) after Section 1 and again after Sections 3-4.
-- [ ] 6.3 Run the full suite including `tests/OutOfTheBox.BehaviorTests` before the final commit of this change.
+- [x] 6.3 Run the full suite including `tests/OutOfTheBox.BehaviorTests` before the final commit of this change.
 
 ## 7. Live verification
 
