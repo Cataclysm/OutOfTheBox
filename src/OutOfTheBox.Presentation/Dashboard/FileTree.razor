@@ -25,8 +25,8 @@
                 SizeBytes="@entry.SizeBytes"
                 Depth="0"
                 OnChanged="LoadRootAsync"
-                ConfirmDialogRef="_confirmDialog!"
-                PreviewDialogRef="_previewDialog!" />
+                RequestConfirm="ShowConfirmAsync"
+                RequestPreview="ShowPreviewAsync" />
         }
     }
 </div>
@@ -62,6 +62,17 @@
         _entries = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, CancellationToken.None);
         await InvokeAsync(StateHasChanged);
     }
+
+    // _confirmDialog/_previewDialog are only ever dereferenced here, inside methods only invoked as
+    // a result of a FileTreeNode event bubbling up - by which point this component (their owner) has
+    // long since completed its own first render, so these are never null in practice despite the `!`
+    // (see FileTreeNode's own remarks on RequestConfirm/RequestPreview for why passing the dialog
+    // instances themselves down as parameters instead was unsafe).
+    private Task ShowConfirmAsync(FileTreeConfirmRequest request) =>
+        _confirmDialog!.ShowAsync(request.Title, request.Message, request.OnConfirmed, request.ConfirmLabel);
+
+    private Task ShowPreviewAsync(FilePreviewRequest request) =>
+        _previewDialog!.ShowAsync(request.RepositoryName, request.RelativePath, request.Name, request.DownloadUrl);
 
     private async Task PollLoopAsync(CancellationToken cancellationToken)
     {

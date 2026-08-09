@@ -67,8 +67,8 @@
                     SizeBytes="@child.SizeBytes"
                     Depth="@(Depth + 1)"
                     OnChanged="LoadChildrenAsync"
-                    ConfirmDialogRef="ConfirmDialogRef"
-                    PreviewDialogRef="PreviewDialogRef" />
+                    RequestConfirm="RequestConfirm"
+                    RequestPreview="RequestPreview" />
             }
         }
     </div>
@@ -105,13 +105,24 @@
     [Parameter]
     public EventCallback OnChanged { get; set; }
 
-    /// <summary>The single <see cref="ConfirmDialog"/> shared by the whole tree (per <see cref="FileTree"/>), reused for every node's delete confirmation rather than one dialog per row.</summary>
-    [Parameter, EditorRequired]
-    public ConfirmDialog ConfirmDialogRef { get; set; } = default!;
+    // Bubbled up to FileTree (the root, which owns the single shared ConfirmDialog/FilePreviewDialog
+    // instance for the whole tree) as an EventCallback rather than passed down as a direct component
+    // reference - a deeply nested node can otherwise be created (and immediately clicked) on the same
+    // render where the root's own @ref hasn't been assigned yet, since a child's parameters are
+    // evaluated as part of building the parent's render tree, strictly before the parent's own @ref
+    // callbacks for elements declared later in that same markup are applied. Dereferencing a still-null
+    // dialog reference crashed the whole Blazor circuit (a NullReferenceException in a component event
+    // handler is fatal, not just a failed click) - an EventCallback has no such window, since it's just
+    // a delegate reference, resolvable the instant the root component exists, long before any nested
+    // node could possibly exist to raise one.
 
-    /// <summary>The single <see cref="FilePreviewDialog"/> shared by the whole tree (per <see cref="FileTree"/>), reused for every file row's click-to-preview rather than one dialog per row.</summary>
+    /// <summary>Raised to ask the root <see cref="FileTree"/> to show its shared <see cref="ConfirmDialog"/>.</summary>
     [Parameter, EditorRequired]
-    public FilePreviewDialog PreviewDialogRef { get; set; } = default!;
+    public EventCallback<FileTreeConfirmRequest> RequestConfirm { get; set; }
+
+    /// <summary>Raised to ask the root <see cref="FileTree"/> to show its shared <see cref="FilePreviewDialog"/>.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback<FilePreviewRequest> RequestPreview { get; set; }
 
     private bool _expanded;
     private IReadOnlyList<RepositoryFileEntry>? _children;
@@ -136,7 +147,7 @@
             // own CanPreview) - not every click needs to do something.
             if (FilePreviewDialog.CanPreview(Name))
             {
-                await PreviewDialogRef.ShowAsync(RepositoryName, RelativePath, Name, DownloadUrl);
+                await RequestPreview.InvokeAsync(new FilePreviewRequest(RepositoryName, RelativePath, Name, DownloadUrl));
             }
 
             return;
@@ -234,13 +245,13 @@
     }
 
     private Task ConfirmDeleteAsync() =>
-        ConfirmDialogRef.ShowAsync(
+        RequestConfirm.InvokeAsync(new FileTreeConfirmRequest(
             IsDirectory ? "Delete folder" : "Delete file",
             IsDirectory
                 ? $"Permanently delete the folder '{Name}' and everything inside it? This cannot be undone."
                 : $"Permanently delete '{Name}'? This cannot be undone.",
             DeleteAsync,
-            confirmLabel: "Delete");
+            "Delete"));
 
     private async Task DeleteAsync()
     {

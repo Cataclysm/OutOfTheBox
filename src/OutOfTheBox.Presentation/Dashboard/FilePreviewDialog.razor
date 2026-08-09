@@ -111,6 +111,7 @@
         if (_kind == PreviewKind.Image)
         {
             _imageUrl = downloadUrl;
+            StateHasChanged();
             return;
         }
 
