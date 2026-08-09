@@ -1,7 +1,17 @@
-## MODIFIED Requirements
+## REMOVED Requirements
+
+### Requirement: An in-flight clone can be cancelled from the dashboard, not the REST cancel endpoint
+**Reason**: The REST cancel endpoint this requirement's title and body refer to has been removed entirely - the requirement's *dashboard*-cancellation half is unchanged, but its title/body specifically call out and explain the REST endpoint's own refusal behavior, which no longer exists to refuse anything.
+**Migration**: See the replacement requirement "An in-flight clone can be cancelled from the dashboard or via cancel_run", added below - dashboard cancellation is identical; REST cancellation is replaced by `cancel_run` (per `mcp-command-execution`), which deliberately *does* accept a clone's run id (the opposite of the old REST endpoint's behavior).
+
+### Requirement: Deletion and the new git operations are reachable only from the authenticated dashboard; listing and cloning are also REST-reachable
+**Reason**: The REST API this requirement describes has been removed entirely.
+**Migration**: See the replacement requirement "Deletion and the new git operations are reachable only from the authenticated dashboard; listing and cloning are also MCP-reachable", added below.
+
+## ADDED Requirements
 
 ### Requirement: An in-flight clone can be cancelled from the dashboard or via cancel_run
-The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL accept a repository-clone run's id on the `cancel_run` MCP tool (per `mcp-command-execution`) - unlike the REST cancel endpoint this service originally shipped, which refused a repository-management run's id entirely, `cancel_run` deliberately accepts one, per `mcp-repository-access`'s "An in-flight clone is accepted by cancel_run" requirement and design.md's "one shared cancel_run" decision.
+The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL accept a repository-clone run's id on the `cancel_run` MCP tool (per `mcp-command-execution`) - unlike the REST cancel endpoint this service originally shipped (since removed), which refused a repository-management run's id entirely, `cancel_run` deliberately accepts one, per `mcp-repository-access`'s "An in-flight clone is accepted by cancel_run" requirement and design.md's "one shared cancel_run" decision.
 
 #### Scenario: Cancelling a clone from the dashboard
 - **WHEN** an operator cancels an in-flight clone from the Repositories or Status view
