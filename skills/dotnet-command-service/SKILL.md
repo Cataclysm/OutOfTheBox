@@ -1,6 +1,6 @@
 ---
 name: dotnet-command-service
-description: Client guide for calling the Out of the Box service from a sandboxed Claude Code instance - run dotnet/git commands, download files, and list/clone repositories on a Windows host that has the .NET toolchain, since the sandbox itself doesn't. Covers authentication, starting/streaming/cancelling a run, downloading files, and listing/cloning repositories. Does NOT cover the dashboard, resource monitoring, install/upgrade, or repository deletion - those have no API surface for this caller at all.
+description: Client guide for calling the Out of the Box service from a sandboxed Claude Code instance - run dotnet/git commands, download files, and list/clone repositories on a Windows host that has the .NET toolchain, since the sandbox itself doesn't. Covers both interfaces this service exposes - the REST+SSE API and the equivalent MCP tools - authentication, starting/polling/cancelling a run, downloading files, and listing/cloning repositories. Does NOT cover the dashboard, resource monitoring, install/upgrade, or repository deletion - those have no API surface for this caller at all, through either interface.
 ---
 
 # Out of the Box command service - client guide
@@ -13,13 +13,23 @@ Windows host, over HTTPS. This skill documents exactly how to call it. It restat
 ever seems to contradict this doc, those spec files (not this one) are authoritative, and this doc
 is stale.
 
-**Scope**: this skill covers the six endpoints below and nothing else. It does not cover the
-operator-facing dashboard, host/process resource monitoring, or install/upgrade - none of that has
-any bearer-token-authenticated API surface for you to reach. **Repository deletion is explicitly out
-of scope too and cannot be done from here at all** - it has no REST endpoint; it's a dashboard-only
-action the human operator performs, by design (repository *listing* and *cloning* are in scope, see
-below). If you need a repository deleted, ask the operator - don't look for an endpoint, there isn't
-one.
+**Scope**: this skill covers the six REST endpoints below plus the equivalent MCP tools (see
+[Calling this service over MCP](#calling-this-service-over-mcp) further down) and nothing else. It
+does not cover the operator-facing dashboard, host/process resource monitoring, or install/upgrade -
+none of that has any bearer-token-authenticated API surface for you to reach. **Repository deletion
+is explicitly out of scope too and cannot be done from here at all, through either interface** - it
+has no REST endpoint and no MCP tool; it's a dashboard-only action the human operator performs, by
+design (repository *listing* and *cloning* are in scope, see below). If you need a repository
+deleted, ask the operator - don't look for an endpoint or a tool, there isn't one.
+
+**Two ways to call this service**: the REST+SSE API documented first below, and an MCP server
+(`specs/mcp-server`, `specs/mcp-command-execution`, `specs/mcp-file-transfer`,
+`specs/mcp-repository-access`) covering the exact same capability set. If you're Claude Code calling
+this service and MCP is configured/reachable, prefer it - it's far cheaper (typed tool calls instead
+of hand-built `curl`/SSE parsing) and functionally equivalent. The REST section immediately below
+remains the reference for the underlying behavior either interface exposes; jump to
+[Calling this service over MCP](#calling-this-service-over-mcp) if you just want the MCP-specific
+mechanics.
 
 ## Authentication
 
@@ -242,6 +252,46 @@ curl -sk -X POST "$BASE_URL/run/$RUN_ID/cancel" -H "Authorization: Bearer $TOKEN
 | `/repositories/clone`: `name` already exists | `409 Conflict`, `{"reason": "already-exists"}`. |
 | `/repositories/clone`: target already has a run (or another clone) in flight | `409 Conflict`, `{"reason": "busy", "runId": "<the blocking run's id>"}`. |
 | `/run/{runId}/cancel`: unknown/already-finished/pre-restart run id, or a repository clone/delete id | `404 Not Found` (see [Cancelling a run](#cancelling-a-run-post-runrunidcancel) above for the cases this covers). |
+
+## Calling this service over MCP
+
+The MCP server exposes the same capability set as the REST API above as seven typed tools, reachable
+over the MCP Streamable HTTP transport at `$BASE_URL/mcp`. If you're Claude Code, you likely don't
+need to construct raw requests at all - configure this as a remote MCP server (endpoint `/mcp`,
+`Authorization: Bearer $TOKEN` header) and the tools below become directly callable, with their
+descriptions and input schemas already self-documenting (that self-description is the reason this
+interface exists - see `openspec/changes/sbx-mcp-server/proposal.md` if you want the full "why").
+
+**Same auth as REST**: the identical bearer token from [Authentication](#authentication) above,
+sent the same way. A missing/invalid token is rejected before the MCP handshake, tool listing, or
+any tool call is processed.
+
+**Long-running commands are start-then-poll, not blocking or streamed**: `dotnet_run`/`git_run`/
+`clone_repository` return immediately with a `runId` and status `"running"` - they never block for
+the command to finish, and there is no SSE stream to attach to. Call `read_run_output` repeatedly
+(passing each call's `nextOffset` into the next one, starting from `0`) to get incremental
+stdout/stderr and the current status; it keeps working after the run finishes too, so you don't have
+to catch it exactly at completion.
+
+| Tool | Equivalent to | Notes |
+|---|---|---|
+| `dotnet_run` | `POST /run` | `arguments`, `workingDirectory`, optional `timeoutSeconds`. Returns `{runId, status}`. |
+| `git_run` | `POST /run/git` | Same shape as `dotnet_run`, against `git` - no subcommand restricted. |
+| `read_run_output` | consuming the SSE stream | `runId`, `offset` (default `0`). Returns `{status, stdout, stderr, nextOffset, truncated, exitCode}`. `status` is one of `running`/`completed`/`timed out`/`cancelled`/`failed-to-start`. |
+| `cancel_run` | `POST /run/{runId}/cancel` | `runId`. Works for a `dotnet_run`/`git_run`/`clone_repository` run id, **including a clone's** - unlike the REST cancel endpoint, which always 404s for a clone's run id. Calling it on an already-finished run returns that run's status, not an error. |
+| `transfer_file` | `POST /files` | `repository`, `path`. Synchronous - returns `{contentBase64, sizeBytes}` directly, no `runId`/polling involved. Rejects a file larger than the server's configured MCP transfer limit outright (smaller than you might expect from a raw file download, since the content has to fit base64-encoded in one tool result - ask the operator for the configured limit if a large file transfer keeps failing). |
+| `list_repositories` | `GET /repositories` | No arguments. Same fields as the REST response. |
+| `clone_repository` | `POST /repositories/clone` | `url`, `name`, optional `branch`. Returns `{runId, status}` in the same start-then-poll shape as `dotnet_run`/`git_run` - poll its progress with `read_run_output` the same way. |
+
+**Same locking as REST, shared bidirectionally**: a `dotnet_run`/`git_run` targeting a repository
+that already has *any* in-flight run against it - started via MCP or via the REST API - is rejected
+with a tool error identifying the conflicting run. There is exactly one lock per repository,
+regardless of which interface is asking.
+
+**Errors**: a rejected call (validation failure, confinement violation, busy repository, not found,
+too large, unknown run id) comes back as a tool error (`isError: true`, a message explaining why) -
+check for that rather than assuming success. Nothing is started, no lock is acquired, and no
+filesystem is touched when a call is rejected this way.
 
 ## Out of scope (do not look for these)
 

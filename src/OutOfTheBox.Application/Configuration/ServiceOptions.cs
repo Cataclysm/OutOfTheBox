@@ -42,6 +42,16 @@ public sealed class ServiceOptions
     public long OutputCapBytes { get; set; } = 5 * 1024 * 1024;
 
     /// <summary>
+    /// Maximum file size the MCP <c>transfer_file</c> tool will return, in bytes. A larger file is
+    /// rejected outright rather than truncated (per <c>mcp-file-transfer</c>'s spec) - unlike the
+    /// REST <c>POST /files</c> endpoint (which streams and has no comparable concern), an MCP tool
+    /// result is a single response payload, and the tool returns file content base64-encoded (~33%
+    /// larger than the raw bytes), so this exists to keep a tool-result payload from growing
+    /// unreasonably large. Default (25 MB) is sized for typical build artifacts/logs.
+    /// </summary>
+    public long McpMaxFileTransferBytes { get; set; } = 25 * 1024 * 1024;
+
+    /// <summary>
     /// Absolute path to the SQLite database file used for run history and resource-sample persistence.
     /// </summary>
     public string SqliteFilePath { get; set; } = string.Empty;

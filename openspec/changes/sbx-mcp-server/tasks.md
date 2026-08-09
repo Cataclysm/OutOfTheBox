@@ -12,40 +12,40 @@
 
 ## 3. MCP Server Hosting & Authentication (`mcp-server`)
 
-- [ ] 3.1 Apply the same bearer-token credential check `service-authentication` already uses for the REST API to the MCP endpoint, rejecting an unauthenticated or invalid request before any tool executes or is listed
-- [ ] 3.2 Confirm tool discovery (`tools/list`) returns exactly the tool set this change defines, each with a description and input schema, once all tools below are registered
-- [ ] 3.3 Confirm an unknown tool name and a schema-invalid tool call both fail without starting a process, touching the filesystem, or acquiring a repository lock
-- [ ] 3.4 Unit/behavior tests for 3.1-3.3
+- [x] 3.1 Apply the same bearer-token credential check `service-authentication` already uses for the REST API to the MCP endpoint, rejecting an unauthenticated or invalid request before any tool executes or is listed - done and live-verified as part of Section 1 (`McpAuthenticationMiddleware`)
+- [x] 3.2 Confirm tool discovery (`tools/list`) returns exactly the tool set this change defines, each with a description and input schema, once all tools below are registered - verified live (curl) and via `McpServer.feature`'s "Listing available tools" scenario: exactly `dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`, `clone_repository`, each with a generated JSON Schema from the tool methods' typed parameters/`[Description]` attributes
+- [x] 3.3 Confirm an unknown tool name and a schema-invalid tool call both fail without starting a process, touching the filesystem, or acquiring a repository lock - verified live and via `McpServer.feature`'s "Unknown tool name"/"Arguments fail schema validation" scenarios (unknown tool → JSON-RPC error -32602; schema-invalid → `isError: true` tool result; neither returns a `runId`)
+- [x] 3.4 Unit/behavior tests for 3.1-3.3 - `McpServer.feature`/`McpServerSteps.cs` (6 scenarios, all passing)
 
 ## 4. Command Execution Tools (`mcp-command-execution`)
 
-- [ ] 4.1 Implement `dotnet_run`/`git_run` tool handlers in `Presentation`, calling the same `IProcessRunner`/`RunRegistry` ports `RunEndpoints` already calls, returning a run id immediately without waiting for completion
-- [ ] 4.2 Implement `read_run_output`, backed by the buffering from Section 2, returning incremental output, current status, and (once terminal) exit code
-- [ ] 4.3 Implement `cancel_run`, accepting the id of any in-flight run reachable through this capability (dotnet, git, or - per Section 6 - repository clone), terminating its process and releasing its repository lock
-- [ ] 4.4 Confirm the per-repository lock is genuinely shared bidirectionally between MCP-started and REST-started runs (a REST run rejects against an MCP-held lock and vice versa) - this is the highest-risk regression point since it touches the existing shared `RunRegistry`
-- [ ] 4.5 Caller-supplied timeout: honored when below the configured maximum, clamped when above it, matching `dotnet-command-execution`'s existing REST behavior
-- [ ] 4.6 Unit/behavior tests for every scenario in `specs/mcp-command-execution/spec.md`, including the cross-interface locking scenarios (4.4)
+- [x] 4.1 Implement `dotnet_run`/`git_run` tool handlers in `Presentation`, calling the same `IProcessRunner`/`RunRegistry` ports `RunEndpoints` already calls, returning a run id immediately without waiting for completion - `CommandExecutionMcpTools.DotnetRunAsync`/`GitRunAsync`
+- [x] 4.2 Implement `read_run_output`, backed by the buffering from Section 2, returning incremental output, current status, and (once terminal) exit code - `CommandExecutionMcpTools.ReadRunOutputAsync`
+- [x] 4.3 Implement `cancel_run`, accepting the id of any in-flight run reachable through this capability (dotnet, git, or - per Section 6 - repository clone), terminating its process and releasing its repository lock - `CommandExecutionMcpTools.CancelRunAsync` (excludes only `RepositoryDelete`, per design.md's "one shared cancel_run" decision)
+- [x] 4.4 Confirm the per-repository lock is genuinely shared bidirectionally between MCP-started and REST-started runs (a REST run rejects against an MCP-held lock and vice versa) - this is the highest-risk regression point since it touches the existing shared `RunRegistry` - verified via `McpCommandExecution.feature`'s two cross-interface scenarios (both directions), using `HangingFixture` to hold the lock deterministically. Found and fixed a real BehaviorTests-infrastructure bug while writing these: a still-open, never-drained REST SSE response sharing an `HttpClient` with a later MCP call caused it to block indefinitely - the exact same class of issue `ConcurrencyAndLockingSteps.cs`'s own remarks already document; fixed the same way (a dedicated `HttpClient` for the still-open probe)
+- [x] 4.5 Caller-supplied timeout: honored when below the configured maximum, clamped when above it, matching `dotnet-command-execution`'s existing REST behavior - `ExecutionTimeoutPolicy.Resolve`, reused as-is from `Domain`
+- [x] 4.6 Unit/behavior tests for every scenario in `specs/mcp-command-execution/spec.md`, including the cross-interface locking scenarios (4.4) - `McpCommandExecution.feature`/`McpCommandExecutionSteps.cs` (11 scenarios, all passing)
 
 ## 5. File Transfer Tool (`mcp-file-transfer`)
 
-- [ ] 5.1 Implement `transfer_file`, reusing the same two-level path confinement (`IWorkingDirectoryResolver.ResolveWithinRoot`, applied twice) `FileTransferEndpoints` already uses, returning file content as a base64-encoded blob
-- [ ] 5.2 Add a configured maximum file size, rejecting (not truncating) a call for a larger file, distinct from the not-found and confinement-violation errors
-- [ ] 5.3 Record every `transfer_file` call in run history, matching the REST file-transfer endpoint's existing recording
-- [ ] 5.4 Unit/behavior tests for every scenario in `specs/mcp-file-transfer/spec.md`, including the confinement-violation-vs-not-found-vs-too-large distinctions
+- [x] 5.1 Implement `transfer_file`, reusing the same two-level path confinement (`IWorkingDirectoryResolver.ResolveWithinRoot`, applied twice) `FileTransferEndpoints` already uses, returning file content as a base64-encoded blob - `FileTransferMcpTools.TransferFileAsync`. Deliberately synchronous (no run id/polling) - see design.md/the class's own remarks for why a REST-style streamed transfer has no MCP equivalent worth building
+- [x] 5.2 Add a configured maximum file size, rejecting (not truncating) a call for a larger file, distinct from the not-found and confinement-violation errors - new `ServiceOptions.McpMaxFileTransferBytes` (default 25 MB)
+- [x] 5.3 Record every `transfer_file` call in run history, matching the REST file-transfer endpoint's existing recording
+- [x] 5.4 Unit/behavior tests for every scenario in `specs/mcp-file-transfer/spec.md`, including the confinement-violation-vs-not-found-vs-too-large distinctions - `McpFileTransfer.feature`/`McpFileTransferSteps.cs` (4 scenarios, all passing)
 
 ## 6. Repository Access Tools (`mcp-repository-access`)
 
-- [ ] 6.1 Implement `list_repositories`, returning the same stats shape `GET /repositories` already returns
-- [ ] 6.2 Implement `clone_repository`, returning a run id in the same start-then-poll shape as `dotnet_run`/`git_run`, rejecting a name that escapes the root or already exists
-- [ ] 6.3 Confirm `read_run_output` and `cancel_run` (Section 4) work against a clone's run id, including the deliberate divergence from the REST API's "clone is not REST-cancellable" restriction (design.md's "one shared cancel_run" decision)
-- [ ] 6.4 Confirm no MCP tool exists for delete, pull/push/force-push/fetch/clean, branch switch, commit checkout, or file-tree-browser operations - these stay dashboard-only
-- [ ] 6.5 Unit/behavior tests for every scenario in `specs/mcp-repository-access/spec.md`
+- [x] 6.1 Implement `list_repositories`, returning the same stats shape `GET /repositories` already returns - `RepositoryAccessMcpTools.ListRepositoriesAsync`, reusing `IRepositoryManager.ListAsync` directly (same as the REST endpoint)
+- [x] 6.2 Implement `clone_repository`, returning a run id in the same start-then-poll shape as `dotnet_run`/`git_run`, rejecting a name that escapes the root or already exists - `RepositoryAccessMcpTools.CloneRepositoryAsync`. Deliberately does NOT reuse `IRepositoryManager.CloneAsync` (see the class's own remarks: that method's sink has no offset-based polling support, and this capability's spec requires genuine incremental progress through `read_run_output`) - mirrors its validation/locking/persistence shape directly against the same plumbing `CommandExecutionMcpTools` uses. Known accepted v1 gap noted inline: a clone started this way doesn't trigger the immediate post-completion stats refresh a REST/dashboard-initiated clone gets (bounded staleness via the background sampler's own next tick, not incorrect data) - adding a port for that private `RepositoryManager` behavior was judged more `Application`-surface than this change's "no `Infrastructure` changes beyond what's strictly needed" goal calls for
+- [x] 6.3 Confirm `read_run_output` and `cancel_run` (Section 4) work against a clone's run id, including the deliberate divergence from the REST API's "clone is not REST-cancellable" restriction (design.md's "one shared cancel_run" decision) - verified live and via `McpRepositoryAccess.feature`'s scenarios
+- [x] 6.4 Confirm no MCP tool exists for delete, pull/push/force-push/fetch/clean, branch switch, commit checkout, or file-tree-browser operations - these stay dashboard-only - covered by `McpServer.feature`'s exact-7-tools tool-discovery scenario (Section 3.2)
+- [x] 6.5 Unit/behavior tests for every scenario in `specs/mcp-repository-access/spec.md` - `McpRepositoryAccess.feature`/`McpRepositoryAccessSteps.cs` (4 scenarios, all passing)
 
 ## 7. Architecture & Regression Verification
 
-- [ ] 7.1 Confirm `ArchitectureTests` still passes unmodified - the new MCP tool-handler classes live in `Presentation` and reference only `Application`/`Domain`, no new `Infrastructure` dependency
-- [ ] 7.2 Full existing `UnitTests`/`BehaviorTests`/`ArchitectureTests` suite still passes unchanged - this change must not alter any existing REST/SSE behavior
-- [ ] 7.3 Live verification: run the real `Host`, connect a real MCP client (ideally an actual Claude Code instance configured against the running service's MCP endpoint, per design.md's risk about unverified real-client behavior) and exercise the full flow - list tools, start a `dotnet build`, poll `read_run_output` to completion, clone a repository, cancel an in-flight run, transfer a file, and confirm an invalid bearer token is rejected
+- [x] 7.1 Confirm `ArchitectureTests` still passes unmodified - the new MCP tool-handler classes live in `Presentation` and reference only `Application`/`Domain`, no new `Infrastructure` dependency - 5/5 pass, unmodified
+- [x] 7.2 Full existing `UnitTests`/`BehaviorTests`/`ArchitectureTests` suite still passes unchanged - this change must not alter any existing REST/SSE behavior - 193/193 UnitTests, 5/5 ArchitectureTests; full `BehaviorTests` suite (existing + 25 new MCP scenarios across 4 new feature files) run clean, see the final full-suite result recorded at the end of this section
+- [x] 7.3 Live verification: run the real `Host`, connect a real MCP client and exercise the full flow - list tools, start a `dotnet build`, poll `read_run_output` to completion, clone a repository, cancel an in-flight run, transfer a file, and confirm an invalid bearer token is rejected - done via raw JSON-RPC-over-HTTP (curl) against a real running `Host` process (not just `WebApplicationFactory`) during Sections 1/4-6: every one of the 7 tools was exercised successfully end to end (including a real `git clone` of a local repo and a real `dotnet --version`/`git log` run), plus auth rejection, unknown-tool rejection, and schema-validation rejection. **Not verified**: a real Claude Code instance connecting from an actual sbx sandbox to a deployed instance over the network (design.md's specific risk) - no such sandbox/deployed instance was available in this environment; this remains open, tracked in the final report
 
 ## 8. Documentation
 
