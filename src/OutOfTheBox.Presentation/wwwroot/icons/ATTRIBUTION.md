@@ -23,6 +23,12 @@ Vendored subset (dashboard action icons only, not the full icon set):
 | `x.svg` | Cancel / close dialog |
 | `check.svg` | Confirm dialog |
 | `loader-circle.svg` | In-flight clone (cancel-clone row state) |
+| `folder.svg` | File tree: collapsed folder |
+| `folder-open.svg` | File tree: expanded folder |
+| `file.svg` | File tree: file |
+| `pencil.svg` | File tree: rename |
+| `tag.svg` | Commit graph: tag ref pill |
+| `map-pin.svg` | Commit graph: checkout commit (as detached HEAD) |
 
 To add another icon, download the matching `<name>.svg` from
 `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`
