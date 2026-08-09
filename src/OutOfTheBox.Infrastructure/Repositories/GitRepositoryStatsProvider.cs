@@ -33,7 +33,8 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
             gitStatus.AheadCount,
             gitStatus.BehindCount,
             gitStatus.IsRemoteGone,
-            gitStatus.Remotes);
+            gitStatus.Remotes,
+            gitStatus.IsDetachedHead);
     }
 
     /// <inheritdoc />
@@ -48,7 +49,17 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
             return new GitStatusSnapshot(IsGitRepository: false, Branch: null, IsDirty: false, AheadCount: null, BehindCount: null, IsRemoteGone: false, Remotes: []);
         }
 
-        var branch = (await RunGitCaptureAsync(repositoryPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
+        // `git symbolic-ref -q --short HEAD` succeeds (printing the branch name) only when HEAD is
+        // attached to a branch; it fails when detached, which is how a detached HEAD is
+        // distinguished here - `git rev-parse --abbrev-ref HEAD` (the previous approach) instead
+        // returns the literal string "HEAD" when detached, which was previously passed straight
+        // through and displayed as if "HEAD" were a real branch name.
+        var symbolicRef = (await RunGitCaptureAsync(repositoryPath, ["symbolic-ref", "-q", "--short", "HEAD"], cancellationToken))?.Trim();
+        var isDetachedHead = symbolicRef is null;
+        var branch = isDetachedHead
+            ? (await RunGitCaptureAsync(repositoryPath, ["rev-parse", "--short", "HEAD"], cancellationToken))?.Trim()
+            : symbolicRef;
+
         var statusOutput = await RunGitCaptureAsync(repositoryPath, ["status", "--porcelain"], cancellationToken);
         var isDirty = !string.IsNullOrEmpty(statusOutput?.Trim());
 
@@ -74,7 +85,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
         // stay null either way), so this is git's own tracking-state marker, which reports the
         // literal "[gone]" token when the upstream ref it remembers no longer exists on the remote.
         var isRemoteGone = false;
-        if (!string.IsNullOrEmpty(branch))
+        if (!isDetachedHead && !string.IsNullOrEmpty(branch))
         {
             var trackState = await RunGitCaptureAsync(repositoryPath, ["for-each-ref", "--format=%(upstream:track)", $"refs/heads/{branch}"], cancellationToken);
             isRemoteGone = trackState?.Contains("[gone]", StringComparison.Ordinal) == true;
@@ -82,7 +93,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner) : I
 
         var remotes = await ComputeRemotesAsync(repositoryPath, cancellationToken);
 
-        return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes);
+        return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes, isDetachedHead);
     }
 
     private async Task<IReadOnlyList<RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)

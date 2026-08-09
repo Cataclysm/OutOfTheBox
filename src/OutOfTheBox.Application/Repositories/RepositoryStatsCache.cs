@@ -31,7 +31,7 @@ public sealed class RepositoryStatsCache
     public void SetGitStatus(string name, GitStatusSnapshot gitStatus) =>
         _stats.AddOrUpdate(
             name,
-            static (_, snapshot) => new RepositoryStats(0, snapshot.IsGitRepository, snapshot.Branch, snapshot.IsDirty, snapshot.AheadCount, snapshot.BehindCount, snapshot.IsRemoteGone, snapshot.Remotes),
+            static (_, snapshot) => new RepositoryStats(0, snapshot.IsGitRepository, snapshot.Branch, snapshot.IsDirty, snapshot.AheadCount, snapshot.BehindCount, snapshot.IsRemoteGone, snapshot.Remotes, snapshot.IsDetachedHead),
             static (_, existing, snapshot) => existing with
             {
                 IsGitRepository = snapshot.IsGitRepository,
@@ -41,6 +41,7 @@ public sealed class RepositoryStatsCache
                 BehindCount = snapshot.BehindCount,
                 IsRemoteGone = snapshot.IsRemoteGone,
                 Remotes = snapshot.Remotes,
+                IsDetachedHead = snapshot.IsDetachedHead,
             },
             gitStatus);
 

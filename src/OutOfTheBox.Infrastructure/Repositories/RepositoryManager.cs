@@ -70,6 +70,7 @@ public sealed class RepositoryManager(
                     BehindCount = stats.BehindCount,
                     IsRemoteGone = stats.IsRemoteGone,
                     Remotes = [.. stats.Remotes.Select(r => new Domain.Repositories.RepositoryRemote(r.Name, r.Url))],
+                    IsDetachedHead = stats.IsDetachedHead,
                     IsActive = isActive,
                 });
         }

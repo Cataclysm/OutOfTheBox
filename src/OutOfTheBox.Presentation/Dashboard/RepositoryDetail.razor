@@ -241,7 +241,8 @@ else
             return "Not a git repository";
         }
 
-        var status = $"{repository.Branch ?? "(no branch)"} ({(repository.IsDirty ? "dirty" : "clean")})";
+        var branchText = repository.IsDetachedHead ? $"detached at {repository.Branch}" : repository.Branch ?? "(no branch)";
+        var status = $"{branchText} ({(repository.IsDirty ? "dirty" : "clean")})";
 
         if (repository.IsRemoteGone)
         {

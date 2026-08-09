@@ -55,6 +55,13 @@ public sealed class RepositorySummary
     /// <summary>This repository's configured git remotes (name and URL), shown on its detail subpage. Empty if not a git repository.</summary>
     public IReadOnlyList<RepositoryRemote> Remotes { get; init; } = [];
 
+    /// <summary>
+    /// Whether HEAD is detached (checked out at a specific commit rather than a branch), if
+    /// <see cref="IsGitRepository"/>. When true, <see cref="Branch"/> holds the short commit hash
+    /// HEAD is at, not a branch name - git itself has no branch name for this state.
+    /// </summary>
+    public bool IsDetachedHead { get; init; }
+
     /// <summary>Whether this repository currently holds the per-repository command lock (an in-flight <c>dotnet</c>/<c>git</c> run or clone). Sourced live, never cached.</summary>
     public required bool IsActive { get; init; }
 }
