@@ -17,11 +17,11 @@
 
 ## 4. Live verification
 
-- [ ] 4.1 Start the real `Host`, start a real long-enough-running `dotnet_run`/`git_run` via a raw MCP call (or the existing test client pattern), call `get_run_resources` for it while in flight, and confirm the returned points and derived summary reflect real observed CPU/RAM - not just that the call succeeds structurally.
-- [ ] 4.2 Confirm an unknown run id is rejected, and that calling immediately after starting a run (before the ~3s sampler tick) returns an empty result rather than an error.
-- [ ] 4.3 Confirm the dashboard's own live resource graphs (Status page) are unaffected - same `ResourceHistoryBuffer` instance, now with a second reader.
+- [x] 4.1 Start the real `Host`, start a real long-enough-running `dotnet_run`/`git_run` via a raw MCP call (or the existing test client pattern), call `get_run_resources` for it while in flight, and confirm the returned points and derived summary reflect real observed CPU/RAM - not just that the call succeeds structurally.
+- [x] 4.2 Confirm an unknown run id is rejected, and that calling immediately after starting a run (before the ~3s sampler tick) returns an empty result rather than an error.
+- [x] 4.3 Confirm the dashboard's own live resource graphs (Status page) are unaffected - same `ResourceHistoryBuffer` instance, now with a second reader.
 
 ## 5. Wrap-up
 
-- [ ] 5.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
-- [ ] 5.2 Commit and push. Do not archive this change as part of implementation - archiving is a separate, deliberate step.
+- [x] 5.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
+- [x] 5.2 Commit and push. Do not archive this change as part of implementation - archiving is a separate, deliberate step.
