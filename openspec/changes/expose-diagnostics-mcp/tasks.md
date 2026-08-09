@@ -7,8 +7,8 @@
 
 ## 2. `get_environment_info` MCP tool (Presentation)
 
-- [ ] 2.1 Add `McpEnvironmentInfoResult`-shaped record(s) near `McpToolResults.cs` (or a new file if that grows unwieldy), matching this project's existing MCP result doc-comment style.
-- [ ] 2.2 Add `EnvironmentInfoMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), a new `[McpServerToolType]` class (no explicit DI registration needed) exposing `[McpServerTool] GetEnvironmentInfoAsync()` (no parameters), calling `IEnvironmentInfoProvider` and mapping to the MCP result shape. XML doc comments + `[Description]` attributes matching `CommandExecutionMcpTools`'s existing style.
+- [x] 2.1 Add `McpEnvironmentInfoResult`-shaped record(s) near `McpToolResults.cs` (or a new file if that grows unwieldy), matching this project's existing MCP result doc-comment style.
+- [x] 2.2 Add `EnvironmentInfoMcpTools.cs` (`OutOfTheBox.Presentation.Mcp`), a new `[McpServerToolType]` class (no explicit DI registration needed) exposing `[McpServerTool] GetEnvironmentInfoAsync()` (no parameters), calling `IEnvironmentInfoProvider` and mapping to the MCP result shape. XML doc comments + `[Description]` attributes matching `CommandExecutionMcpTools`'s existing style.
 
 ## 3. File-lock diagnostics (Application + Infrastructure)
 

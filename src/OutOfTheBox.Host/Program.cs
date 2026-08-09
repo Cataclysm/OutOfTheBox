@@ -2,11 +2,13 @@
 
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Diagnostics;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Infrastructure.Diagnostics;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Monitoring;
@@ -114,6 +116,7 @@ builder.Services.AddSingleton<McpRunOutputRegistry>();
 builder.Services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
 builder.Services.AddSingleton<IProcessRunner, CliProcessRunner>();
 builder.Services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
+builder.Services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
 
 // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repository lock
 // would be meaningless (each request would get its own empty registry).
