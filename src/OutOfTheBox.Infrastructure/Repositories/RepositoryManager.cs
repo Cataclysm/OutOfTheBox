@@ -253,6 +253,66 @@ public sealed class RepositoryManager(
         RunGitActionAsync(name, ["clean", "-xdf"], cancellationToken);
 
     /// <inheritdoc />
+    public async Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        if (!Directory.Exists(targetPath))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+        }
+
+        var newResolution = workingDirectoryResolver.Resolve(newName);
+        if (!newResolution.IsAllowed)
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
+        }
+
+        var newPath = newResolution.ResolvedPath!;
+        if (Directory.Exists(newPath))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.AlreadyExists);
+        }
+
+        var runId = Guid.NewGuid();
+        using var cancelRequestCts = new CancellationTokenSource();
+        if (!runRegistry.TryAcquire(targetPath, runId, cancelRequestCts, out var conflictingRunId))
+        {
+            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
+        }
+
+        try
+        {
+            Directory.Move(targetPath, newPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Same class of failure Directory.Delete already has to defend against (a file open
+            // elsewhere) - Directory.Move additionally fails across different volumes, surfaced here
+            // as a plain IOException too, with its own message.
+            return new RepositoryGitActionResult.Failed(ex.Message);
+        }
+        finally
+        {
+            runRegistry.Release(targetPath);
+        }
+
+        statsCache.Remove(name);
+
+        // Primed immediately under the new name rather than left for the next sampler sweep -
+        // otherwise the renamed row would sit showing "Computing…" until that tick, the exact
+        // regression already fixed once for clone completion (see RefreshStatsAsync's own remarks).
+        await RefreshStatsAsync(newName, newPath);
+
+        return new RepositoryGitActionResult.Succeeded();
+    }
+
+    /// <inheritdoc />
     public async Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken)
     {
         var resolution = workingDirectoryResolver.Resolve(name);

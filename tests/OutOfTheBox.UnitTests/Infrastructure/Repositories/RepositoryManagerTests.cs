@@ -19,11 +19,12 @@ namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
 
 /// <summary>
 /// Exercises <see cref="RepositoryManager"/>'s rejection paths (invalid name, already-exists,
-/// busy) and <c>DeleteAsync</c> end to end against a real temp directory tree - none of these need
-/// a real <c>git.exe</c> invocation, since they all return before <see cref="RepositoryManager.CloneAsync"/>
-/// would start one. A successful clone is covered by <c>RepositoryManagement.feature</c> instead
-/// (per this project's "no real process spawning in UnitTests" convention), against a real local
-/// git source the same way <c>git-command-execution</c> itself is tested.
+/// busy) and <c>DeleteAsync</c>/<c>RenameAsync</c> end to end against a real temp directory tree -
+/// none of these need a real <c>git.exe</c> invocation, since they all return before
+/// <see cref="RepositoryManager.CloneAsync"/> would start one. A successful clone is covered by
+/// <c>RepositoryManagement.feature</c> instead (per this project's "no real process spawning in
+/// UnitTests" convention), against a real local git source the same way <c>git-command-execution</c>
+/// itself is tested.
 /// </summary>
 public sealed class RepositoryManagerTests : IDisposable
 {
@@ -171,6 +172,99 @@ public sealed class RepositoryManagerTests : IDisposable
         var row = Assert.Single(recorded);
         Assert.Equal(RunOutcome.Completed, row.Outcome);
         Assert.NotNull(row.CompletedAt);
+    }
+
+    [Fact]
+    public async Task RenameAsync_rejects_a_name_that_escapes_the_root()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.RenameAsync(@"..\evil", "new-name", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task RenameAsync_rejects_a_new_name_that_escapes_the_root()
+    {
+        var repositoryPath = Path.Combine(_root, "idle-repository");
+        Directory.CreateDirectory(repositoryPath);
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.RenameAsync("idle-repository", @"..\evil", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.InvalidName, rejected.Reason);
+        Assert.True(Directory.Exists(repositoryPath));
+    }
+
+    [Fact]
+    public async Task RenameAsync_rejects_a_nonexistent_repository()
+    {
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.RenameAsync("does-not-exist", "new-name", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.NotFound, rejected.Reason);
+    }
+
+    [Fact]
+    public async Task RenameAsync_rejects_when_the_new_name_already_exists()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "source-repository"));
+        Directory.CreateDirectory(Path.Combine(_root, "existing-repository"));
+        var manager = CreateManager(new RunRegistry());
+
+        var result = await manager.RenameAsync("source-repository", "existing-repository", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.AlreadyExists, rejected.Reason);
+        Assert.True(Directory.Exists(Path.Combine(_root, "source-repository")));
+    }
+
+    [Fact]
+    public async Task RenameAsync_is_rejected_as_busy_and_leaves_the_repository_untouched()
+    {
+        var repositoryPath = Path.Combine(_root, "busy-repository");
+        Directory.CreateDirectory(repositoryPath);
+
+        var registry = new RunRegistry();
+        using var cts = new CancellationTokenSource();
+        var conflictingRunId = Guid.NewGuid();
+        registry.TryAcquire(repositoryPath, conflictingRunId, cts, out _);
+
+        var manager = CreateManager(registry);
+
+        var result = await manager.RenameAsync("busy-repository", "new-name", CancellationToken.None);
+
+        var rejected = Assert.IsType<RepositoryGitActionResult.Rejected>(result);
+        Assert.Equal(RepositoryActionRejectionReason.Busy, rejected.Reason);
+        Assert.Equal(conflictingRunId, rejected.ConflictingRunId);
+        Assert.True(Directory.Exists(repositoryPath));
+        Assert.False(Directory.Exists(Path.Combine(_root, "new-name")));
+    }
+
+    [Fact]
+    public async Task RenameAsync_moves_an_idle_repository_to_the_new_name_and_clears_the_old_stats_cache_entry()
+    {
+        var oldPath = Path.Combine(_root, "old-name");
+        Directory.CreateDirectory(oldPath);
+        File.WriteAllText(Path.Combine(oldPath, "file.txt"), "content");
+
+        var statsCache = new RepositoryStatsCache();
+        statsCache.Set("old-name", new RepositoryStats(1, false, null, false, null, null));
+
+        var manager = CreateManager(new RunRegistry(), statsCache: statsCache);
+
+        var result = await manager.RenameAsync("old-name", "new-name", CancellationToken.None);
+
+        Assert.IsType<RepositoryGitActionResult.Succeeded>(result);
+        Assert.False(Directory.Exists(oldPath));
+        Assert.True(Directory.Exists(Path.Combine(_root, "new-name")));
+        Assert.True(File.Exists(Path.Combine(_root, "new-name", "file.txt")));
+        Assert.Null(statsCache.TryGet("old-name"));
     }
 
     [Fact]

@@ -47,6 +47,15 @@ public interface IRepositoryManager
     Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Renames the repository named <paramref name="name"/> to <paramref name="newName"/> - a plain
+    /// directory move confined to the configured root, same as every other repository-name
+    /// resolution. This only changes what this service calls the repository; its git remotes,
+    /// history, and working tree contents are untouched. Runs to completion before returning, like
+    /// <see cref="PullAsync"/>'s own remarks describe.
+    /// </summary>
+    Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The URL the named repository was cloned from through this service, sourced from its most
     /// recent completed <c>RepositoryClone</c> history record (per <c>run-history</c>) - not
     /// persisted separately. <see langword="null"/> if unknown (a pre-existing directory this

@@ -55,6 +55,13 @@ else
     else
     {
         <table class="data-table clickable-rows">
+            <colgroup>
+                <col style="width:6rem" />
+                <col />
+                <col style="width:7rem" />
+                <col style="width:18rem" />
+                <col style="width:19rem" />
+            </colgroup>
             <thead>
                 <tr>
                     <th @onclick="@(() => SortBy(SortColumn.Status))">Status@(SortIndicator(SortColumn.Status))</th>
@@ -96,6 +103,9 @@ else
                                 <button type="button" class="icon-button @FlashClass(repository.Name, "clean")" title="Clean (git clean -xdf)" @onclick="@(() => ConfirmAndRunAsync(repository.Name, "clean", "Clean", $"Run 'git clean -xdf' on '{repository.Name}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
                                     <Icon Name="clean" />
                                 </button>
+                                <button type="button" class="icon-button" title="Rename" @onclick="@(() => _renameDialog!.ShowAsync(repository.Name))">
+                                    <Icon Name="pencil" />
+                                </button>
                                 <button type="button" class="icon-button icon-button-danger" title="Delete" @onclick="@(() => ConfirmDeleteAsync(repository.Name))">
                                     <Icon Name="trash" />
                                 </button>
@@ -110,6 +120,7 @@ else
 
 <ConfirmDialog @ref="_confirmDialog" />
 <CloneDialog @ref="_cloneDialog" OnCloned="RefreshAsync" />
+<RenameDialog @ref="_renameDialog" OnRenamed="RefreshAsync" />
 
 @code {
     private IReadOnlyList<RepositorySummary>? _summaries;
@@ -123,6 +134,7 @@ else
     private bool _sortAscending = true;
     private ConfirmDialog? _confirmDialog;
     private CloneDialog? _cloneDialog;
+    private RenameDialog? _renameDialog;
 
     /// <summary>Per "repositoryName:action" (e.g. "my-repo:pull"), the CSS class briefly applied to that row's icon to report the outcome - no streamed output, per specs/repository-management's "Outcome is shown without a console view" requirement.</summary>
     private readonly Dictionary<string, string> _flashClasses = [];

@@ -12,7 +12,7 @@
         </label>
         <label>
             Name
-            <input type="text" @bind="_name" placeholder="new-repository-name" />
+            <input type="text" value="@_name" @oninput="OnNameChanged" placeholder="new-repository-name" />
         </label>
         <label>
             Branch
@@ -50,6 +50,7 @@
     private string _branch = string.Empty;
     private string? _error;
     private bool _submitting;
+    private bool _nameManuallyEdited;
     private IReadOnlyList<string> _branches = [];
     private CancellationTokenSource? _branchLookupCts;
 
@@ -61,6 +62,7 @@
         _branch = string.Empty;
         _branches = [];
         _error = null;
+        _nameManuallyEdited = false;
         StateHasChanged();
         await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
     }
@@ -69,6 +71,13 @@
     {
         _url = e.Value?.ToString() ?? string.Empty;
 
+        // Best-guess auto-fill, not a locked/derived field - stops the moment the operator types
+        // into Name themselves, so this never fights an intentional edit.
+        if (!_nameManuallyEdited)
+        {
+            _name = DeriveNameFromUrl(_url);
+        }
+
         // Debounced, not looked up on every keystroke - git ls-remote is a real network round trip
         // (up to IRepositoryManager.ListRemoteBranchesAsync's own 10s timeout), per
         // specs/repository-management's "Branches populate after entering a URL" requirement.
@@ -76,6 +85,28 @@
         var cts = new CancellationTokenSource();
         _branchLookupCts = cts;
         _ = LookupBranchesAfterDelayAsync(_url, cts);
+    }
+
+    private void OnNameChanged(ChangeEventArgs e)
+    {
+        _name = e.Value?.ToString() ?? string.Empty;
+        _nameManuallyEdited = true;
+    }
+
+    // Best-effort last-path-segment guess (e.g. "https://example.com/org/repo.git" -> "repo",
+    // "git@host:org/repo.git" -> "repo") - good enough as an editable starting point, not a
+    // validated name; IRepositoryManager.CloneAsync's own InvalidName/AlreadyExists rejection is
+    // still the real check once the operator submits.
+    private static string DeriveNameFromUrl(string url)
+    {
+        var trimmed = url.Trim().TrimEnd('/', '\\');
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var lastSegment = trimmed[(trimmed.LastIndexOfAny(['/', '\\']) + 1)..];
+        return lastSegment.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? lastSegment[..^4] : lastSegment;
     }
 
     private async Task LookupBranchesAfterDelayAsync(string url, CancellationTokenSource cts)

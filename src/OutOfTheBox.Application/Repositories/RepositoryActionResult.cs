@@ -8,7 +8,7 @@ public enum RepositoryActionRejectionReason
     /// <summary>The supplied name resolves outside the configured root.</summary>
     InvalidName,
 
-    /// <summary>(Clone only) the target name already names an existing repository.</summary>
+    /// <summary>(Clone/rename only) the target name already names an existing repository.</summary>
     AlreadyExists,
 
     /// <summary>(Delete only) the named repository does not exist.</summary>

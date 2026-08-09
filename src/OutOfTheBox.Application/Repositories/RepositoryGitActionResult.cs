@@ -3,11 +3,13 @@
 namespace OutOfTheBox.Application.Repositories;
 
 /// <summary>
-/// The outcome of a pull/push/force-push/fetch/clean action (per <see cref="IRepositoryManager"/>) -
-/// unlike <see cref="RepositoryActionResult"/>'s clone/delete outcomes, these run to completion
-/// synchronously (no run id, no history record, no streamed output) since the dashboard only needs
-/// to recolor an icon on completion, per specs/repository-management's "Dashboard-only
-/// pull/push/force-push/fetch/clean actions" requirement.
+/// The outcome of a pull/push/force-push/fetch/clean/rename action (per
+/// <see cref="IRepositoryManager"/>) - unlike <see cref="RepositoryActionResult"/>'s clone/delete
+/// outcomes, these run to completion synchronously (no run id, no history record, no streamed
+/// output) since the dashboard only needs to recolor an icon (or close a dialog) on completion, per
+/// specs/repository-management's "Dashboard-only pull/push/force-push/fetch/clean actions"
+/// requirement - renaming is the same shape of action (a quick, local, lock-guarded mutation) even
+/// though it isn't a git command itself.
 /// </summary>
 public abstract record RepositoryGitActionResult
 {

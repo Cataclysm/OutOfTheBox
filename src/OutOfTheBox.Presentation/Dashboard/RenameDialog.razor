@@ -1,0 +1,94 @@
+@using OutOfTheBox.Application.Repositories
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IRepositoryManager RepositoryManager
+
+<dialog @ref="_dialogElement">
+    <div class="dialog-body">
+        <h2>Rename repository</h2>
+        <p>Renames '@_currentName' for this service only - its git remotes and history are untouched.</p>
+        <label>
+            New name
+            <input type="text" @bind="_newName" placeholder="new-repository-name" />
+        </label>
+        @if (_error is not null)
+        {
+            <span class="login-error">@_error</span>
+        }
+        <div class="dialog-actions">
+            <button type="button" @onclick="CancelAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Cancel
+            </button>
+            <button type="button" class="btn-primary" @onclick="SubmitAsync" disabled="@_submitting">
+                <Icon Name="pencil" CssClass="icon-inline" /> Rename
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    /// <summary>Raised once the rename has succeeded, so the caller can refresh its list.</summary>
+    [Parameter]
+    public EventCallback OnRenamed { get; set; }
+
+    private ElementReference _dialogElement;
+    private string _currentName = string.Empty;
+    private string _newName = string.Empty;
+    private string? _error;
+    private bool _submitting;
+
+    /// <summary>Opens the dialog pre-filled with the repository's current name.</summary>
+    public async Task ShowAsync(string currentName)
+    {
+        _currentName = currentName;
+        _newName = currentName;
+        _error = null;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_newName) || _newName == _currentName)
+        {
+            _error = "Enter a different name.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var result = await RepositoryManager.RenameAsync(_currentName, _newName, CancellationToken.None);
+
+            if (result is RepositoryGitActionResult.Rejected rejected)
+            {
+                _error = rejected.Reason switch
+                {
+                    RepositoryActionRejectionReason.InvalidName => "Invalid name - it must resolve inside the configured root.",
+                    RepositoryActionRejectionReason.AlreadyExists => "A repository with that name already exists.",
+                    RepositoryActionRejectionReason.NotFound => "Repository not found.",
+                    RepositoryActionRejectionReason.Busy => $"Busy - conflicting run {rejected.ConflictingRunId}.",
+                    _ => "Rejected.",
+                };
+                return;
+            }
+
+            if (result is RepositoryGitActionResult.Failed failed)
+            {
+                _error = failed.ErrorMessage ?? "Rename failed.";
+                return;
+            }
+
+            await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+            await OnRenamed.InvokeAsync();
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task CancelAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+}
