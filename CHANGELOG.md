@@ -56,6 +56,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - `.editorconfig` expanded from formatting-only conventions to a curated set of modern-C#-construct style rules (pattern matching, target-typed `new`, collection expressions, readonly/accessibility modifiers, unused usings/parameters, ...), enforced at `warning` severity and surfaced during `dotnet build`
 - Renamed the project from `BuildAndTestService` to `OutOfTheBox`
 - Replaced the originally-planned `install.ps1`/`upgrade.ps1` scripts with the WiX Toolset installer above, on explicit request — native upgrade/uninstall semantics and a proper config UI a hand-rolled script couldn't match
+- Split `Program.cs`'s ~115 lines of `builder.Services.Add...` DI registrations (it had grown to 271 lines total) out into five feature-grouped extension methods under `src/OutOfTheBox.Host/ServiceRegistration/` (command execution/MCP, persistence, repository management, resource monitoring, dashboard) - each keeps its own registrations' lifetime rationale (singleton vs. scoped) as a doc comment colocated with them, and `Program.cs` itself is now a readable top-level list of five calls instead of the full wiring. Pure reorganization, no behavior change - the "one place allowed to reference both Infrastructure and Presentation" rule these methods live under is still just Host, per design.md's Layering decision
 
 ### Fixed
 
