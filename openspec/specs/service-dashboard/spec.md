@@ -140,6 +140,21 @@ The system SHALL provide a control to clone a new repository (opening a popup di
 - **WHEN** an operator views the Repositories list
 - **THEN** every action (clone, delete, pull, push, force-push, fetch, clean) is represented by an icon rather than a text-labeled button
 
+### Requirement: Every popup dialog can be dismissed by clicking outside it
+The system SHALL let an operator dismiss any open popup dialog (confirmation, clone, rename, file preview, commit diff) by clicking anywhere on the page outside the dialog's own content, with the same effect as pressing Escape or selecting the dialog's own Cancel/Close control - not just via an explicit in-dialog control.
+
+#### Scenario: Clicking outside a dialog closes it
+- **WHEN** an operator clicks anywhere on the page outside an open popup dialog's own content
+- **THEN** the dialog closes, the same as if the operator had pressed Escape
+
+#### Scenario: Clicking inside a dialog does not close it
+- **WHEN** an operator clicks anywhere within an open popup dialog's own content
+- **THEN** the dialog remains open
+
+#### Scenario: Dismissing a confirmation dialog this way does not proceed with its action
+- **WHEN** an operator dismisses an open destructive-action confirmation dialog by clicking outside it
+- **THEN** the pending action is not carried out, the same as clicking that dialog's own Cancel control
+
 ### Requirement: Repository detail's commit graph and file tree update on a live cadence, and use icons consistent with the rest of the dashboard
 The system SHALL refresh a repository detail page's commit graph whenever that repository's git status is otherwise refreshed (the same live-update signal driving its git-status/branch display), so new commits, checkouts, or branch changes made elsewhere become visible without a manual reload. The system SHALL refresh an expanded file-tree folder's contents on its own bounded interval while it remains expanded, independent of other expanded folders, rather than re-walking the entire tree on every refresh. Both the commit graph (checkout, branch/tag pills) and the file tree (folder/file, download, rename, delete) SHALL use icons consistent with the rest of the dashboard's iconography, not text labels.
 

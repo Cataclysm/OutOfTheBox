@@ -43,6 +43,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Repositories list and repository detail page both now show live git status (clean/dirty dot, branch, ahead/behind counts, and a distinct "remote gone" icon) as a single compact icon column/line, shared between both pages via one new component; the commit detail page shows the same status for the commit's own repository
 - Repository detail page now offers the same pull/push/force-push/fetch/clean quick actions the Repositories list already had, not just via the list
 - File tree browser gained a "Dirty files only" filter (`git status --porcelain`) that hides clean files/folders and auto-expands any folder containing a dirty file
+- Every popup dialog (confirmation, clone, rename, file preview, commit diff) can now be dismissed by clicking anywhere outside it, the same as pressing Escape or its own Cancel/Close control - previously the only way to dismiss one was an explicit in-dialog control
 
 ### Changed
 
