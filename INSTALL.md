@@ -37,23 +37,37 @@ sandbox caller are under the same operator's control, not exposed to the public 
 **The [production install](#production-install) below generates and configures this
 automatically** — the installer's own `ResolveSecrets` custom action creates a self-signed
 certificate (covering the machine's hostname, `localhost`, and its local IPv4 addresses) the first
-time it installs, writes it to `%ProgramData%\OutOfTheBox\outofthebox.pfx`, and points Kestrel at
-it via the same environment-variable mechanism used for every other setting — no manual step
-required, and an upgrade never regenerates or invalidates an already-issued certificate (the same
-generate-once-then-preserve reasoning already applied to the bearer token and service account
-password). This was not always true: an earlier real install crashed outright on startup ("No
-server certificate was specified") because nothing configured a certificate at all — that gap is
-what this automation closes.
+time it installs and writes two files to `%ProgramData%\OutOfTheBox\`:
+
+- `outofthebox.pfx` — the full certificate plus private key, password-protected, which Kestrel
+  binds to (via the same environment-variable mechanism used for every other setting).
+- `outofthebox.cer` — the same certificate's **public portion only**, PEM-encoded, no password, no
+  private key — safe to hand to anyone who needs to trust this certificate. This is what the
+  dashboard's About page offers as a download once logged in (`https://<host>:<port>/about`, or
+  directly at `https://<host>:<port>/dashboard-certificate`), so an operator or the sbx sandbox
+  never needs to extract it from the PFX by hand.
+
+No manual step is required for either file, and an upgrade never regenerates or invalidates an
+already-issued certificate (the same generate-once-then-preserve reasoning already applied to the
+bearer token and service account password) — including an upgrade from before `outofthebox.cer`
+existed at all, which derives it from the already-installed PFX rather than rotating anything. This
+automation exists because an earlier real install crashed outright on startup ("No server
+certificate was specified") since nothing configured a certificate at all — that gap is what it
+closes.
 
 For the [development run](#today-development-run) above (`dotnet run`, no installer involved),
-generate one yourself and bind it via the standard ASP.NET Core configuration shape:
+generate both files yourself and bind Kestrel to the PFX via the standard ASP.NET Core
+configuration shape:
 
 ```
 dotnet dev-certs https -ep C:\ProgramData\OutOfTheBox\outofthebox.pfx -p <password>
+dotnet dev-certs https -ep C:\ProgramData\OutOfTheBox\outofthebox.cer --format PEM
 ```
 
-(or any equivalent self-signed cert generated with `New-SelfSignedCertificate` / `openssl`), then
-point Kestrel at it:
+(the second command, run without `-p`, exports the public certificate only — no private key — into
+a plain PEM file, matching what the installer produces; or use any equivalent self-signed cert
+generated with `New-SelfSignedCertificate` / `openssl`), then point Kestrel at the PFX and tell
+`ServiceOptions` where to find the public one:
 
 ```json
 "Kestrel": {
@@ -66,21 +80,45 @@ point Kestrel at it:
       }
     }
   }
+},
+"OutOfTheBox": {
+  "CertificateFilePath": "C:\\ProgramData\\OutOfTheBox\\outofthebox.cer"
 }
 ```
 
-This is also how to supply your own certificate instead of the installer-generated one for a
-production install: replace `%ProgramData%\OutOfTheBox\outofthebox.pfx` with your own file before
-first install (the installer never overwrites an existing one), or update the service's own
-`Kestrel__Endpoints__Https__Certificate__*` environment variables afterward and restart it.
+`CertificateFilePath` is optional — the About page's download link simply doesn't appear if it's
+unset or the file doesn't exist, which is fine for a dev session that doesn't need to hand the
+certificate to anything else.
 
-Because the certificate isn't from a publicly trusted CA, the sbx-side caller must pin/trust it
-explicitly rather than relying on the OS/CA trust store — e.g. for `curl`, pass `--cacert
-<path-to-the-cert-in-PEM-form>` (or `-k`/`--insecure` only if the operator has independently
-verified the connection is otherwise safe, such as over a private network the operator controls
-end-to-end); for a .NET `HttpClient`, configure an `HttpClientHandler.ServerCertificateCustomValidationCallback`
-that compares the presented certificate's thumbprint against the known one, rather than disabling
-validation outright.
+This is also how to supply your own certificate instead of the installer-generated one for a
+production install: replace both files under `%ProgramData%\OutOfTheBox\` with your own before
+first install (the installer never overwrites either if it already exists), or update the running
+service's `Kestrel__Endpoints__Https__Certificate__*`/`OutOfTheBox__CertificateFilePath`
+environment variables afterward and restart it. Whatever certificate you supply, export its public
+portion as a PEM file (no private key, no password) for `CertificateFilePath` to point at — e.g.
+`openssl x509 -in yourcert.pfx -out outofthebox.cer` for an existing PFX.
+
+Because the certificate isn't from a publicly trusted CA, both a browser and the sbx-side caller
+must be told to trust it explicitly rather than relying on the OS/CA trust store. The dashboard's
+About page has the full walkthrough once you're logged in and can download the certificate, but in
+short:
+
+- **Windows PC (dashboard)**: download `outofthebox.cer` from the About page, double-click it,
+  **Install Certificate...** → **Local Machine** (or **Current User**) → **Place all certificates
+  in the following store** → **Trusted Root Certification Authorities**. Or, from an elevated
+  PowerShell prompt: `Import-Certificate -FilePath outofthebox.cer -CertStoreLocation
+  Cert:\LocalMachine\Root`.
+- **sbx sandbox (MCP connection)**: copy the downloaded certificate onto the sandbox, then either
+  trust it system-wide (`sudo update-ca-certificates` after copying it to
+  `/usr/local/share/ca-certificates/outofthebox.crt` on most Linux distributions — every tool
+  reading the system trust store picks it up automatically from then on), or point just the Node.js
+  process Claude Code runs on at it via `NODE_EXTRA_CA_CERTS=/path/to/outofthebox.cer`, without
+  touching the OS trust store at all. For a manual connectivity check with `curl`, pass `--cacert
+  /path/to/outofthebox.cer` explicitly (or `-k`/`--insecure` only if the operator has independently
+  verified the connection is otherwise safe, such as over a private network the operator controls
+  end-to-end). For a .NET `HttpClient`, configure an
+  `HttpClientHandler.ServerCertificateCustomValidationCallback` that compares the presented
+  certificate's thumbprint against the known one, rather than disabling validation outright.
 
 ### Firewall
 
@@ -214,8 +252,9 @@ This:
   somehow still missing even after the bootstrapper's own check (e.g. the MSI was run directly,
   bypassing the bootstrapper).
 
-Certificate binding for Kestrel HTTPS is generated and wired up automatically — see
-[Network & transport](#network--transport) above for how, and how to supply your own instead.
+Certificate binding for Kestrel HTTPS (and the public-only file the dashboard offers for download)
+are generated and wired up automatically — see [Network & transport](#network--transport) above for
+how, and how to supply your own instead.
 
 ### 4. Upgrade / uninstall
 

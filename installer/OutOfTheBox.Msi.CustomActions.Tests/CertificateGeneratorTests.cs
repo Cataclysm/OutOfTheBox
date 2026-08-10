@@ -72,5 +72,36 @@ namespace OutOfTheBox.Msi.CustomActions.Tests
 
             Assert.False(CertificateGenerator.CanOpen(pfxBytes, "WrongPassword"));
         }
+
+        [Fact]
+        public void ExportPublicCertificatePem_is_well_formed_PEM()
+        {
+            var pfxBytes = CertificateGenerator.CreateSelfSignedPfx("TestPassword123!");
+
+            var pem = CertificateGenerator.ExportPublicCertificatePem(pfxBytes, "TestPassword123!");
+
+            Assert.StartsWith("-----BEGIN CERTIFICATE-----\r\n", pem);
+            Assert.EndsWith("-----END CERTIFICATE-----\r\n", pem);
+        }
+
+        [Fact]
+        public void ExportPublicCertificatePem_round_trips_to_the_same_certificate_without_a_private_key()
+        {
+            var pfxBytes = CertificateGenerator.CreateSelfSignedPfx("TestPassword123!");
+            using (var original = new X509Certificate2(pfxBytes, "TestPassword123!"))
+            {
+                var pem = CertificateGenerator.ExportPublicCertificatePem(pfxBytes, "TestPassword123!");
+                var body = pem
+                    .Replace("-----BEGIN CERTIFICATE-----", string.Empty)
+                    .Replace("-----END CERTIFICATE-----", string.Empty);
+                var der = Convert.FromBase64String(body);
+
+                using (var roundTripped = new X509Certificate2(der))
+                {
+                    Assert.False(roundTripped.HasPrivateKey);
+                    Assert.Equal(original.Thumbprint, roundTripped.Thumbprint);
+                }
+            }
+        }
     }
 }

@@ -219,6 +219,7 @@ try
     app.UseAntiforgery();
 
     app.MapRepositoryFileDownloadEndpoints();
+    app.MapCertificateDownloadEndpoints();
     app.MapLoginEndpoints();
     app.MapVersionEndpoint();
 
@@ -231,8 +232,8 @@ try
     app.MapMcp("/mcp");
 
     // RequireAuthorization() applies to this Razor Components route group the same way it's applied
-    // directly to MapRepositoryFileDownloadEndpoints above (the file tree browser's download link -
-    // cookie-authenticated, since it's a plain browser navigation). Neither the MCP route above (its
+    // directly to MapRepositoryFileDownloadEndpoints/MapCertificateDownloadEndpoints above (both
+    // cookie-authenticated download links, since they're plain browser navigations). Neither the MCP route above (its
     // own bearer-token middleware, not ASP.NET Core's cookie-based authorization) nor the dashboard's
     // own Login page (its [AllowAnonymous] attribute) are affected by this.
     //

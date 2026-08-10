@@ -1,5 +1,8 @@
 @page "/about"
 @attribute [Authorize]
+@using OutOfTheBox.Application.Configuration
+@using Microsoft.Extensions.Options
+@inject IOptions<ServiceOptions> Options
 
 <PageTitle>@VersionInfo.DisplayName - About</PageTitle>
 
@@ -59,3 +62,78 @@ get_file_lock_info   - find which process(es) have a file open, to diagnose a Wi
     repository's own directory, and <code>transfer_file</code> is rejected outright if the file
     exceeds the configured size limit.
 </p>
+
+<h2>Trusting the certificate</h2>
+<p>
+    This service's HTTPS certificate is self-signed - private by design, not issued by a publicly
+    trusted certificate authority - so both a browser and the sbx sandbox's MCP client need to be
+    told to trust it explicitly, or every connection will show a warning (browser) or fail TLS
+    verification outright (a typical MCP client).
+</p>
+@if (_certificateAvailable)
+{
+    <p>
+        <a href="/dashboard-certificate" download="outofthebox.cer">Download the certificate (outofthebox.cer)</a>
+        - a public-only file with no private key, safe to copy anywhere it's needed.
+    </p>
+}
+else
+{
+    <p class="empty-state">
+        No certificate file is configured on this instance (typical for a bare <code>dotnet run</code>
+        without one set up) - see <code>INSTALL.md</code>'s "Certificate" section for how to generate
+        one, including the public-only file this download needs.
+    </p>
+}
+
+<h3>On a Windows PC, for the dashboard</h3>
+<p>
+    Double-click the downloaded <code>outofthebox.cer</code> file, select
+    <strong>Install Certificate...</strong>, choose <strong>Current User</strong> (just for your own
+    account) or <strong>Local Machine</strong> (every account on that PC - prompts for
+    administrator elevation), then <strong>Place all certificates in the following store</strong>
+    and browse to <strong>Trusted Root Certification Authorities</strong>. Confirm through the
+    security warning (self-signed certificates always show one) - your browser stops warning about
+    this host from then on.
+</p>
+<p>Equivalently, from an elevated PowerShell prompt:</p>
+<pre class="run-output">Import-Certificate -FilePath outofthebox.cer -CertStoreLocation Cert:\LocalMachine\Root</pre>
+
+<h3>In the sbx sandbox, for the MCP connection</h3>
+<p>
+    Copy the downloaded certificate onto the sandbox, then use whichever of these matches how the
+    sandbox actually makes its outbound connection:
+</p>
+<ul>
+    <li>
+        <strong>System-wide trust (most Linux distributions)</strong>: copy it to
+        <code>/usr/local/share/ca-certificates/outofthebox.crt</code> (the <code>.crt</code>
+        extension matters here) and run <code>sudo update-ca-certificates</code> - every tool that
+        reads the system trust store (<code>curl</code>, <code>openssl</code>, most language
+        runtimes) picks it up automatically from then on, no further per-tool configuration needed.
+    </li>
+    <li>
+        <strong>Node.js</strong> (the runtime Claude Code itself runs on): set
+        <code>NODE_EXTRA_CA_CERTS=/path/to/outofthebox.cer</code> in the environment the sandbox's
+        Claude Code process runs in - Node's own TLS stack reads this directly, without touching the
+        OS trust store at all.
+    </li>
+    <li>
+        <strong><code>curl</code>, for a manual connectivity check</strong>: pass
+        <code>--cacert /path/to/outofthebox.cer</code> explicitly, e.g.
+        <code>curl --cacert outofthebox.cer https://&lt;host&gt;:&lt;port&gt;/mcp</code>.
+    </li>
+</ul>
+<p>
+    Exactly how you register a remote MCP server (and thus where to point it at this certificate)
+    depends on your sandbox's own Claude Code configuration mechanism - nothing repository-specific
+    to configure beyond trusting this one file.
+</p>
+
+@code {
+    private bool _certificateAvailable;
+
+    /// <inheritdoc />
+    protected override void OnInitialized() =>
+        _certificateAvailable = !string.IsNullOrEmpty(Options.Value.CertificateFilePath) && File.Exists(Options.Value.CertificateFilePath);
+}

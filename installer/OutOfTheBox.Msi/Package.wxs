@@ -358,6 +358,11 @@
              certificate was specified" the moment it tried to start Kestrel's HTTPS endpoint. -->
         <MultiString Value="Kestrel__Endpoints__Https__Certificate__Path=[DATADIRFOLDER]outofthebox.pfx" />
         <MultiString Value="Kestrel__Endpoints__Https__Certificate__Password=[CERTPASSWORD]" />
+        <!-- The public-only counterpart of the PFX above (no private key, no password) - ResolveSecrets
+             writes this alongside it. Distinct from the Kestrel__* keys above: this one is read by
+             application code (ServiceOptions.CertificateFilePath), not the framework's own Kestrel
+             configuration binding, so the dashboard's About page can serve it for download. -->
+        <MultiString Value="OutOfTheBox__CertificateFilePath=[DATADIRFOLDER]outofthebox.cer" />
       </RegistryValue>
     </Component>
 

@@ -75,10 +75,11 @@ Architecture section for the full per-project breakdown and rationale.
 The dashboard is a human-facing web UI served by the same running service, at
 `https://<host>:5443/` by default (the port is whatever was configured at install time — see
 [`INSTALL.md`](INSTALL.md)). Since the certificate is typically self-signed for this kind of
-deployment, your browser will show a certificate warning the first time — accept/trust it the way
-you normally would for a self-signed cert on a private network. You'll land on a login page; enter
-the same shared bearer token the API uses (there's no separate dashboard credential) to get a
-session cookie.
+deployment, your browser will show a certificate warning the first time — accept/trust it for now,
+or download it from the About page after logging in and install it properly (see
+[`INSTALL.md`](INSTALL.md#certificate) for the full walkthrough) to stop seeing the warning at all.
+You'll land on a login page; enter the same shared bearer token the API uses (there's no separate
+dashboard credential) to get a session cookie.
 
 Once logged in, three top-level views are available:
 
@@ -120,9 +121,11 @@ client to the server described above. To get it working:
    `transfer_file`, `list_repositories`, `clone_repository`, `get_run_resources`,
    `get_environment_info`, `get_file_lock_info`) are discovered automatically once connected, each
    with a self-describing schema.
-3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), the sandbox
-   needs to either pin/trust it explicitly or the caller needs to have independently verified the
-   connection is otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate).
+3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), download it
+   from the dashboard's About page (`https://<host>:<port>/dashboard-certificate` once logged in)
+   and trust it on the sandbox side, or have the caller independently verify the connection is
+   otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate) for the full walkthrough (system-wide
+   trust, `NODE_EXTRA_CA_CERTS`, or a one-off `curl --cacert` check).
 
 From there, the Claude Code instance in the sandbox can start a `dotnet`/`git` run, poll its
 progress, cancel it, pull back a produced file, and list/clone repositories — using the tools

@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace OutOfTheBox.Msi.CustomActions
 {
@@ -58,6 +59,37 @@ namespace OutOfTheBox.Msi.CustomActions
                     return certificate.Export(X509ContentType.Pfx, password);
                 }
             }
+        }
+
+        /// <summary>
+        /// Extracts just the public certificate (no private key) from <paramref name="pfxBytes"/>,
+        /// PEM-encoded - safe to hand to anyone who needs to trust this self-signed certificate (an
+        /// operator's PC, the sbx sandbox's MCP client), unlike the password-protected PFX itself,
+        /// which carries the private key. Hand-rolled PEM encoding rather than the BCL's
+        /// <c>PemEncoding</c> type, since this project targets net472 (that type was added in .NET 5).
+        /// </summary>
+        public static string ExportPublicCertificatePem(byte[] pfxBytes, string password)
+        {
+            using (var certificate = new X509Certificate2(pfxBytes, password))
+            {
+                var der = certificate.Export(X509ContentType.Cert);
+                return "-----BEGIN CERTIFICATE-----\r\n" + FormatBase64Lines(der) + "-----END CERTIFICATE-----\r\n";
+            }
+        }
+
+        /// <summary>Base64-encodes <paramref name="data"/> wrapped at the conventional 64-character PEM line length.</summary>
+        private static string FormatBase64Lines(byte[] data)
+        {
+            var base64 = Convert.ToBase64String(data);
+            var builder = new StringBuilder();
+
+            for (var offset = 0; offset < base64.Length; offset += 64)
+            {
+                var length = Math.Min(64, base64.Length - offset);
+                builder.Append(base64, offset, length).Append("\r\n");
+            }
+
+            return builder.ToString();
         }
 
         /// <summary>

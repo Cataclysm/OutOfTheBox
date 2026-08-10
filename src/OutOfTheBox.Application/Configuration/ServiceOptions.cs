@@ -57,6 +57,15 @@ public sealed class ServiceOptions
     public string SqliteFilePath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Absolute path to the public-only, PEM-encoded certificate file (no private key) the dashboard's
+    /// About page offers for download, so an operator or the sbx sandbox can trust this service's
+    /// self-signed HTTPS certificate without needing to extract it from the password-protected PFX
+    /// Kestrel itself binds to. Empty when not configured (e.g. a bare <c>dotnet run</c> with no such
+    /// file set up) - the download endpoint 404s rather than erroring in that case.
+    /// </summary>
+    public string CertificateFilePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// How often the background repository-stats sampler recomputes total on-disk size for every
     /// repository, in seconds. Deliberately slow (default 60s) - a full recursive directory walk is
     /// materially more expensive than a git-status check, per design.md's two-cadence decision. Both

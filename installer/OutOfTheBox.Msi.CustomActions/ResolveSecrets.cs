@@ -46,6 +46,7 @@ namespace OutOfTheBox.Msi.CustomActions
             var dataDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OutOfTheBox");
             var certificatePath = Path.Combine(dataDirectory, "outofthebox.pfx");
+            var publicCertificatePath = Path.Combine(dataDirectory, "outofthebox.cer");
 
             // Never regenerate an existing certificate that the resolved password can still open -
             // an upgrade must not silently invalidate a certificate the operator or an sbx caller
@@ -67,7 +68,22 @@ namespace OutOfTheBox.Msi.CustomActions
             if (!hasUsableCertificate)
             {
                 Directory.CreateDirectory(dataDirectory);
-                File.WriteAllBytes(certificatePath, CertificateGenerator.CreateSelfSignedPfx(certPassword));
+                var pfxBytes = CertificateGenerator.CreateSelfSignedPfx(certPassword);
+                File.WriteAllBytes(certificatePath, pfxBytes);
+
+                // Written together with the PFX above (not just "if missing" below) so the two files
+                // never drift apart - a regenerated PFX with a stale public-only outofthebox.cer left
+                // over from a previous certificate would silently serve the wrong public key to
+                // anyone downloading it from the dashboard's About page.
+                File.WriteAllText(publicCertificatePath, CertificateGenerator.ExportPublicCertificatePem(pfxBytes, certPassword));
+            }
+            else if (!File.Exists(publicCertificatePath))
+            {
+                // An upgrade from before this file existed at all: the PFX is already valid and
+                // untouched above, so derive the public-only file from it directly rather than
+                // regenerating anything.
+                File.WriteAllText(publicCertificatePath,
+                    CertificateGenerator.ExportPublicCertificatePem(File.ReadAllBytes(certificatePath), certPassword));
             }
 
             return ActionResult.Success;
