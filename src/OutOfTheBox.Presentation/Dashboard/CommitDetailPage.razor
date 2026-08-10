@@ -76,6 +76,7 @@ else
             <colgroup>
                 <col style="width:1%" />
                 <col />
+                <col style="width:1%" />
             </colgroup>
             <tbody>
                 @foreach (var file in _detail.Files)
@@ -88,6 +89,13 @@ else
                                 @: @file.OldPath →
                             }
                             @file.Path
+                        </td>
+                        <td class="col-shrink diff-stat">
+                            @if (file.LinesAdded is not null && file.LinesRemoved is not null)
+                            {
+                                <span class="diff-stat-added">+@file.LinesAdded</span>
+                                <span class="diff-stat-removed">-@file.LinesRemoved</span>
+                            }
                         </td>
                     </tr>
                 }

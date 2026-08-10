@@ -1093,6 +1093,26 @@ dd {
     color: #a78bfa;
 }
 
+/* Lines-added/removed stat, right-aligned per column (commit detail page's changed-files table) -
+   text-align: right (rather than relying on .col-shrink's own nowrap alone) is what actually lines
+   the numbers up flush against the table's right edge across rows of differing digit counts.
+   ".data-table td" wins over a bare ".diff-stat" on specificity alone, so this has to match that
+   same element+class shape rather than just adding a second class. */
+.data-table td.diff-stat {
+    text-align: right;
+    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 0.82rem;
+}
+
+.diff-stat-added {
+    color: var(--success);
+}
+
+.diff-stat-removed {
+    color: var(--danger);
+    margin-left: 0.5em;
+}
+
 /* File tree browser (repository detail's Files tab) - Explorer-style expand/collapse rows. */
 .file-tree {
     font-size: 0.85rem;

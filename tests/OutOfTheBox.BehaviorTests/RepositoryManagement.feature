@@ -71,3 +71,7 @@ Feature: Repository Management
     Scenario: Requesting a diff for a path the commit didn't touch returns nothing
         When an operator requests the diff for "does-not-exist.txt" in the fixture repository's initial commit
         Then no diff is returned
+
+    Scenario: A commit's changed files include their added/removed line counts
+        When an operator requests the commit detail for the fixture repository's initial commit
+        Then the changed file "README.md" shows 1 line added and 0 lines removed

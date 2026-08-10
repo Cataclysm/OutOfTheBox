@@ -152,11 +152,19 @@ The system SHALL show, on a repository's detail subpage, its commit history as a
 - **THEN** the system loads the next page of commit history rather than having loaded the entire history up front
 
 ### Requirement: A commit's detail subpage lists its changed files, each with a viewable diff
-The system SHALL let an operator open a specific commit's own detail subpage (reached from the commit graph) showing its full message, author and committer identity, parent hash(es), and the list of files it changed, each labeled with its change kind (added, modified, deleted, renamed, or copied). Selecting a listed file (the row itself, not a separate button, consistent with how the commit graph's own rows are selected) SHALL show that file's unified diff for the commit, syntax-highlighted, rather than only the bare file name and change kind.
+The system SHALL let an operator open a specific commit's own detail subpage (reached from the commit graph) showing its full message, author and committer identity, parent hash(es), and the list of files it changed, each labeled with its change kind (added, modified, deleted, renamed, or copied). For an added, modified, or deleted file, the list SHALL also show its added/removed line counts (not shown for a renamed or copied file, where a line count isn't meaningful to attribute). Selecting a listed file (the row itself, not a separate button, consistent with how the commit graph's own rows are selected) SHALL show that file's unified diff for the commit, syntax-highlighted, rather than only the bare file name and change kind.
 
 #### Scenario: Opening a commit's detail subpage
 - **WHEN** an operator selects a specific commit from the graph
 - **THEN** they see that commit's full message, author/committer identity, parent hash(es), and the list of files it changed with each one's change kind
+
+#### Scenario: Added/modified/deleted files show their line counts
+- **WHEN** a commit's changed-files list includes an added, modified, or deleted file
+- **THEN** that file's row shows its added and removed line counts, distinguished by color
+
+#### Scenario: Renamed and copied files don't show line counts
+- **WHEN** a commit's changed-files list includes a renamed or copied file
+- **THEN** that file's row shows no line counts
 
 #### Scenario: Viewing a changed file's diff
 - **WHEN** an operator selects a file's row in the changed-files list on a commit's detail subpage

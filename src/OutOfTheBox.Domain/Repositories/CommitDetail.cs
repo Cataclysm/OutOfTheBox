@@ -28,7 +28,14 @@ public enum CommitFileChangeKind
 /// <param name="Path">The file's path as of this commit (the new path, for a rename/copy).</param>
 /// <param name="Kind">How the file was touched.</param>
 /// <param name="OldPath">The file's prior path, for <see cref="CommitFileChangeKind.Renamed"/>/<see cref="CommitFileChangeKind.Copied"/> only.</param>
-public sealed record CommitFileChange(string Path, CommitFileChangeKind Kind, string? OldPath = null);
+/// <param name="LinesAdded">
+/// Lines added, when meaningful to show - <see langword="null"/> for a rename/copy (unreliable to
+/// attribute a line count to, since git's own line-stat output identifies those by an "old =&gt;
+/// new" arrow notation rather than a plain path) and for a file with no line-based diff at all
+/// (e.g. binary content).
+/// </param>
+/// <param name="LinesRemoved">Lines removed - same availability as <see cref="LinesAdded"/>, and always present or absent together with it.</param>
+public sealed record CommitFileChange(string Path, CommitFileChangeKind Kind, string? OldPath = null, int? LinesAdded = null, int? LinesRemoved = null);
 
 /// <summary>
 /// The full detail of a single commit - everything <see cref="CommitSummary"/> already carries plus

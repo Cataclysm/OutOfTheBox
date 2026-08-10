@@ -4,6 +4,7 @@ using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.BehaviorTests.Support;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
 using Reqnroll;
@@ -319,6 +320,28 @@ public sealed class RepositoryManagementSteps : IDisposable
 
     [Then(@"no diff is returned")]
     public void ThenNoDiffIsReturned() => Assert.Null(_diffResult);
+
+    private CommitDetail? _commitDetail;
+
+    [When(@"an operator requests the commit detail for the fixture repository's initial commit")]
+    public async Task WhenAnOperatorRequestsTheCommitDetailForTheFixtureRepositorySInitialCommit()
+    {
+        await EnsureFactoryAsync();
+
+        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var initialCommitHash = Assert.Single(commits).Hash;
+
+        _commitDetail = await RepositoryManager.GetCommitDetailAsync("GitFixture", initialCommitHash, CancellationToken.None);
+    }
+
+    [Then(@"the changed file ""(.*)"" shows (\d+) lines? added and (\d+) lines? removed")]
+    public void ThenTheChangedFileShowsLinesAddedAndLinesRemoved(string path, int added, int removed)
+    {
+        Assert.NotNull(_commitDetail);
+        var file = Assert.Single(_commitDetail.Files, f => f.Path == path);
+        Assert.Equal(added, file.LinesAdded);
+        Assert.Equal(removed, file.LinesRemoved);
+    }
 
     private bool _cancelAccepted;
 

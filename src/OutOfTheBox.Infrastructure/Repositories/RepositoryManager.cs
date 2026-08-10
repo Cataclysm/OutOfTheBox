@@ -592,7 +592,17 @@ public sealed class RepositoryManager(
             return null;
         }
 
-        var files = ParseNameStatus(output[(recordSeparatorIndex + LogRecordSeparator.Length)..]);
+        // A second invocation, not combined with the one above - --numstat and --name-status are
+        // both diff-format selectors and git rejects using both at once, the same reason --no-patch
+        // couldn't be combined with --name-status either (see that comment above). Looked up by path
+        // below rather than parsed inline with the name-status pass, since the two outputs are keyed
+        // differently for a rename/copy (name-status splits old/new into separate tab fields;
+        // numstat instead reports one path using an "old => new" arrow, which ParseNumstat
+        // deliberately doesn't parse - see its own comment for why that's fine here).
+        var numstatOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["show", "--numstat", "--format=", hash], cancellationToken);
+        var lineStats = string.IsNullOrEmpty(numstatOutput) ? [] : ParseNumstat(numstatOutput);
+
+        var files = ParseNameStatus(output[(recordSeparatorIndex + LogRecordSeparator.Length)..], lineStats);
         var refs = GitDecorationParser.Parse(fields[9].Trim(), remoteNames);
 
         return new CommitDetail(
@@ -635,7 +645,7 @@ public sealed class RepositoryManager(
     private static DateTimeOffset ParseUnixSeconds(string field) =>
         long.TryParse(field.Trim(), out var unixSeconds) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds) : DateTimeOffset.UnixEpoch;
 
-    private static IReadOnlyList<CommitFileChange> ParseNameStatus(string section)
+    private static IReadOnlyList<CommitFileChange> ParseNameStatus(string section, IReadOnlyDictionary<string, (int Added, int Removed)> lineStats)
     {
         var files = new List<CommitFileChange>();
 
@@ -665,12 +675,56 @@ public sealed class RepositoryManager(
 
             // A rename/copy status line carries both the old and new path ("R100<TAB>old<TAB>new");
             // every other status carries just the one current path.
-            files.Add(kind is CommitFileChangeKind.Renamed or CommitFileChangeKind.Copied && parts.Length >= 3
-                ? new CommitFileChange(parts[2], kind, parts[1])
-                : new CommitFileChange(parts[1], kind));
+            var path = kind is CommitFileChangeKind.Renamed or CommitFileChangeKind.Copied && parts.Length >= 3
+                ? parts[2]
+                : parts[1];
+            var oldPath = kind is CommitFileChangeKind.Renamed or CommitFileChangeKind.Copied && parts.Length >= 3
+                ? parts[1]
+                : null;
+
+            // Naturally absent (TryGetValue misses) for a rename/copy - ParseNumstat deliberately
+            // never adds an entry for one, and the commit detail page doesn't show line counts for
+            // those kinds anyway (an old/new arrow, not a plain path, is what git's own line-stat
+            // output would otherwise key it by).
+            var stats = lineStats.TryGetValue(path, out var s) ? s : ((int, int)?)null;
+
+            files.Add(new CommitFileChange(path, kind, oldPath, stats?.Item1, stats?.Item2));
         }
 
         return files;
+    }
+
+    // "<added>\t<removed>\t<path>" per changed file (git show --numstat) - "-\t-\t<path>" for a file
+    // with no line-based diff (binary content), which is deliberately left out of the returned
+    // dictionary (no meaningful count to show). A rename/copy's path here uses git's "old => new"
+    // arrow notation instead of a plain path (occasionally shortened to a common-prefix
+    // "dir/{old => new}" form) - also deliberately left unparsed and thus absent from the
+    // dictionary, since ParseNameStatus never looks up a rename/copy's path in it anyway.
+    private static Dictionary<string, (int Added, int Removed)> ParseNumstat(string section)
+    {
+        var stats = new Dictionary<string, (int, int)>(StringComparer.Ordinal);
+
+        foreach (var rawLine in section.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var parts = line.Split('\t');
+            if (parts.Length < 3 || parts[2].Contains(" => ", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (int.TryParse(parts[0], out var added) && int.TryParse(parts[1], out var removed))
+            {
+                stats[parts[2]] = (added, removed);
+            }
+        }
+
+        return stats;
     }
 
     /// <inheritdoc />
