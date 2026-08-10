@@ -38,6 +38,14 @@ public enum CommitFileChangeKind
 public sealed record CommitFileChange(string Path, CommitFileChangeKind Kind, string? OldPath = null, int? LinesAdded = null, int? LinesRemoved = null);
 
 /// <summary>
+/// A parent commit as shown on the commit detail subpage's own Parents field - just enough to link
+/// to it and show what it was, without the full <see cref="CommitDetail"/> a second `git show` per
+/// parent would cost. <see cref="Subject"/> is empty if the parent's own subject couldn't be looked
+/// up (e.g. a shallow clone missing that commit) - the link/hash still render, just without it.
+/// </summary>
+public sealed record CommitParentInfo(string Hash, string ShortHash, string Subject);
+
+/// <summary>
 /// The full detail of a single commit - everything <see cref="CommitSummary"/> already carries plus
 /// the fields only worth fetching for one commit at a time (full message body, separate committer
 /// identity, per-file change list), parsed from <c>git show</c>, per the commit detail subpage's
@@ -46,7 +54,7 @@ public sealed record CommitFileChange(string Path, CommitFileChangeKind Kind, st
 public sealed record CommitDetail(
     string Hash,
     string ShortHash,
-    IReadOnlyList<string> ParentHashes,
+    IReadOnlyList<CommitParentInfo> Parents,
     string AuthorName,
     string AuthorEmail,
     DateTimeOffset AuthorDate,

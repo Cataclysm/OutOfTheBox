@@ -373,6 +373,34 @@ public sealed class RepositoryManagementSteps : IDisposable
         Assert.Empty(_dirtyFilePaths);
     }
 
+    [Given(@"a second commit exists on top of the fixture repository's initial commit")]
+    public async Task GivenASecondCommitExistsOnTopOfTheFixtureRepositorySInitialCommit()
+    {
+        await EnsureFactoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(SourceRepositoryPath, "second.txt"), "second commit content");
+        await GitFixture.RunGitAsync(SourceRepositoryPath, "add", "-A");
+        await GitFixture.RunGitAsync(SourceRepositoryPath, "commit", "-q", "-m", "second commit");
+    }
+
+    [When(@"an operator requests the commit detail for the fixture repository's newest commit")]
+    public async Task WhenAnOperatorRequestsTheCommitDetailForTheFixtureRepositorySNewestCommit()
+    {
+        await EnsureFactoryAsync();
+
+        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var newestCommitHash = Assert.Single(commits).Hash;
+
+        _commitDetail = await RepositoryManager.GetCommitDetailAsync("GitFixture", newestCommitHash, CancellationToken.None);
+    }
+
+    [Then(@"its single parent shows the initial commit's subject")]
+    public void ThenItsSingleParentShowsTheInitialCommitsSubject()
+    {
+        Assert.NotNull(_commitDetail);
+        var parent = Assert.Single(_commitDetail.Parents);
+        Assert.Equal("initial commit", parent.Subject);
+    }
+
     private bool _cancelAccepted;
 
     [When(@"an operator cancels that clone from the dashboard")]

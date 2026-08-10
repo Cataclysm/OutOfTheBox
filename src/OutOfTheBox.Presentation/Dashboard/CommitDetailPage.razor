@@ -7,7 +7,7 @@
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @implements IDisposable
 
-<PageTitle>@VersionInfo.DisplayName - Commit @Hash</PageTitle>
+<PageTitle>@VersionInfo.DisplayName - @(_detail?.Subject ?? $"Commit {Hash}")</PageTitle>
 
 <a class="back-link" href="@($"repository-management/{Name}")">← Back to @Name</a>
 
@@ -21,7 +21,7 @@ else if (_detail is null)
 }
 else
 {
-    <h1>@_detail.ShortHash</h1>
+    <h1>@_detail.Subject</h1>
 
     <dl>
         @if (_summary is not null)
@@ -33,18 +33,24 @@ else
         <dd>@_detail.Hash</dd>
         <dt>Parents</dt>
         <dd>
-            @if (_detail.ParentHashes.Count == 0)
+            @if (_detail.Parents.Count == 0)
             {
                 @:None (root commit)
             }
             else
             {
-                @for (var i = 0; i < _detail.ParentHashes.Count; i++)
-                {
-                    var parentHash = _detail.ParentHashes[i];
-                    <a href="@($"repository-management/{Name}/commits/{parentHash}")">@parentHash[..Math.Min(7, parentHash.Length)]</a>
-                    @(i < _detail.ParentHashes.Count - 1 ? ", " : "")
-                }
+                <ul class="commit-parent-list">
+                    @foreach (var parent in _detail.Parents)
+                    {
+                        <li>
+                            <a href="@($"repository-management/{Name}/commits/{parent.Hash}")">@parent.ShortHash</a>
+                            @if (!string.IsNullOrEmpty(parent.Subject))
+                            {
+                                <span class="commit-parent-subject">@parent.Subject</span>
+                            }
+                        </li>
+                    }
+                </ul>
             }
         </dd>
         @if (_detail.Refs.Count > 0)
@@ -60,9 +66,15 @@ else
             </dd>
         }
         <dt>Author</dt>
-        <dd>@_detail.AuthorName &lt;@_detail.AuthorEmail&gt; on @FormatDate(_detail.AuthorDate)</dd>
+        <dd class="commit-person">
+            <Avatar Name="@_detail.AuthorName" Email="@_detail.AuthorEmail" />
+            <span>@_detail.AuthorName &lt;@_detail.AuthorEmail&gt; on @FormatDate(_detail.AuthorDate)</span>
+        </dd>
         <dt>Committer</dt>
-        <dd>@_detail.CommitterName &lt;@_detail.CommitterEmail&gt; on @FormatDate(_detail.CommitterDate)</dd>
+        <dd class="commit-person">
+            <Avatar Name="@_detail.CommitterName" Email="@_detail.CommitterEmail" />
+            <span>@_detail.CommitterName &lt;@_detail.CommitterEmail&gt; on @FormatDate(_detail.CommitterDate)</span>
+        </dd>
     </dl>
 
     <h2>Message</h2>

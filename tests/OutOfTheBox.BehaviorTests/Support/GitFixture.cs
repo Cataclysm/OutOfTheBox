@@ -67,7 +67,10 @@ public sealed class GitFixture : IDisposable
         return new GitFixture(root);
     }
 
-    private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
+    // internal, not private - RepositoryManagementSteps reuses this for its own ad-hoc test-setup
+    // commits (e.g. a second commit to exercise parent-info lookup) rather than duplicating a second
+    // near-identical raw git-process runner.
+    internal static async Task RunGitAsync(string workingDirectory, params string[] arguments)
     {
         using var process = new Process
         {

@@ -939,6 +939,57 @@ dd {
     word-break: break-word;
 }
 
+/* Commit detail's Author/Committer rows - the Avatar component sits inline with the existing
+   name/email/date text rather than stacking above it, so these two rows don't grow noticeably
+   taller than every other <dd> in the same <dl>. */
+.commit-person {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Fixed-size circle for both states (a loaded Gravatar image and the vendored fallback icon) so
+   nothing reflows when the image fails and onerror swaps in the fallback. */
+.avatar {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    flex: none;
+}
+
+.avatar-image {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.avatar-fallback {
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-sunken);
+    color: var(--text-muted);
+}
+
+/* Commit detail's Parents field - one row per parent (a merge commit has two), each showing that
+   parent's own subject alongside its hash link rather than just a bare comma-separated hash list. */
+.commit-parent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.commit-parent-subject {
+    color: var(--text-muted);
+    margin-left: 0.5rem;
+}
+
 /* Repository detail's Commits/Files tab group - only one of the two (each potentially long) panels
    visible at a time, per direct instruction. */
 .tab-group {

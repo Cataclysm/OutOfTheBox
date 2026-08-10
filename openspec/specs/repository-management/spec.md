@@ -181,11 +181,11 @@ The system SHALL show, on a repository's detail subpage, its commit history as a
 - **THEN** the system loads the next page of commit history rather than having loaded the entire history up front
 
 ### Requirement: A commit's detail subpage lists its changed files, each with a viewable diff
-The system SHALL let an operator open a specific commit's own detail subpage (reached from the commit graph) showing its full message, author and committer identity, parent hash(es), and the list of files it changed, each labeled with its change kind (added, modified, deleted, renamed, or copied). For an added, modified, or deleted file, the list SHALL also show its added/removed line counts (not shown for a renamed or copied file, where a line count isn't meaningful to attribute). Selecting a listed file (the row itself, not a separate button, consistent with how the commit graph's own rows are selected) SHALL show that file's unified diff for the commit, syntax-highlighted, rather than only the bare file name and change kind.
+The system SHALL let an operator open a specific commit's own detail subpage (reached from the commit graph) showing its full message, author and committer identity, its parent commits, and the list of files it changed, each labeled with its change kind (added, modified, deleted, renamed, or copied). For an added, modified, or deleted file, the list SHALL also show its added/removed line counts (not shown for a renamed or copied file, where a line count isn't meaningful to attribute). Selecting a listed file (the row itself, not a separate button, consistent with how the commit graph's own rows are selected) SHALL show that file's unified diff for the commit, syntax-highlighted, rather than only the bare file name and change kind.
 
 #### Scenario: Opening a commit's detail subpage
 - **WHEN** an operator selects a specific commit from the graph
-- **THEN** they see that commit's full message, author/committer identity, parent hash(es), and the list of files it changed with each one's change kind
+- **THEN** they see that commit's full message, author/committer identity, parent commits, and the list of files it changed with each one's change kind
 
 #### Scenario: Added/modified/deleted files show their line counts
 - **WHEN** a commit's changed-files list includes an added, modified, or deleted file
@@ -202,6 +202,25 @@ The system SHALL let an operator open a specific commit's own detail subpage (re
 #### Scenario: A binary file has no diff to show
 - **WHEN** the selected file's diff has no meaningful text representation (e.g. a binary file)
 - **THEN** the system indicates no diff is available rather than showing empty or garbled content
+
+### Requirement: A commit's detail subpage is titled by its own subject, shows author/committer pictures, and links each parent with its own subject
+The system SHALL use a commit's own subject (not its hash) as both the browser page title and the visible heading of its detail subpage. The system SHALL show a picture for the commit's author and, separately, its committer, sourced by their email address; when no picture is available for an email, the system SHALL show a generic fallback rather than a broken image. Each of a commit's parent commits (a merge commit has more than one) SHALL be shown as a link to that parent's own detail subpage labeled with both its hash and its own subject, not a bare hash alone.
+
+#### Scenario: The page title and heading are the commit's subject
+- **WHEN** an operator opens a commit's detail subpage
+- **THEN** both the browser tab title and the page's own visible heading show that commit's subject, not its hash
+
+#### Scenario: Author and committer each show a picture
+- **WHEN** an operator opens a commit's detail subpage
+- **THEN** the author's identity and the committer's identity each show a picture sourced from their own email address
+
+#### Scenario: A missing picture falls back gracefully
+- **WHEN** no picture is available for an author's or committer's email address
+- **THEN** the system shows a generic fallback in its place rather than a broken image
+
+#### Scenario: Each parent link shows that parent's own subject
+- **WHEN** an operator opens a commit's detail subpage for a commit with one or more parents
+- **THEN** each parent is shown as a link to its own detail subpage, labeled with both its hash and its own subject
 
 ### Requirement: A commit can be checked out as a detached HEAD
 The system SHALL let an operator check out any commit shown in the graph, resulting in a detached HEAD at that commit, requiring explicit confirmation before proceeding given it changes the repository's checked-out state. The system SHALL distinguish a detached HEAD from a normal branch checkout wherever git status is displayed (repository list and detail), rather than showing the literal ref name `HEAD` as if it were a branch.

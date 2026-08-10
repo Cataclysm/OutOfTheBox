@@ -84,3 +84,8 @@ Feature: Repository Management
     Scenario: Listing dirty files in a clean repository returns nothing
         When an operator lists the fixture repository's dirty file paths
         Then the dirty file paths are empty
+
+    Scenario: A commit's detail includes its parent's own subject
+        Given a second commit exists on top of the fixture repository's initial commit
+        When an operator requests the commit detail for the fixture repository's newest commit
+        Then its single parent shows the initial commit's subject

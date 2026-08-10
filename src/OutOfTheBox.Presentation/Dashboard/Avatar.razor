@@ -1,0 +1,36 @@
+@* A person's picture for a git identity (commit author/committer), Fork-style - sourced from
+   Gravatar (https://gravatar.com), keyed by the identity's own email address, since git carries no
+   picture of its own. Gravatar returns an actual 404 for an email with no registered image (thanks
+   to the d=404 query param below) rather than a generic default image, which is what makes a
+   missing picture detectable at all: the plain HTML onerror attribute below (not a Blazor @onerror
+   handler - no interop round-trip needed) swaps to the vendored fallback icon entirely client-side,
+   the instant the browser's own image request comes back 404. *@
+<span class="avatar" title="@Name">
+    <img class="avatar-image" src="@GravatarUrl" alt=""
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
+    <span class="avatar-fallback" style="display:none">
+        <Icon Name="avatar-placeholder" />
+    </span>
+</span>
+
+@code {
+    /// <summary>The identity's display name - shown as this avatar's tooltip, not fetched from anywhere itself.</summary>
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The identity's email address - hashed (never sent in the clear) to build the Gravatar URL.</summary>
+    [Parameter, EditorRequired]
+    public string Email { get; set; } = string.Empty;
+
+    // s=64 requests a 64px image (this dashboard displays it smaller via CSS, but requesting a
+    // sharper source avoids visible upscaling blur on a HiDPI display); d=404 is what makes a missing
+    // picture detectable client-side at all - Gravatar's own default (a generated identicon-like
+    // image) would otherwise always "succeed", giving onerror nothing to fire on.
+    private string GravatarUrl => $"https://www.gravatar.com/avatar/{GravatarHash(Email)}?s=64&d=404";
+
+    // MD5 here is Gravatar's own documented hash-the-email API contract (https://docs.gravatar.com/
+    // general/hash-immutability/), not a security use - there's no cryptographic property being
+    // relied on, just the specific algorithm Gravatar's API requires to look up a picture.
+    private static string GravatarHash(string email) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant())));
+}

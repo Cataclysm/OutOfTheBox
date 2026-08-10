@@ -602,10 +602,13 @@ public sealed class RepositoryManager(
         var files = ParseNameStatus(output[(recordSeparatorIndex + LogRecordSeparator.Length)..], lineStats);
         var refs = GitDecorationParser.Parse(fields[9].Trim(), remoteNames);
 
+        var parentHashes = fields[2].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parents = parentHashes.Length == 0 ? [] : await GetParentInfosAsync(targetPath, parentHashes, cancellationToken);
+
         return new CommitDetail(
             Hash: fields[0].Trim(),
             ShortHash: fields[1].Trim(),
-            ParentHashes: fields[2].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries),
+            Parents: parents,
             AuthorName: fields[3].Trim(),
             AuthorEmail: fields[4].Trim(),
             AuthorDate: ParseUnixSeconds(fields[5]),
@@ -616,6 +619,40 @@ public sealed class RepositoryManager(
             Body: fields[11].Trim(),
             Refs: refs,
             Files: files);
+    }
+
+    // One `git log --no-walk` call for every parent at once, not one `git show` per parent - a merge
+    // commit has two, but there's no reason to pay two round-trips when a single revision list gives
+    // git everything it needs. Looked up by hash into a dictionary and re-projected over
+    // parentHashes' own order, rather than trusting the output's order to match the input's - `--no-
+    // walk` alone still sorts (reverse chronological) unless given `=unsorted`, and matching by hash
+    // is simplest to get right without needing to know the exact contract in every git version.
+    private async Task<IReadOnlyList<CommitParentInfo>> GetParentInfosAsync(string targetPath, string[] parentHashes, CancellationToken cancellationToken)
+    {
+        var format = $"%H{LogFieldSeparator}%h{LogFieldSeparator}%s{LogRecordSeparator}";
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["log", "--no-walk", $"--format={format}", .. parentHashes], cancellationToken);
+
+        var byHash = new Dictionary<string, CommitParentInfo>();
+        if (!string.IsNullOrEmpty(output))
+        {
+            foreach (var record in output.Split(LogRecordSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var recordFields = record.Split(LogFieldSeparator);
+                if (recordFields.Length < 3)
+                {
+                    continue;
+                }
+
+                var hash = recordFields[0].Trim();
+                byHash[hash] = new CommitParentInfo(hash, recordFields[1].Trim(), recordFields[2].Trim());
+            }
+        }
+
+        // A parent this lookup couldn't resolve (the git invocation failed outright, or a shallow
+        // clone doesn't have that commit's own data) still gets a usable entry - the hash and a
+        // best-effort short form, just without a subject - rather than silently dropping it from the
+        // list and making the commit look like it has fewer parents than it does.
+        return [.. parentHashes.Select(hash => byHash.TryGetValue(hash, out var info) ? info : new CommitParentInfo(hash, hash[..Math.Min(7, hash.Length)], string.Empty))];
     }
 
     /// <inheritdoc />
