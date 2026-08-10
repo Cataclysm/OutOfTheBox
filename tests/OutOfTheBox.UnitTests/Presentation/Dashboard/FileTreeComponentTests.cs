@@ -355,8 +355,31 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     /// <inheritdoc />
     public new void Dispose()
     {
-        Directory.Delete(_repositoryRoot, recursive: true);
+        DeleteWithRetry(_repositoryRoot);
         base.Dispose();
+    }
+
+    // The same transient-lock race RecursiveDelete (src/OutOfTheBox.Infrastructure) works around for
+    // production repository deletes, hit here often enough in practice (AV/indexer handle release
+    // lag on a temp directory dozens of these tests write/rename/delete files under in quick
+    // succession) to be worth a small retry rather than an occasional flaky full-suite run. Not
+    // reusing RecursiveDelete itself - it's internal to Infrastructure with no InternalsVisibleTo to
+    // this project, and pulling in a whole extra project reference for one retry loop isn't worth it
+    // for test cleanup.
+    private static void DeleteWithRetry(string path)
+    {
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(200 * attempt);
+            }
+        }
     }
 
     private sealed class FakeRepositoryFileBrowser(string repositoryRoot) : IRepositoryFileBrowser
