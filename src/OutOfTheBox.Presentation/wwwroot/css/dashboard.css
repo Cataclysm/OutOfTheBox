@@ -1079,13 +1079,20 @@ dd {
    `white-space: nowrap` makes an auto-layout table treat the subject's full unwrapped width as a
    hard minimum for this column, which text-overflow: ellipsis can never actually reach since the
    column is never allowed to render narrower than that minimum in the first place. max-width: 0
-   (with width: 100% to still claim this column's intended "remaining space" share) caps what this
-   cell contributes to that minimum-width computation without switching the whole `.data-table`
-   convention to table-layout: fixed, which every other column's col-shrink sizing (width:1% relying
-   on auto-layout's content-aware expansion, documented on .col-shrink itself) depends on. */
+   caps what this cell contributes to that minimum-width computation without switching the whole
+   `.data-table` convention to table-layout: fixed, which every other column's col-shrink sizing
+   (width:1% relying on auto-layout's content-aware expansion, documented on .col-shrink itself)
+   depends on. Deliberately NOT paired with width: 100% (an earlier version of this rule was) - this
+   table's first column (the lane-graphics cell the SVG overlay lines up against) has its own fixed
+   pixel <col> width, and a `width: 100%` demand from this cell competed against that fixed width in
+   the auto-layout algorithm, collapsing the lane column to a sliver - the absolutely-positioned SVG
+   overlay, unaware of any of this (it doesn't participate in table layout), kept its own originally
+   intended width and rendered on top of the ref pills/subject text that had shifted left into the
+   space the lane column gave up. max-width: 0 alone is sufficient: this column's own <col /> (no
+   declared width) already absorbs the remaining space on its own, the same mechanism .col-shrink's
+   sibling columns already rely on - no need to also assert width: 100% here. */
 .commit-subject-cell {
     max-width: 0;
-    width: 100%;
 }
 
 .ref-pill {
