@@ -269,6 +269,13 @@ dialog {
     color: var(--text);
     box-shadow: var(--shadow-card);
     max-width: min(480px, calc(100vw - 2rem));
+    /* A modal <dialog> already makes the rest of the page inert for clicks/focus, but that doesn't
+       stop scroll chaining: wheel input past a scrollable region's own boundary (its own content, or
+       the browser's default dialog overflow:auto for a message too long to fit) otherwise passes the
+       remaining delta to the page behind it, scrolling the background out from under an open dialog.
+       Applied here, not just on the specific known-scrollable regions below, so any future dialog
+       content that ends up scrollable is covered by default. */
+    overscroll-behavior: contain;
 }
 
 dialog::backdrop {
@@ -1353,6 +1360,11 @@ dd {
    with what's visually capped. */
 .file-preview-codemirror.CodeMirror .CodeMirror-scroll {
     max-height: 65vh;
+    /* Without this, scrolling past this element's own end (mouse wheel keeps going once content is
+       fully scrolled) chains the remaining delta to the dashboard page behind the modal dialog,
+       visibly scrolling the background - CodeMirror's own scroll handling doesn't prevent that on
+       its own, `overscroll-behavior` is what actually stops the chain at this boundary. */
+    overscroll-behavior: contain;
 }
 
 /* Hand-authored "visual-studio-dark" CodeMirror theme (selector convention/scoping matches how
@@ -1410,6 +1422,8 @@ dd {
 .markdown-preview {
     max-height: 65vh;
     overflow-y: auto;
+    /* See .CodeMirror-scroll's own remarks - same scroll-chaining-to-the-background problem, same fix. */
+    overscroll-behavior: contain;
     line-height: 1.55;
 }
 
