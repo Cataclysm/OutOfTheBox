@@ -3,8 +3,10 @@
 @using System.Globalization
 @using OutOfTheBox.Application.Execution
 @inject IRunRepository RunRepository
+@inject IRunEventBus RunEventBus
 @inject IWorkingDirectoryResolver WorkingDirectoryResolver
 @inject NavigationManager NavigationManager
+@implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - History</PageTitle>
 
@@ -100,6 +102,7 @@ else
     private CancellationTokenSource? _debounceCts;
     private SortColumn _sortColumn = SortColumn.Started;
     private bool _sortAscending;
+    private IDisposable? _runSubscription;
 
     private enum SortColumn
     {
@@ -111,7 +114,29 @@ else
     }
 
     /// <inheritdoc />
-    protected override Task OnInitializedAsync() => RefreshAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _runSubscription = RunEventBus.Subscribe(OnRunEvent);
+    }
+
+    // Mirrors Status.razor's own OnRunEvent - a new run (started by any caller, dashboard or MCP)
+    // or one reaching a terminal state both need to show up here live, per service-dashboard's
+    // "Completion moves a run from status to history live" requirement; only per-line stdout/stderr
+    // output is skipped, since this view never shows a live output preview.
+    private void OnRunEvent(RunEvent runEvent)
+    {
+        if (runEvent.Type is RunEventType.OutputLine)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        });
+    }
 
     private Task ToggleKind(RunKind kind, bool isSelected)
     {
@@ -215,4 +240,7 @@ else
     // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.
     private static string FormatDateTime(DateTimeOffset value) =>
         value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <inheritdoc />
+    public void Dispose() => _runSubscription?.Dispose();
 }

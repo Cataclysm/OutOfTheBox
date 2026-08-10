@@ -1,9 +1,11 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
+using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
@@ -23,10 +25,12 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 public sealed class HistoryComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
+    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
 
     public HistoryComponentTests()
     {
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
+        Services.AddSingleton(_runEventBus);
 
         // The repository filter resolves an operator-typed name against the configured root before
         // querying - a real resolver backed by the same root every test's fake repository paths
@@ -122,6 +126,37 @@ public sealed class HistoryComponentTests : BunitContext, IDisposable
             Assert.Contains("alpha", cut.Markup);
             Assert.Contains("beta", cut.Markup);
         });
+    }
+
+    [Fact]
+    public async Task A_run_completed_elsewhere_appears_live_without_reload()
+    {
+        // Reproduces the reported bug directly: a run started and completed via the MCP tools (no
+        // dashboard interaction at all, just like a real git_run/dotnet_run call), publishing the
+        // same RunEvent a dashboard-triggered action would - History must pick it up on its own,
+        // the same way Status already does, per service-dashboard's "Completion moves a run from
+        // status to history live" requirement.
+        var cut = Render<History>();
+        cut.WaitForAssertion(() => Assert.Contains("No runs match the current filters.", cut.Markup));
+
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var runId = Guid.NewGuid();
+        var repositoryPath = @"C:\repositories\mcp-triggered";
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = repositoryPath,
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            CompletedAt = DateTimeOffset.UtcNow,
+            ExitCode = 0,
+            Outcome = RunOutcome.Completed,
+        }, CancellationToken.None);
+
+        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repositoryPath));
+
+        cut.WaitForAssertion(() => Assert.Contains("mcp-triggered", cut.Markup), TimeSpan.FromSeconds(2));
     }
 
     private static Run Sample(RunKind kind, string repositoryPath) => new()

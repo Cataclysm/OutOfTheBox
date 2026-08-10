@@ -65,6 +65,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Clicking a commit's parent-hash link on the commit detail page updated the URL but kept showing the previous commit's data - Blazor reuses the component instance across same-route navigations, so the data reload was moved from `OnInitializedAsync` (runs once per instance) to `OnParametersSetAsync` (runs on every navigation)
 - The About page's MCP tool list was missing `get_run_resources`, `get_environment_info`, and `get_file_lock_info`, and still said "eight tools"
 - Repository deletion could fail with a transient "directory in use"/"not empty" error even though every file inside had already been removed - a Windows filesystem race (AV/indexer handle release lag) between the last file disappearing and the now-empty directory itself becoming deletable. Both repository deletion and the file tree browser's own delete now retry with backoff instead of failing on the first attempt
+- The History page never updated live - unlike Status, it had no `IRunEventBus` subscription at all, so a run's completion (whether triggered from the dashboard or, as found live-testing against a real install, via an MCP `dotnet_run`/`git_run` call) only ever appeared after a manual reload or an unrelated filter interaction happening to re-query. It now subscribes the same way Status does
 
 ### In progress
 
