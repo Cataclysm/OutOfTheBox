@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.ComponentModel;
-using System.Text;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
@@ -340,9 +339,9 @@ public sealed class RepositoryManager(
         }
 
         var targetPath = resolution.ResolvedPath!;
-        var currentBranch = (await RunGitCaptureAsync(targetPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
-        var localOutput = await RunGitCaptureAsync(targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
-        var remoteOutput = await RunGitCaptureAsync(targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+        var currentBranch = (await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
+        var localOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+        var remoteOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
 
         var localNames = new HashSet<string>(StringComparer.Ordinal);
         var branches = new List<RepositoryBranch>();
@@ -401,7 +400,7 @@ public sealed class RepositoryManager(
 
         try
         {
-            var localOutput = await RunGitCaptureAsync(targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+            var localOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
             var hasLocal = SplitNonEmptyLines(localOutput).Contains(branch, StringComparer.Ordinal);
 
             string[] checkoutArguments;
@@ -420,7 +419,7 @@ public sealed class RepositoryManager(
                 checkoutArguments = ["checkout", "-b", branch, "--track", remoteRef];
             }
 
-            var sink = new CapturingOutputSink();
+            var sink = new GitCaptureOutputSink();
 
             try
             {
@@ -451,7 +450,7 @@ public sealed class RepositoryManager(
     {
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-        var sink = new CapturingOutputSink();
+        var sink = new GitCaptureOutputSink();
 
         try
         {
@@ -516,7 +515,9 @@ public sealed class RepositoryManager(
         // contain. %at (author date as a Unix timestamp) is used instead of a formatted date string
         // so parsing needs no locale/format assumptions.
         var format = $"%H{LogFieldSeparator}%h{LogFieldSeparator}%P{LogFieldSeparator}%an{LogFieldSeparator}%at{LogFieldSeparator}%D{LogFieldSeparator}%s{LogRecordSeparator}";
-        var output = await RunGitCaptureAsync(
+        var output = await GitCaptureRunner.CaptureAsync(
+            processRunner,
+            logger,
             targetPath,
             ["log", "--all", "--topo-order", $"--skip={skip}", $"-n{take}", $"--format={format}"],
             cancellationToken);
@@ -572,7 +573,7 @@ public sealed class RepositoryManager(
         // can't be combined with --name-status (git rejects that combination outright), so the header
         // record separator is what marks where the header ends and the file list begins instead.
         var format = $"%H{LogFieldSeparator}%h{LogFieldSeparator}%P{LogFieldSeparator}%an{LogFieldSeparator}%ae{LogFieldSeparator}%at{LogFieldSeparator}%cn{LogFieldSeparator}%ce{LogFieldSeparator}%ct{LogFieldSeparator}%D{LogFieldSeparator}%s{LogFieldSeparator}%b{LogRecordSeparator}";
-        var output = await RunGitCaptureAsync(targetPath, ["show", $"--format={format}", "--name-status", hash], cancellationToken);
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["show", $"--format={format}", "--name-status", hash], cancellationToken);
 
         if (string.IsNullOrEmpty(output))
         {
@@ -675,7 +676,7 @@ public sealed class RepositoryManager(
 
         try
         {
-            var sink = new CapturingOutputSink();
+            var sink = new GitCaptureOutputSink();
 
             try
             {
@@ -707,7 +708,7 @@ public sealed class RepositoryManager(
 
     private async Task<HashSet<string>> GetRemoteNamesAsync(string targetPath, CancellationToken cancellationToken)
     {
-        var output = await RunGitCaptureAsync(targetPath, ["remote"], cancellationToken);
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["remote"], cancellationToken);
         return output is null ? [] : new HashSet<string>(SplitNonEmptyLines(output), StringComparer.Ordinal);
     }
 
@@ -771,7 +772,7 @@ public sealed class RepositoryManager(
             var timeout = TimeSpan.FromSeconds(options.Value.DefaultExecutionTimeoutSeconds);
             using var timeoutCts = new CancellationTokenSource(timeout);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-            var sink = new CapturingOutputSink();
+            var sink = new GitCaptureOutputSink();
 
             try
             {
@@ -806,7 +807,7 @@ public sealed class RepositoryManager(
 
     private async Task<string?> FindRemoteRefAsync(string targetPath, string branch, CancellationToken cancellationToken)
     {
-        var remoteOutput = await RunGitCaptureAsync(targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
+        var remoteOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
         string? fallback = null;
 
         foreach (var remoteRef in SplitNonEmptyLines(remoteOutput))
@@ -831,54 +832,6 @@ public sealed class RepositoryManager(
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .Where(line => line.Length > 0);
-
-    /// <summary>Runs a short-lived git invocation and captures its stdout, for the ad-hoc lookups (branches, remotes) this class needs outside the streamed/history-tracked run path.</summary>
-    private async Task<string?> RunGitCaptureAsync(string workingDirectory, string[] arguments, CancellationToken cancellationToken)
-    {
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-        var sink = new CapturingOutputSink();
-
-        try
-        {
-            var result = await processRunner.RunAsync(new ProcessRunRequest(arguments, workingDirectory, "git"), sink, linkedCts.Token);
-            return result.ExitCode == 0 ? sink.Stdout : null;
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch (Win32Exception ex)
-        {
-            // Backs ListBranchesAsync/ListCommitsAsync/FindRemoteRefAsync/SwitchBranchAsync's local-
-            // branch check - a failure here surfaces only as an empty branch list or commit graph,
-            // indistinguishable from "genuinely nothing there" without this trace.
-            logger.LogWarning(ex, "git {Arguments} failed to start in {WorkingDirectory}.", string.Join(' ', arguments), workingDirectory);
-            return null;
-        }
-    }
-
-    private sealed class CapturingOutputSink : IProcessOutputSink
-    {
-        private readonly StringBuilder _stdout = new();
-        private readonly StringBuilder _stderr = new();
-
-        public string Stdout => _stdout.ToString();
-
-        public string Stderr => _stderr.ToString();
-
-        public Task OnStandardOutputAsync(string line, CancellationToken cancellationToken)
-        {
-            _stdout.AppendLine(line);
-            return Task.CompletedTask;
-        }
-
-        public Task OnStandardErrorAsync(string line, CancellationToken cancellationToken)
-        {
-            _stderr.AppendLine(line);
-            return Task.CompletedTask;
-        }
-    }
 
     /// <summary>
     /// Recursively clears the read-only attribute from every file under <paramref name="path"/> -

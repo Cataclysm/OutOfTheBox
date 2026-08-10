@@ -31,7 +31,7 @@ else
         <dt>Size</dt>
         <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "Computing…")</dd>
         <dt>Git status</dt>
-        <dd>@GitStatusText(_summary)</dd>
+        <dd>@RepositoryDisplay.GitStatusText(_summary)</dd>
         @if (_summary.IsGitRepository)
         {
             <dt>Branch</dt>
@@ -280,41 +280,6 @@ else
         };
 
         return _sortAscending ? ordered : ordered.Reverse();
-    }
-
-    private static string GitStatusText(RepositorySummary repository)
-    {
-        if (!repository.StatsComputed)
-        {
-            return "Computing…";
-        }
-
-        if (!repository.IsGitRepository)
-        {
-            return "Not a git repository";
-        }
-
-        var branchText = repository.IsDetachedHead ? $"detached at {repository.Branch}" : repository.Branch ?? "(no branch)";
-        var status = $"{branchText} ({(repository.IsDirty ? "dirty" : "clean")})";
-
-        if (repository.IsRemoteGone)
-        {
-            status += ", remote gone";
-        }
-        else
-        {
-            if (repository.AheadCount is > 0)
-            {
-                status += $", ahead {repository.AheadCount}";
-            }
-
-            if (repository.BehindCount is > 0)
-            {
-                status += $", behind {repository.BehindCount}";
-            }
-        }
-
-        return status;
     }
 
     // Local time, no offset suffix - see RunDetail.razor's own FormatDateTime for why.

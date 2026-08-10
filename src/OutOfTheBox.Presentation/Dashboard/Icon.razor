@@ -1,13 +1,21 @@
+@using System.Collections.Concurrent
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Hosting
+
 <svg class="icon @CssClass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     @GetPaths()
 </svg>
 
 @code {
     /// <summary>
-    /// Which icon to render - one of the names listed in <c>wwwroot/icons/ATTRIBUTION.md</c>
-    /// (vendored from Lucide, ISC-licensed). Rendered as inline SVG (not <c>&lt;img src&gt;</c>) so
-    /// <c>stroke="currentColor"</c> picks up the surrounding element's CSS <c>color</c> - what lets
-    /// e.g. the repository git-action buttons flash green/red on completion via a CSS class alone.
+    /// Which icon to render - one of the keys in <see cref="IconFiles"/>, backed by the matching
+    /// vendored file under <c>wwwroot/icons</c> (Lucide, https://lucide.dev, ISC-licensed - see that
+    /// directory's own ATTRIBUTION.md for the full vendored set and how to add another). Rendered as
+    /// inline SVG (not <c>&lt;img src&gt;</c>) so <c>stroke="currentColor"</c> picks up the
+    /// surrounding element's CSS <c>color</c> - what lets e.g. the repository git-action buttons
+    /// flash green/red on completion via a CSS class alone - so each vendored file's inner markup is
+    /// read once per icon name and cached (see <see cref="_pathsCache"/>) rather than the file being
+    /// fetched by the browser.
     /// </summary>
     [Parameter, EditorRequired]
     public string Name { get; set; } = string.Empty;
@@ -16,26 +24,53 @@
     [Parameter]
     public string? CssClass { get; set; }
 
-    private MarkupString GetPaths() => new(Name switch
+    [Inject]
+    private IWebHostEnvironment WebHostEnvironment { get; set; } = null!;
+
+    private static readonly ConcurrentDictionary<string, string> _pathsCache = new();
+
+    private static readonly Regex InnerSvgPattern = new("<svg[^>]*>(?<inner>.*)</svg>", RegexOptions.Singleline | RegexOptions.Compiled);
+
+    private static readonly Dictionary<string, string> IconFiles = new()
     {
-        "trash" => """<path d="M10 11v6" /><path d="M14 11v6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />""",
-        "download" => """<path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" />""",
-        "pull" => """<circle cx="12" cy="12" r="10" /><path d="M12 8v8" /><path d="m8 12 4 4 4-4" />""",
-        "push" => """<circle cx="12" cy="12" r="10" /><path d="m16 12-4-4-4 4" /><path d="M12 16V8" />""",
-        "force-push" => """<path d="m17 11-5-5-5 5" /><path d="m17 18-5-5-5 5" />""",
-        "fetch" => """<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />""",
-        "clean" => """<path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21" /><path d="m5.082 11.09 8.828 8.828" />""",
-        "branch" => """<path d="M15 6a9 9 0 0 0-9 9V3" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" />""",
-        "clear-filters" => """<path d="M2 5h20" /><path d="M6 12h12" /><path d="M9 19h6" />""",
-        "close" => """<path d="M18 6 6 18" /><path d="m6 6 12 12" />""",
-        "confirm" => """<path d="M20 6 9 17l-5-5" />""",
-        "spinner" => """<path d="M21 12a9 9 0 1 1-6.219-8.56" />""",
-        "folder" => """<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />""",
-        "folder-open" => """<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />""",
-        "file" => """<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" />""",
-        "pencil" => """<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" />""",
-        "tag" => """<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /><circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />""",
-        "checkout" => """<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" />""",
-        _ => string.Empty,
-    });
+        ["trash"] = "trash-2.svg",
+        ["download"] = "download.svg",
+        ["pull"] = "circle-arrow-down.svg",
+        ["push"] = "circle-arrow-up.svg",
+        ["force-push"] = "chevrons-up.svg",
+        ["fetch"] = "refresh-cw.svg",
+        ["clean"] = "eraser.svg",
+        ["branch"] = "git-branch.svg",
+        ["clear-filters"] = "list-filter.svg",
+        ["close"] = "x.svg",
+        ["confirm"] = "check.svg",
+        ["folder"] = "folder.svg",
+        ["folder-open"] = "folder-open.svg",
+        ["file"] = "file.svg",
+        ["pencil"] = "pencil.svg",
+        ["tag"] = "tag.svg",
+        ["checkout"] = "map-pin.svg",
+    };
+
+    private MarkupString GetPaths() => new(_pathsCache.GetOrAdd(Name, LoadInnerMarkup));
+
+    private string LoadInnerMarkup(string name)
+    {
+        if (!IconFiles.TryGetValue(name, out var fileName))
+        {
+            return string.Empty;
+        }
+
+        var file = WebHostEnvironment.WebRootFileProvider.GetFileInfo($"_content/OutOfTheBox.Presentation/icons/{fileName}");
+        if (!file.Exists)
+        {
+            return string.Empty;
+        }
+
+        using var stream = file.CreateReadStream();
+        using var reader = new StreamReader(stream);
+        var svg = reader.ReadToEnd();
+        var match = InnerSvgPattern.Match(svg);
+        return match.Success ? match.Groups["inner"].Value.Trim() : string.Empty;
+    }
 }

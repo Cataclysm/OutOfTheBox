@@ -32,7 +32,7 @@
             }
             @if (_truncated)
             {
-                <p class="empty-state">Preview truncated to the first @FormatSize(PreviewMaxBytes) - download the file for the rest.</p>
+                <p class="empty-state">Preview truncated to the first @RepositoryDisplay.FormatSize(PreviewMaxBytes) - download the file for the rest.</p>
             }
         }
         else
@@ -263,8 +263,4 @@
     }
 
     private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
-
-    private static string FormatSize(long bytes) => bytes >= 1024 * 1024
-        ? $"{bytes / (1024.0 * 1024):F1} MB"
-        : $"{bytes / 1024.0:F1} KB";
 }

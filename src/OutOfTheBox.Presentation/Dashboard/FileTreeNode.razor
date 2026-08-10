@@ -1,4 +1,3 @@
-@using System.Globalization
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryFileBrowser FileBrowser
@@ -38,7 +37,7 @@
         </span>
         @if (!IsDirectory && SizeBytes is not null)
         {
-            <span class="file-tree-meta">@FormatSize(SizeBytes.Value)</span>
+            <span class="file-tree-meta">@RepositoryDisplay.FormatSize(SizeBytes.Value)</span>
         }
     }
 </div>
@@ -259,14 +258,6 @@
             await OnChanged.InvokeAsync();
         }
     }
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1024L * 1024 * 1024 => $"{(bytes / (1024.0 * 1024 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} GB",
-        >= 1024L * 1024 => $"{(bytes / (1024.0 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} MB",
-        >= 1024L => $"{(bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture)} KB",
-        _ => $"{bytes} B",
-    };
 
     /// <inheritdoc />
     public void Dispose() => StopPolling();

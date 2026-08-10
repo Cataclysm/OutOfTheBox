@@ -14,6 +14,7 @@ using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -62,6 +63,7 @@ public sealed class RepositoriesComponentTests : BunitContext, IDisposable
             options,
             NullLogger<RepositoryManager>.Instance);
 
+        Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryManager>(repositoryManager);
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton(_runRegistry);

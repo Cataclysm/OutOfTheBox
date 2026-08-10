@@ -1,7 +1,5 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using System.ComponentModel;
-using System.Text;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Repositories;
 using Microsoft.Extensions.Logging;
@@ -13,13 +11,11 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// Reuses <see cref="IProcessRunner"/>'s process-spawning mechanics (per task 13.3) for the
 /// internal git invocations, but never goes through <c>RunEndpoints</c>/SSE/<c>RunRegistry</c>/
 /// history - this is background telemetry sampling, not an operator-triggered run, so its output
-/// is captured into a plain string via a throwaway <see cref="IProcessOutputSink"/>, not streamed
-/// or persisted anywhere.
+/// is captured into a plain string via <see cref="GitCaptureRunner"/>, not streamed or persisted
+/// anywhere.
 /// </remarks>
 public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILogger<GitRepositoryStatsProvider> logger) : IRepositoryStatsProvider
 {
-    private static readonly TimeSpan GitInvocationTimeout = TimeSpan.FromSeconds(10);
-
     /// <inheritdoc />
     public async Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken)
     {
@@ -55,13 +51,13 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         // distinguished here - `git rev-parse --abbrev-ref HEAD` (the previous approach) instead
         // returns the literal string "HEAD" when detached, which was previously passed straight
         // through and displayed as if "HEAD" were a real branch name.
-        var symbolicRef = (await RunGitCaptureAsync(repositoryPath, ["symbolic-ref", "-q", "--short", "HEAD"], cancellationToken))?.Trim();
+        var symbolicRef = (await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["symbolic-ref", "-q", "--short", "HEAD"], cancellationToken))?.Trim();
         var isDetachedHead = symbolicRef is null;
         var branch = isDetachedHead
-            ? (await RunGitCaptureAsync(repositoryPath, ["rev-parse", "--short", "HEAD"], cancellationToken))?.Trim()
+            ? (await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["rev-parse", "--short", "HEAD"], cancellationToken))?.Trim()
             : symbolicRef;
 
-        var statusOutput = await RunGitCaptureAsync(repositoryPath, ["status", "--porcelain"], cancellationToken);
+        var statusOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["status", "--porcelain"], cancellationToken);
         var isDirty = !string.IsNullOrEmpty(statusOutput?.Trim());
 
         int? ahead = null;
@@ -70,7 +66,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         // Fails (non-zero exit) when no upstream is configured - treated as "no upstream" rather
         // than an error, per specs/repository-management's "ahead/behind its upstream if one is
         // configured" wording.
-        var aheadBehind = await RunGitCaptureAsync(repositoryPath, ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], cancellationToken);
+        var aheadBehind = await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], cancellationToken);
         if (aheadBehind is not null)
         {
             var parts = aheadBehind.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);
@@ -88,7 +84,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         var isRemoteGone = false;
         if (!isDetachedHead && !string.IsNullOrEmpty(branch))
         {
-            var trackState = await RunGitCaptureAsync(repositoryPath, ["for-each-ref", "--format=%(upstream:track)", $"refs/heads/{branch}"], cancellationToken);
+            var trackState = await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["for-each-ref", "--format=%(upstream:track)", $"refs/heads/{branch}"], cancellationToken);
             isRemoteGone = trackState?.Contains("[gone]", StringComparison.Ordinal) == true;
         }
 
@@ -99,7 +95,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
 
     private async Task<IReadOnlyList<RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)
     {
-        var output = await RunGitCaptureAsync(repositoryPath, ["remote", "-v"], cancellationToken);
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["remote", "-v"], cancellationToken);
         if (string.IsNullOrEmpty(output))
         {
             return [];
@@ -163,53 +159,5 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         }
 
         return total;
-    }
-
-    private async Task<string?> RunGitCaptureAsync(string workingDirectory, string[] arguments, CancellationToken cancellationToken)
-    {
-        using var timeoutCts = new CancellationTokenSource(GitInvocationTimeout);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-
-        var sink = new CollectingOutputSink();
-
-        try
-        {
-            var result = await processRunner.RunAsync(new ProcessRunRequest(arguments, workingDirectory, "git"), sink, linkedCts.Token);
-            return result.ExitCode == 0 ? sink.Stdout : null;
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch (Win32Exception ex)
-        {
-            // git.exe unreachable for the process's account/PATH (e.g. a service account whose
-            // environment doesn't resolve it) - treated the same as "this git invocation produced
-            // nothing usable" rather than allowed to propagate. Left uncaught, this previously
-            // escaped RecomputeOneAsync/RecomputeAllAsync (which only caught
-            // OperationCanceledException) and crashed RepositoryStatsSampler's BackgroundService -
-            // which by default (BackgroundServiceExceptionBehavior.StopHost) stops the whole host,
-            // silently ending every future stats update, not just this one repository's. Logged
-            // (not just swallowed) because this exact "stats silently stop updating" bug was
-            // previously diagnosable only by reading code, not logs - a repeat occurrence (this
-            // repository or a different one) should be visible to the operator, not invisible.
-            logger.LogWarning(ex, "git {Arguments} failed to start in {WorkingDirectory} while sampling repository stats.", string.Join(' ', arguments), workingDirectory);
-            return null;
-        }
-    }
-
-    private sealed class CollectingOutputSink : IProcessOutputSink
-    {
-        private readonly StringBuilder _stdout = new();
-
-        public string Stdout => _stdout.ToString();
-
-        public Task OnStandardOutputAsync(string line, CancellationToken cancellationToken)
-        {
-            _stdout.AppendLine(line);
-            return Task.CompletedTask;
-        }
-
-        public Task OnStandardErrorAsync(string line, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

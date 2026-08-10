@@ -43,11 +43,11 @@ public sealed class ServiceOptions
 
     /// <summary>
     /// Maximum file size the MCP <c>transfer_file</c> tool will return, in bytes. A larger file is
-    /// rejected outright rather than truncated (per <c>mcp-file-transfer</c>'s spec) - unlike the
-    /// REST <c>POST /files</c> endpoint (which streams and has no comparable concern), an MCP tool
-    /// result is a single response payload, and the tool returns file content base64-encoded (~33%
-    /// larger than the raw bytes), so this exists to keep a tool-result payload from growing
-    /// unreasonably large. Default (25 MB) is sized for typical build artifacts/logs.
+    /// rejected outright rather than truncated (per <c>mcp-file-transfer</c>'s spec) - an MCP tool
+    /// result is a single response payload (unlike a streamed HTTP response, which has no comparable
+    /// concern), and the tool returns file content base64-encoded (~33% larger than the raw bytes),
+    /// so this exists to keep a tool-result payload from growing unreasonably large. Default (25 MB)
+    /// is sized for typical build artifacts/logs.
     /// </summary>
     public long McpMaxFileTransferBytes { get; set; } = 25 * 1024 * 1024;
 

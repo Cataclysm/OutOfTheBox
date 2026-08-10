@@ -1,6 +1,5 @@
 @page "/repository-management"
 @attribute [Authorize]
-@using System.Globalization
 @using OutOfTheBox.Application.Concurrency
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
@@ -77,8 +76,8 @@ else
                     <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
                         <td class="col-shrink"><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
                         <td class="ellipsis" title="@repository.Name">@repository.Name</td>
-                        <td class="col-shrink">@(repository.StatsComputed ? FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
-                        <td class="col-shrink ellipsis" title="@GitStatusText(repository)">@GitStatusText(repository)</td>
+                        <td class="col-shrink">@(repository.StatsComputed ? RepositoryDisplay.FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
+                        <td class="col-shrink ellipsis" title="@RepositoryDisplay.GitStatusText(repository)">@RepositoryDisplay.GitStatusText(repository)</td>
                         <td class="col-shrink actions" @onclick:stopPropagation="true">
                             @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
                             {
@@ -247,7 +246,7 @@ else
         {
             SortColumn.Status => repositories.OrderBy(r => r.IsActive),
             SortColumn.Size => repositories.OrderBy(r => r.TotalSizeBytes),
-            SortColumn.GitStatus => repositories.OrderBy(GitStatusText, StringComparer.OrdinalIgnoreCase),
+            SortColumn.GitStatus => repositories.OrderBy(RepositoryDisplay.GitStatusText, StringComparer.OrdinalIgnoreCase),
             _ => repositories.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase),
         };
 
@@ -293,50 +292,6 @@ else
     }
 
     private string FlashClass(string name, string action) => _flashClasses.GetValueOrDefault($"{name}:{action}", string.Empty);
-
-    // Invariant-culture-formatted - see Status.razor's FormatBytes for why this matters.
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1024L * 1024 * 1024 => $"{(bytes / (1024.0 * 1024 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} GB",
-        >= 1024L * 1024 => $"{(bytes / (1024.0 * 1024)).ToString("F1", CultureInfo.InvariantCulture)} MB",
-        >= 1024L => $"{(bytes / 1024.0).ToString("F1", CultureInfo.InvariantCulture)} KB",
-        _ => $"{bytes} B",
-    };
-
-    private static string GitStatusText(RepositorySummary repository)
-    {
-        if (!repository.StatsComputed)
-        {
-            return "Computing…";
-        }
-
-        if (!repository.IsGitRepository)
-        {
-            return "Not a git repository";
-        }
-
-        var branchText = repository.IsDetachedHead ? $"detached at {repository.Branch}" : repository.Branch ?? "(no branch)";
-        var status = $"{branchText} ({(repository.IsDirty ? "dirty" : "clean")})";
-
-        if (repository.IsRemoteGone)
-        {
-            status += ", remote gone";
-        }
-        else
-        {
-            if (repository.AheadCount is > 0)
-            {
-                status += $", ahead {repository.AheadCount}";
-            }
-
-            if (repository.BehindCount is > 0)
-            {
-                status += $", behind {repository.BehindCount}";
-            }
-        }
-
-        return status;
-    }
 
     /// <inheritdoc />
     public void Dispose()

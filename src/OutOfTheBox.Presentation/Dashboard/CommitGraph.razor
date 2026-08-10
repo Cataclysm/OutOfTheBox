@@ -191,7 +191,7 @@ else
     /// decoration), but detached HEAD produces no ref decoration on any commit at all - this is the
     /// only way to still highlight the right row in that state. Comes from the parent's own
     /// <c>RepositorySummary.Branch</c>, which already holds the short hash instead of a branch name
-    /// while <c>IsDetachedHead</c> is set (see RepositoryDetail.razor's own GitStatusText).
+    /// while <c>IsDetachedHead</c> is set (see RepositoryDisplay.GitStatusText).
     /// </summary>
     [Parameter]
     public string? DetachedHeadShortHash { get; set; }

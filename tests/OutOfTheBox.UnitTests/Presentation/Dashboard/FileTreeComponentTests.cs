@@ -4,6 +4,7 @@ using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Presentation.Dashboard;
 using Bunit;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
@@ -39,6 +40,7 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
         // markup matters, not that a real <dialog> actually became modal (bUnit has no browser
         // behind it for that to mean anything).
         JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryFileBrowser>(new FakeRepositoryFileBrowser(_repositoryRoot));
     }
 
