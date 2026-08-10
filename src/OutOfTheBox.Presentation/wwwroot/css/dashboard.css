@@ -925,15 +925,37 @@ dialog::backdrop {
 }
 
 /* Long free-text cell content (repository paths, commands, file paths, URLs) - truncated with an
-   ellipsis rather than wrapping or overflowing the table; the full value is on the title tooltip.
-   No max-width:0 here (that was a table-layout: fixed-only trick to stop content from fighting a
-   colgroup width) - table-layout: auto already gives every column a genuine computed width (the
-   flex column's is whatever .col-shrink's siblings left over), so overflow/text-overflow alone is
-   enough to truncate once a column is actually narrower than its content. */
+   ellipsis rather than wrapping; the full value is on the title tooltip. On its own this only
+   truncates once a column already happens to be narrower than its content - see the max-width: 0
+   rule just below for the other half (stopping that column from ever growing past its share of the
+   table in the first place), which every *flexible* (non-.col-shrink) .ellipsis column needs too. */
 .ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Every .data-table has exactly one flexible column - the one with no .col-shrink and no width hint
+   on its own <col>, documented on .col-shrink above as "absorbs whatever space is left over". Left
+   alone, that column's own content (e.g. an unusually long commit subject, file path, or run detail)
+   otherwise forces it - and with it the table, and the page itself - to grow past the viewport:
+   .ellipsis's own white-space: nowrap makes an auto-layout table treat that content's full unwrapped
+   width as a hard minimum for the column, which text-overflow: ellipsis can never actually reach
+   since the column is never allowed to render narrower than that minimum in the first place.
+   max-width: 0 caps what this cell contributes to that minimum-width computation without switching
+   the whole `.data-table` convention to table-layout: fixed, which every .col-shrink column's own
+   sizing (width:1% relying on auto-layout's content-aware expansion) depends on. Scoped to
+   :not(.col-shrink) - a handful of .col-shrink columns (e.g. History's Repository column) also carry
+   .ellipsis as a defensive cap against an outlier-long value, and still need to size to their
+   typical content rather than collapsing to zero the way this rule would make them if it applied
+   there too. Deliberately not paired with width: 100%: found live on the one table (the commit
+   graph) with a second unconstrained column - its lane-graphics column has its own fixed pixel <col>
+   width, and a width: 100% demand from this cell competed against that fixed width in the
+   auto-layout algorithm, collapsing the lane column to a sliver. max-width: 0 alone is sufficient
+   everywhere: the flexible column's own <col> (no declared width) already absorbs the remaining
+   space on its own, the same mechanism .col-shrink's sibling columns already rely on. */
+.data-table td.ellipsis:not(.col-shrink) {
+    max-width: 0;
 }
 
 /* Key/value stat blocks (repository detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
@@ -1141,27 +1163,6 @@ dd {
 .commit-graph-cell {
     white-space: nowrap;
     padding: 0 !important;
-}
-
-/* An extremely long commit subject (real-world, if uncommon) otherwise forces this whole column -
-   and with it the table, and the page itself - to grow well past the viewport: `.ellipsis`'s own
-   `white-space: nowrap` makes an auto-layout table treat the subject's full unwrapped width as a
-   hard minimum for this column, which text-overflow: ellipsis can never actually reach since the
-   column is never allowed to render narrower than that minimum in the first place. max-width: 0
-   caps what this cell contributes to that minimum-width computation without switching the whole
-   `.data-table` convention to table-layout: fixed, which every other column's col-shrink sizing
-   (width:1% relying on auto-layout's content-aware expansion, documented on .col-shrink itself)
-   depends on. Deliberately NOT paired with width: 100% (an earlier version of this rule was) - this
-   table's first column (the lane-graphics cell the SVG overlay lines up against) has its own fixed
-   pixel <col> width, and a `width: 100%` demand from this cell competed against that fixed width in
-   the auto-layout algorithm, collapsing the lane column to a sliver - the absolutely-positioned SVG
-   overlay, unaware of any of this (it doesn't participate in table layout), kept its own originally
-   intended width and rendered on top of the ref pills/subject text that had shifted left into the
-   space the lane column gave up. max-width: 0 alone is sufficient: this column's own <col /> (no
-   declared width) already absorbs the remaining space on its own, the same mechanism .col-shrink's
-   sibling columns already rely on - no need to also assert width: 100% here. */
-.commit-subject-cell {
-    max-width: 0;
 }
 
 .ref-pill {
