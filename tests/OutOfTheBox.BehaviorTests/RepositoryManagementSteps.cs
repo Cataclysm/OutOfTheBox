@@ -296,6 +296,30 @@ public sealed class RepositoryManagementSteps : IDisposable
     }
 
 
+    private string? _diffResult;
+
+    [When(@"an operator requests the diff for ""(.*)"" in the fixture repository's initial commit")]
+    public async Task WhenAnOperatorRequestsTheDiffForInTheFixtureRepositorySInitialCommit(string relativePath)
+    {
+        await EnsureFactoryAsync();
+
+        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var initialCommitHash = Assert.Single(commits).Hash;
+
+        _diffResult = await RepositoryManager.GetCommitFileDiffAsync("GitFixture", initialCommitHash, relativePath, CancellationToken.None);
+    }
+
+    [Then(@"the diff shows ""(.*)"" as the changed file with an added ""(.*)"" line")]
+    public void ThenTheDiffShowsAsTheChangedFileWithAnAddedLine(string path, string addedLine)
+    {
+        Assert.NotNull(_diffResult);
+        Assert.Contains(path, _diffResult);
+        Assert.Contains($"+{addedLine}", _diffResult);
+    }
+
+    [Then(@"no diff is returned")]
+    public void ThenNoDiffIsReturned() => Assert.Null(_diffResult);
+
     private bool _cancelAccepted;
 
     [When(@"an operator cancels that clone from the dashboard")]

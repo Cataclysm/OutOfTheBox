@@ -109,4 +109,14 @@ public interface IRepositoryManager
     /// repository, or a hash it doesn't contain.
     /// </summary>
     Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches the unified diff for one file as changed by <paramref name="hash"/> (<c>git show</c>,
+    /// scoped to that file's path), for the commit detail subpage's per-file diff view.
+    /// <see langword="null"/> for an invalid repository name, a repository that isn't a git
+    /// repository, a hash it doesn't contain, or a path the commit didn't actually touch - as well as
+    /// for a file git itself declines to produce a text diff for (e.g. binary content), which
+    /// produces no diff body to show.
+    /// </summary>
+    Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken);
 }

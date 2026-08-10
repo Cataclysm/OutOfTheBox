@@ -1,0 +1,83 @@
+@using Microsoft.JSInterop
+@using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Presentation.Dashboard.CodePreview
+@inject IRepositoryManager RepositoryManager
+@inject IJSRuntime JS
+@inject ICodePreviewInterop CodePreviewInterop
+@implements IAsyncDisposable
+
+<dialog @ref="_dialogElement" class="file-preview-dialog">
+    <div class="dialog-body">
+        <h2 class="ellipsis" title="@_path">@_path</h2>
+        @if (_loading)
+        {
+            <p>Loading...</p>
+        }
+        else if (_diff is null)
+        {
+            <p class="empty-state">No text diff available for this file (it may be binary, or the commit may not have touched it).</p>
+        }
+        else
+        {
+            <textarea id="@_previewElementId" class="file-preview-code" data-mime="@DiffMimeType" readonly>@_diff</textarea>
+        }
+        <div class="dialog-actions">
+            <button type="button" @onclick="CloseAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Close
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    // CodeMirror's "text/x-diff" mode is already vendored (see CodePreviewLanguage's own .diff/.patch
+    // mapping) - reused directly here rather than trying to infer a per-language mode for the
+    // changed file itself, since a unified diff's own syntax (+/-/@@ hunk headers) is what actually
+    // needs highlighting, not the underlying file's language.
+    private const string DiffMimeType = "text/x-diff";
+
+    private ElementReference _dialogElement;
+    private readonly string _previewElementId = $"commit-diff-{Guid.NewGuid():N}";
+    private string _path = string.Empty;
+    private string? _diff;
+    private bool _loading;
+    private bool _pendingRender;
+
+    /// <summary>Opens the dialog and loads the unified diff for <paramref name="path"/> as changed by <paramref name="hash"/>.</summary>
+    public async Task ShowAsync(string repositoryName, string hash, string path)
+    {
+        // Same destroy-before-any-state-change reasoning as FilePreviewDialog.ShowAsync - see that
+        // method's own remarks for why this has to happen before the first StateHasChanged below.
+        await CodePreviewInterop.DestroyAsync(_previewElementId);
+
+        _path = path;
+        _diff = null;
+        _pendingRender = false;
+        _loading = true;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+
+        _diff = await RepositoryManager.GetCommitFileDiffAsync(repositoryName, hash, path, CancellationToken.None);
+        _pendingRender = _diff is not null;
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_pendingRender)
+        {
+            return;
+        }
+
+        _pendingRender = false;
+        await CodePreviewInterop.RenderAsync(_previewElementId, DiffMimeType);
+    }
+
+    private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);
+}

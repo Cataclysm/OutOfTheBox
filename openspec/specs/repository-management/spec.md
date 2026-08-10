@@ -151,6 +151,21 @@ The system SHALL show, on a repository's detail subpage, its commit history as a
 - **WHEN** an operator has viewed the initially-loaded page of commits and wants to see older ones
 - **THEN** the system loads the next page of commit history rather than having loaded the entire history up front
 
+### Requirement: A commit's detail subpage lists its changed files, each with a viewable diff
+The system SHALL let an operator open a specific commit's own detail subpage (reached from the commit graph) showing its full message, author and committer identity, parent hash(es), and the list of files it changed, each labeled with its change kind (added, modified, deleted, renamed, or copied). For each changed file, the system SHALL let the operator view that file's unified diff for the commit, syntax-highlighted, rather than only the bare file name and change kind.
+
+#### Scenario: Opening a commit's detail subpage
+- **WHEN** an operator selects a specific commit from the graph
+- **THEN** they see that commit's full message, author/committer identity, parent hash(es), and the list of files it changed with each one's change kind
+
+#### Scenario: Viewing a changed file's diff
+- **WHEN** an operator selects the diff action for a file listed on a commit's detail subpage
+- **THEN** the system shows that file's unified diff for the commit, syntax-highlighted
+
+#### Scenario: A binary file has no diff to show
+- **WHEN** the selected file's diff has no meaningful text representation (e.g. a binary file)
+- **THEN** the system indicates no diff is available rather than showing empty or garbled content
+
 ### Requirement: A commit can be checked out as a detached HEAD
 The system SHALL let an operator check out any commit shown in the graph, resulting in a detached HEAD at that commit, requiring explicit confirmation before proceeding given it changes the repository's checked-out state. The system SHALL distinguish a detached HEAD from a normal branch checkout wherever git status is displayed (repository list and detail), rather than showing the literal ref name `HEAD` as if it were a branch.
 

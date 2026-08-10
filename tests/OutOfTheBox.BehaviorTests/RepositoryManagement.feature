@@ -63,3 +63,11 @@ Feature: Repository Management
         Given a clone into a given name is already in flight
         When an operator cancels that clone from the dashboard
         Then the cancellation is accepted
+
+    Scenario: Viewing the diff for a file changed by a commit
+        When an operator requests the diff for "README.md" in the fixture repository's initial commit
+        Then the diff shows "README.md" as the changed file with an added "GitFixture" line
+
+    Scenario: Requesting a diff for a path the commit didn't touch returns nothing
+        When an operator requests the diff for "does-not-exist.txt" in the fixture repository's initial commit
+        Then no diff is returned

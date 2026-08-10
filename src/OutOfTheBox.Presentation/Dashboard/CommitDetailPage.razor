@@ -76,6 +76,7 @@ else
             <colgroup>
                 <col style="width:1%" />
                 <col />
+                <col style="width:1%" />
             </colgroup>
             <tbody>
                 @foreach (var file in _detail.Files)
@@ -89,12 +90,19 @@ else
                             }
                             @file.Path
                         </td>
+                        <td class="col-shrink">
+                            <button type="button" class="icon-button" title="View diff" @onclick="@(() => _diffDialog!.ShowAsync(Name, Hash, file.Path))">
+                                <Icon Name="diff" />
+                            </button>
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     }
 }
+
+<CommitFileDiffDialog @ref="_diffDialog" />
 
 @code {
     /// <summary>The repository name from the route.</summary>
@@ -108,6 +116,7 @@ else
     private CommitDetail? _detail;
     private bool _loading = true;
     private string? _loadedKey;
+    private CommitFileDiffDialog? _diffDialog;
 
     // OnParametersSetAsync, not OnInitializedAsync: clicking a parent-commit link navigates from
     // this route to itself with a different Hash, which Blazor resolves by reusing the existing

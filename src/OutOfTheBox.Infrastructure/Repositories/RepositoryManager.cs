@@ -611,6 +611,27 @@ public sealed class RepositoryManager(
             Files: files);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        {
+            return null;
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+
+        // --format= (empty pretty-format) suppresses the commit header entirely - the operator
+        // already sees author/date/message on the page itself, so repeating it here would just be
+        // noise above the diff. "--" before the path is git's own idiom for "everything after this
+        // is a pathspec, never a flag" - load-bearing here since relativePath isn't otherwise
+        // validated against looking like an option (e.g. a file named "--foo").
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["show", "--format=", hash, "--", relativePath], cancellationToken);
+
+        return string.IsNullOrEmpty(output) ? null : output;
+    }
+
     private static DateTimeOffset ParseUnixSeconds(string field) =>
         long.TryParse(field.Trim(), out var unixSeconds) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds) : DateTimeOffset.UnixEpoch;
 
