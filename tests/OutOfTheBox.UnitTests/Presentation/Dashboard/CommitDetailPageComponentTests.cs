@@ -20,7 +20,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// icon), and parents now showing each parent's own subject alongside its hash link, not just a
 /// bare comma-separated hash list.
 /// </summary>
-public sealed class CommitDetailPageComponentTests : BunitContext, IDisposable
+public sealed class CommitDetailPageComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly IRepositoryStatsEventBus _repositoryStatsEventBus = new InMemoryRepositoryStatsEventBus(NullLogger<InMemoryRepositoryStatsEventBus>.Instance);
     private readonly FakeRepositoryManager _repositoryManager = new();

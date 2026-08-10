@@ -20,7 +20,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// for 12.14 (History/run-detail render correctly across every kind and outcome), now that §13 has
 /// made <see cref="RunKind.RepositoryClone"/>/<see cref="RunKind.RepositoryDelete"/> real.
 /// </summary>
-public sealed class RunDetailComponentTests : BunitContext, IDisposable
+public sealed class RunDetailComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly SpyChartInterop _chartInterop = new();

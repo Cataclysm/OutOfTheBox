@@ -22,7 +22,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// what actually exercises that timing and would have caught it - see FileTreeNode's own remarks on
 /// <c>RequestConfirm</c>/<c>RequestPreview</c> for the fix (bubbled EventCallbacks, not instances).
 /// </summary>
-public sealed class FileTreeComponentTests : BunitContext, IDisposable
+public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDisposable
 {
     // Just the magic-number prefix each format needs to be recognized - FilePreviewDialog's sniff
     // never validates that the rest of the file is a well-formed image, so a full real image isn't

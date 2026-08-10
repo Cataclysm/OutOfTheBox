@@ -27,7 +27,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// 13.19 (live active/idle indicator), 13.20 (live git-status refresh), and 13.21 (filter/search),
 /// the same way <c>StatusComponentTests</c> closes §12's equivalent gap.
 /// </summary>
-public sealed class RepositoriesComponentTests : BunitContext, IDisposable
+public sealed class RepositoriesComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly string _root;
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();

@@ -27,7 +27,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// this page's own History tab never picked up a run's completion live, the same class of bug
 /// <c>HistoryComponentTests</c> covers for the standalone History view.
 /// </summary>
-public sealed class RepositoryDetailComponentTests : BunitContext, IDisposable
+public sealed class RepositoryDetailComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly string _root;
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();

@@ -24,7 +24,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// reload" claim instead of only code-reviewing it. Closes the gap tasks.md's §12 deviation notes
 /// left open for 12.12/12.13 (no Blazor-interactive test client in this project's toolchain).
 /// </summary>
-public sealed class StatusComponentTests : BunitContext, IDisposable
+public sealed class StatusComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);

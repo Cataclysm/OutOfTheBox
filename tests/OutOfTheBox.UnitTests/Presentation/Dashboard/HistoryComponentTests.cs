@@ -22,7 +22,7 @@ namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 /// deviation notes left open for 12.15 (filtering/searching the History view narrows the list
 /// correctly, and clearing restores it), the same way <c>StatusComponentTests</c> closes 12.12/12.13.
 /// </summary>
-public sealed class HistoryComponentTests : BunitContext, IDisposable
+public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
