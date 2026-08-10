@@ -42,6 +42,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Commit detail subpage's changed-files list now shows each added/modified/deleted file's line counts (`git show --numstat`), color-coded (green added, red removed) and right-aligned in their own column, matching the other dashboard tables' "content column takes the remaining space, the rest shrink to fit" width convention; not shown for a renamed/copied file, where a line count isn't meaningful to attribute to either its old or new path
 - Repositories list and repository detail page both now show live git status (clean/dirty dot, branch, ahead/behind counts, and a distinct "remote gone" icon) as a single compact icon column/line, shared between both pages via one new component; the commit detail page shows the same status for the commit's own repository
 - Repository detail page now offers the same pull/push/force-push/fetch/clean quick actions the Repositories list already had, not just via the list
+- File tree browser gained a "Dirty files only" filter (`git status --porcelain`) that hides clean files/folders and auto-expands any folder containing a dirty file
 
 ### Changed
 

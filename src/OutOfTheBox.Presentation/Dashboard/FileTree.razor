@@ -1,35 +1,48 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryFileBrowser FileBrowser
+@inject IRepositoryManager RepositoryManager
 @implements IDisposable
 
-<div class="file-tree">
-    @if (_entries is null)
-    {
-        <p>Loading...</p>
-    }
-    else if (_entries.Count == 0)
-    {
-        <p class="empty-state">This repository is empty.</p>
-    }
-    else
-    {
-        @foreach (var entry in _entries)
-        {
-            <FileTreeNode
-                @key="entry.Name"
-                RepositoryName="@RepositoryName"
-                ParentRelativePath=""
-                Name="@entry.Name"
-                IsDirectory="@entry.IsDirectory"
-                SizeBytes="@entry.SizeBytes"
-                Depth="0"
-                OnChanged="LoadRootAsync"
-                RequestConfirm="ShowConfirmAsync"
-                RequestPreview="ShowPreviewAsync" />
-        }
-    }
+<div class="history-filters">
+    <label>
+        <input type="checkbox" @bind="_dirtyOnly" @bind:after="OnDirtyOnlyChangedAsync" /> Dirty files only
+    </label>
 </div>
+
+<CascadingValue Value="_dirtyOnly ? _dirtyPaths : null" Name="DirtyPaths">
+    <div class="file-tree">
+        @if (_entries is null)
+        {
+            <p>Loading...</p>
+        }
+        else if (_entries.Count == 0)
+        {
+            <p class="empty-state">This repository is empty.</p>
+        }
+        else if (_dirtyOnly && _dirtyPaths.Count == 0)
+        {
+            <p class="empty-state">No dirty files - working tree is clean.</p>
+        }
+        else
+        {
+            @foreach (var entry in _entries)
+            {
+                <FileTreeNode
+                    @key="entry.Name"
+                    RepositoryName="@RepositoryName"
+                    ParentRelativePath=""
+                    Name="@entry.Name"
+                    IsDirectory="@entry.IsDirectory"
+                    SizeBytes="@entry.SizeBytes"
+                    Depth="0"
+                    OnChanged="LoadRootAsync"
+                    RequestConfirm="ShowConfirmAsync"
+                    RequestPreview="ShowPreviewAsync" />
+            }
+        }
+    </div>
+</CascadingValue>
 
 <ConfirmDialog @ref="_confirmDialog" />
 <FilePreviewDialog @ref="_previewDialog" />
@@ -45,6 +58,8 @@
     private ConfirmDialog? _confirmDialog;
     private FilePreviewDialog? _previewDialog;
     private CancellationTokenSource? _pollCts;
+    private bool _dirtyOnly;
+    private HashSet<string> _dirtyPaths = [];
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -60,6 +75,24 @@
     private async Task LoadRootAsync()
     {
         _entries = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, CancellationToken.None);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // @bind:after, not an inline lambda on the checkbox's own @onchange - _dirtyOnly needs to already
+    // reflect the new checked state before this runs (RefreshDirtyPathsAsync's own caller-side check
+    // isn't the concern here, the <CascadingValue>'s own conditional expression is, and that reads
+    // _dirtyOnly directly during the next render this method's StateHasChanged triggers).
+    private async Task OnDirtyOnlyChangedAsync()
+    {
+        if (_dirtyOnly)
+        {
+            await RefreshDirtyPathsAsync();
+        }
+    }
+
+    private async Task RefreshDirtyPathsAsync()
+    {
+        _dirtyPaths = [.. await RepositoryManager.ListDirtyFilePathsAsync(RepositoryName, CancellationToken.None)];
         await InvokeAsync(StateHasChanged);
     }
 
@@ -82,8 +115,16 @@
             {
                 await Task.Delay(PollInterval, cancellationToken);
                 var fresh = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, cancellationToken);
+                var freshDirtyPaths = _dirtyOnly
+                    ? await RepositoryManager.ListDirtyFilePathsAsync(RepositoryName, cancellationToken)
+                    : null;
                 cancellationToken.ThrowIfCancellationRequested();
                 _entries = fresh;
+                if (freshDirtyPaths is not null)
+                {
+                    _dirtyPaths = [.. freshDirtyPaths];
+                }
+
                 await InvokeAsync(StateHasChanged);
             }
         }

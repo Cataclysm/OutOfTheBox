@@ -241,6 +241,21 @@ The system SHALL provide, on a repository's detail subpage, a tree-structured, e
 - **WHEN** a rename or delete request targets the repository's own root (an empty relative path)
 - **THEN** the system rejects it — removing or renaming a repository is `repository-management`'s own dedicated deletion action, not a file-browser operation
 
+### Requirement: The file tree browser can filter to only dirty files
+The system SHALL let an operator toggle a "dirty files only" filter on a repository's file tree browser, restricting the tree to files with an uncommitted working-tree change (modified, staged, deleted, or untracked) and the folders that contain them; a folder containing a dirty file SHALL auto-expand when the filter is turned on so the dirty file is immediately visible, without requiring the operator to manually expand every ancestor folder.
+
+#### Scenario: Enabling the filter hides clean files
+- **WHEN** an operator enables the "dirty files only" filter on a repository with both clean and dirty files
+- **THEN** the tree shows only the dirty files and the folders leading to them, hiding everything else
+
+#### Scenario: A folder containing a dirty file auto-expands
+- **WHEN** the "dirty files only" filter is enabled and a collapsed folder contains a dirty file somewhere within it
+- **THEN** that folder automatically expands to reveal the dirty file, without the operator needing to click it open
+
+#### Scenario: No dirty files means an empty result, not an error
+- **WHEN** the "dirty files only" filter is enabled on a repository with a clean working tree
+- **THEN** the system shows that there are no dirty files, rather than an empty tree indistinguishable from a loading or error state
+
 ### Requirement: An in-flight clone can be cancelled from the dashboard or via cancel_run
 The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL accept a repository-clone run's id on the `cancel_run` MCP tool (per `mcp-command-execution`), per `mcp-repository-access`'s "An in-flight clone is accepted by cancel_run" requirement and design.md's "one shared cancel_run" decision.
 

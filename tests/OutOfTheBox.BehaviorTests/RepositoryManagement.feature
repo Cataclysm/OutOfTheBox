@@ -75,3 +75,12 @@ Feature: Repository Management
     Scenario: A commit's changed files include their added/removed line counts
         When an operator requests the commit detail for the fixture repository's initial commit
         Then the changed file "README.md" shows 1 line added and 0 lines removed
+
+    Scenario: Listing dirty files in a repository with uncommitted changes
+        Given an untracked file exists in the fixture repository's working tree
+        When an operator lists the fixture repository's dirty file paths
+        Then the dirty file paths include "untracked.txt"
+
+    Scenario: Listing dirty files in a clean repository returns nothing
+        When an operator lists the fixture repository's dirty file paths
+        Then the dirty file paths are empty

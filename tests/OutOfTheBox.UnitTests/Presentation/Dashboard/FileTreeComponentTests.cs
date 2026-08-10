@@ -40,6 +40,7 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     private static readonly byte[] Mp4MagicBytes = [0x00, 0x00, 0x00, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'i', (byte)'s', (byte)'o', (byte)'m'];
 
     private readonly string _repositoryRoot = Directory.CreateTempSubdirectory("filetree-tests-").FullName;
+    private readonly FakeRepositoryManager _repositoryManager = new();
 
     public FileTreeComponentTests()
     {
@@ -49,6 +50,7 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryFileBrowser>(new FakeRepositoryFileBrowser(_repositoryRoot));
+        Services.AddSingleton<IRepositoryManager>(_repositoryManager);
         Services.AddScoped<ICodePreviewInterop, CodePreviewInterop>();
     }
 
@@ -258,6 +260,57 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
         cut.WaitForAssertion(() => Assert.Contains("Permanently delete 'data.dat'", cut.Markup));
     }
 
+    [Fact]
+    public void Dirty_files_only_filter_hides_clean_files_and_auto_expands_folders_containing_a_dirty_one()
+    {
+        Directory.CreateDirectory(Path.Combine(_repositoryRoot, "subdir"));
+        File.WriteAllText(Path.Combine(_repositoryRoot, "clean.txt"), "clean");
+        File.WriteAllText(Path.Combine(_repositoryRoot, "subdir", "dirty.txt"), "dirty");
+        _repositoryManager.DirtyPaths = ["subdir/dirty.txt"];
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("clean.txt", cut.Markup);
+            Assert.Contains("subdir", cut.Markup);
+        });
+
+        cut.Find("input[type=checkbox]").Change(true);
+
+        cut.WaitForAssertion(() =>
+        {
+            // subdir auto-expands (it contains a dirty file) without a manual click, and its own
+            // dirty child is now visible - the whole point of the filter over just hiding rows.
+            Assert.Contains("dirty.txt", cut.Markup);
+            Assert.DoesNotContain("clean.txt", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void Dirty_files_only_filter_reveals_every_file_under_a_wholesale_untracked_directory()
+    {
+        // git status --porcelain reports an entirely untracked directory as one "?? dir/" line, not
+        // one line per file inside it - RepositoryManager.ListDirtyFilePathsAsync passes that
+        // wholesale entry straight through, so every file/folder nested under it must still be
+        // treated as dirty-relevant, not just the directory's own top-level entry.
+        Directory.CreateDirectory(Path.Combine(_repositoryRoot, "untracked", "nested"));
+        File.WriteAllText(Path.Combine(_repositoryRoot, "untracked", "shallow.txt"), "new");
+        File.WriteAllText(Path.Combine(_repositoryRoot, "untracked", "nested", "deep.txt"), "new");
+        _repositoryManager.DirtyPaths = ["untracked/"];
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("untracked", cut.Markup));
+
+        cut.Find("input[type=checkbox]").Change(true);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("shallow.txt", cut.Markup);
+            Assert.Contains("nested", cut.Markup);
+            Assert.Contains("deep.txt", cut.Markup);
+        });
+    }
+
     /// <inheritdoc />
     public new void Dispose()
     {
@@ -290,5 +343,35 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
 
         private static RepositoryFileEntry ToEntry(string path) => new(
             Path.GetFileName(path), Directory.Exists(path), Directory.Exists(path) ? null : new FileInfo(path).Length, DateTimeOffset.UtcNow);
+    }
+
+    // Only ListDirtyFilePathsAsync is exercised by these tests (FileTree's "Dirty files only"
+    // filter) - every other member throws, the same "not exercised, say so" precedent
+    // FakeRepositoryFileBrowser already established, so a future test accidentally depending on one
+    // of them fails loudly instead of silently returning a meaningless default.
+    private sealed class FakeRepositoryManager : IRepositoryManager
+    {
+        public IReadOnlyList<string> DirtyPaths { get; set; } = [];
+
+        public Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken) =>
+            Task.FromResult(DirtyPaths);
+
+        public Task<IReadOnlyList<RepositorySummary>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryActionResult> CloneAsync(string url, string name, string? branch, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

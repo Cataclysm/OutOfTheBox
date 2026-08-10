@@ -343,6 +343,36 @@ public sealed class RepositoryManagementSteps : IDisposable
         Assert.Equal(removed, file.LinesRemoved);
     }
 
+    [Given(@"an untracked file exists in the fixture repository's working tree")]
+    public async Task GivenAnUntrackedFileExistsInTheFixtureRepositorySWorkingTree()
+    {
+        await EnsureFactoryAsync();
+        await File.WriteAllTextAsync(Path.Combine(SourceRepositoryPath, "untracked.txt"), "dirty");
+    }
+
+    private IReadOnlyList<string>? _dirtyFilePaths;
+
+    [When(@"an operator lists the fixture repository's dirty file paths")]
+    public async Task WhenAnOperatorListsTheFixtureRepositorySDirtyFilePaths()
+    {
+        await EnsureFactoryAsync();
+        _dirtyFilePaths = await RepositoryManager.ListDirtyFilePathsAsync("GitFixture", CancellationToken.None);
+    }
+
+    [Then(@"the dirty file paths include ""(.*)""")]
+    public void ThenTheDirtyFilePathsInclude(string path)
+    {
+        Assert.NotNull(_dirtyFilePaths);
+        Assert.Contains(path, _dirtyFilePaths);
+    }
+
+    [Then(@"the dirty file paths are empty")]
+    public void ThenTheDirtyFilePathsAreEmpty()
+    {
+        Assert.NotNull(_dirtyFilePaths);
+        Assert.Empty(_dirtyFilePaths);
+    }
+
     private bool _cancelAccepted;
 
     [When(@"an operator cancels that clone from the dashboard")]

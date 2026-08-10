@@ -639,6 +639,59 @@ public sealed class RepositoryManager(
         return string.IsNullOrEmpty(output) ? null : output;
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        {
+            return [];
+        }
+
+        var targetPath = resolution.ResolvedPath!;
+        var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["status", "--porcelain"], cancellationToken);
+
+        return string.IsNullOrEmpty(output) ? [] : ParsePorcelainPaths(output);
+    }
+
+    // Each line is "XY PATH" (a two-character status code, a space, then the path) or, for a
+    // rename/copy, "XY OLD -> NEW" - only the current (new) path is kept, matching what the file
+    // tree itself lists (it has no notion of "this file used to be called something else").
+    private static IReadOnlyList<string> ParsePorcelainPaths(string output)
+    {
+        var paths = new List<string>();
+
+        foreach (var rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (rawLine.Length < 4)
+            {
+                continue;
+            }
+
+            var path = rawLine[3..].Trim();
+            var arrowIndex = path.IndexOf(" -> ", StringComparison.Ordinal);
+            if (arrowIndex >= 0)
+            {
+                path = path[(arrowIndex + 4)..];
+            }
+
+            // git wraps a path containing characters core.quotepath treats as special (by default,
+            // any non-ASCII byte, plus a literal quote/backslash) in C-style double quotes - the
+            // outer quotes are stripped here since the file tree's own paths never carry them, but
+            // the escape sequences git would also apply inside (\", \\, \nnn octal bytes) are
+            // deliberately not unescaped - a rare enough case for this filter not to be worth the
+            // extra complexity; such a file just won't match the filter, same as if it weren't dirty.
+            if (path.Length >= 2 && path[0] == '"' && path[^1] == '"')
+            {
+                path = path[1..^1];
+            }
+
+            paths.Add(path);
+        }
+
+        return paths;
+    }
+
     private static DateTimeOffset ParseUnixSeconds(string field) =>
         long.TryParse(field.Trim(), out var unixSeconds) ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds) : DateTimeOffset.UnixEpoch;
 

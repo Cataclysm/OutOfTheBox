@@ -119,4 +119,13 @@ public interface IRepositoryManager
     /// produces no diff body to show.
     /// </summary>
     Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Repo-relative paths of every file with an uncommitted working-tree change - modified, staged,
+    /// deleted, or untracked (<c>git status --porcelain</c>) - for the file tree browser's "dirty
+    /// files only" filter. A renamed/copied path is reported once, under its current (new) path,
+    /// matching what the file tree itself lists. Empty for an invalid repository name, a repository
+    /// that isn't a git repository, or a clean working tree.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken);
 }

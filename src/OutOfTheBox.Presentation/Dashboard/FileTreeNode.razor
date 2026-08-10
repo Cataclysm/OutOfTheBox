@@ -3,74 +3,77 @@
 @inject IRepositoryFileBrowser FileBrowser
 @implements IDisposable
 
-<div class="file-tree-row" @onclick="OnRowClickAsync">
-    <Icon Name="@(IsDirectory ? (_expanded ? "folder-open" : "folder") : "file")" />
-
-    @if (_renaming)
-    {
-        <input class="file-tree-rename-input" value="@_renameValue" @oninput="@(e => _renameValue = e.Value?.ToString() ?? string.Empty)" @onclick:stopPropagation="true" @onkeydown="OnRenameKeyDownAsync" />
-        <span class="file-tree-actions" style="visibility: visible" @onclick:stopPropagation="true">
-            <button type="button" class="icon-button" title="Confirm rename" @onclick="ConfirmRenameAsync">
-                <Icon Name="confirm" />
-            </button>
-            <button type="button" class="icon-button" title="Cancel rename" @onclick="CancelRename">
-                <Icon Name="close" />
-            </button>
-        </span>
-    }
-    else
-    {
-        <span class="file-tree-name" title="@Name">@Name</span>
-        <span class="file-tree-actions" @onclick:stopPropagation="true">
-            @if (!IsDirectory)
-            {
-                <a class="icon-button" title="Download" href="@DownloadUrl">
-                    <Icon Name="download" />
-                </a>
-            }
-            <button type="button" class="icon-button" title="Rename" @onclick="StartRename">
-                <Icon Name="pencil" />
-            </button>
-            <button type="button" class="icon-button icon-button-danger" title="Delete" @onclick="ConfirmDeleteAsync">
-                <Icon Name="trash" />
-            </button>
-        </span>
-        @if (!IsDirectory && SizeBytes is not null)
-        {
-            <span class="file-tree-meta">@RepositoryDisplay.FormatSize(SizeBytes.Value)</span>
-        }
-    }
-</div>
-
-@if (IsDirectory && _expanded)
+@if (DirtyPaths is null || IsDirtyRelevant)
 {
-    <div class="file-tree-children">
-        @if (_children is null)
+    <div class="file-tree-row" @onclick="OnRowClickAsync">
+        <Icon Name="@(IsDirectory ? (_expanded ? "folder-open" : "folder") : "file")" />
+
+        @if (_renaming)
         {
-            <p class="empty-state">Loading...</p>
-        }
-        else if (_children.Count == 0)
-        {
-            <p class="empty-state">Empty</p>
+            <input class="file-tree-rename-input" value="@_renameValue" @oninput="@(e => _renameValue = e.Value?.ToString() ?? string.Empty)" @onclick:stopPropagation="true" @onkeydown="OnRenameKeyDownAsync" />
+            <span class="file-tree-actions" style="visibility: visible" @onclick:stopPropagation="true">
+                <button type="button" class="icon-button" title="Confirm rename" @onclick="ConfirmRenameAsync">
+                    <Icon Name="confirm" />
+                </button>
+                <button type="button" class="icon-button" title="Cancel rename" @onclick="CancelRename">
+                    <Icon Name="close" />
+                </button>
+            </span>
         }
         else
         {
-            @foreach (var child in _children)
+            <span class="file-tree-name" title="@Name">@Name</span>
+            <span class="file-tree-actions" @onclick:stopPropagation="true">
+                @if (!IsDirectory)
+                {
+                    <a class="icon-button" title="Download" href="@DownloadUrl">
+                        <Icon Name="download" />
+                    </a>
+                }
+                <button type="button" class="icon-button" title="Rename" @onclick="StartRename">
+                    <Icon Name="pencil" />
+                </button>
+                <button type="button" class="icon-button icon-button-danger" title="Delete" @onclick="ConfirmDeleteAsync">
+                    <Icon Name="trash" />
+                </button>
+            </span>
+            @if (!IsDirectory && SizeBytes is not null)
             {
-                <FileTreeNode
-                    @key="child.Name"
-                    RepositoryName="@RepositoryName"
-                    ParentRelativePath="@RelativePath"
-                    Name="@child.Name"
-                    IsDirectory="@child.IsDirectory"
-                    SizeBytes="@child.SizeBytes"
-                    Depth="@(Depth + 1)"
-                    OnChanged="LoadChildrenAsync"
-                    RequestConfirm="RequestConfirm"
-                    RequestPreview="RequestPreview" />
+                <span class="file-tree-meta">@RepositoryDisplay.FormatSize(SizeBytes.Value)</span>
             }
         }
     </div>
+
+    @if (IsDirectory && _expanded)
+    {
+        <div class="file-tree-children">
+            @if (_children is null)
+            {
+                <p class="empty-state">Loading...</p>
+            }
+            else if (_children.Count == 0)
+            {
+                <p class="empty-state">Empty</p>
+            }
+            else
+            {
+                @foreach (var child in _children)
+                {
+                    <FileTreeNode
+                        @key="child.Name"
+                        RepositoryName="@RepositoryName"
+                        ParentRelativePath="@RelativePath"
+                        Name="@child.Name"
+                        IsDirectory="@child.IsDirectory"
+                        SizeBytes="@child.SizeBytes"
+                        Depth="@(Depth + 1)"
+                        OnChanged="LoadChildrenAsync"
+                        RequestConfirm="RequestConfirm"
+                        RequestPreview="RequestPreview" />
+                }
+            }
+        </div>
+    }
 }
 
 @code {
@@ -123,7 +126,15 @@
     [Parameter, EditorRequired]
     public EventCallback<FilePreviewRequest> RequestPreview { get; set; }
 
+    // Cascaded from FileTree.razor's own <CascadingValue> rather than threaded through as a regular
+    // parameter at every recursive <FileTreeNode> invocation site - null when the "dirty files only"
+    // filter is off, otherwise the full set of repo-relative dirty paths (not just this node's own
+    // subtree), so every node at every depth can independently decide its own relevance.
+    [CascadingParameter(Name = "DirtyPaths")]
+    private HashSet<string>? DirtyPaths { get; set; }
+
     private bool _expanded;
+    private bool _dirtyFilterWasActive;
     private IReadOnlyList<RepositoryFileEntry>? _children;
     private CancellationTokenSource? _pollCts;
     private bool _renaming;
@@ -132,6 +143,38 @@
     private string RelativePath => string.IsNullOrEmpty(ParentRelativePath) ? Name : $"{ParentRelativePath}/{Name}";
 
     private string DownloadUrl => $"/dashboard-files/{Uri.EscapeDataString(RepositoryName)}?path={Uri.EscapeDataString(RelativePath)}";
+
+    // A file is relevant if it's dirty itself, or if it sits inside a directory git reports as a
+    // single wholesale-dirty entry (an entirely untracked directory shows up in `git status
+    // --porcelain` as one "?? dir/" line, not one line per file inside it - without this check,
+    // every file under such a directory would be invisible under the filter). A folder is relevant
+    // if it contains a dirty descendant anywhere below it (not just its immediate children), or if
+    // it's itself nested inside one of those wholesale-dirty directories.
+    private bool IsDirtyRelevant => DirtyPaths is not null && (IsUnderWholesaleDirtyDirectory
+        || (IsDirectory
+            ? DirtyPaths.Any(path => path.StartsWith(RelativePath + "/", StringComparison.Ordinal))
+            : DirtyPaths.Contains(RelativePath)));
+
+    private bool IsUnderWholesaleDirtyDirectory =>
+        DirtyPaths!.Any(path => path.EndsWith('/') && RelativePath.StartsWith(path, StringComparison.Ordinal));
+
+    // Auto-expands a relevant folder exactly once per "filter just turned on" transition (not on
+    // every unrelated re-render the cascading value's own container re-renders for) - otherwise an
+    // operator manually collapsing a folder while the filter stays on would find it immediately
+    // re-expanding itself on the tree's next poll tick, fighting their own input.
+    /// <inheritdoc />
+    protected override async Task OnParametersSetAsync()
+    {
+        var dirtyFilterActive = DirtyPaths is not null;
+        if (dirtyFilterActive && !_dirtyFilterWasActive && IsDirectory && IsDirtyRelevant && !_expanded)
+        {
+            _expanded = true;
+            await LoadChildrenAsync();
+            StartPolling();
+        }
+
+        _dirtyFilterWasActive = dirtyFilterActive;
+    }
 
     private async Task OnRowClickAsync()
     {
