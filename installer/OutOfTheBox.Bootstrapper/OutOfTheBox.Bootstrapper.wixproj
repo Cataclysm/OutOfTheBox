@@ -22,4 +22,13 @@
     <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Build-ordering only, not a real MSBuild reference - MsiSourcePath above still points at
+         the MSI's output by file path, since a Bundle project consumes a finished .msi as a
+         payload rather than linking against it like an assembly. Without this, a solution build
+         (OutOfTheBox.Installer.slnx) parallelizes the two projects and this one can race ahead of
+         the MSI existing on disk. -->
+    <ProjectReference Include="..\OutOfTheBox.Msi\OutOfTheBox.Msi.wixproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

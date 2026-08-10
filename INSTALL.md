@@ -178,14 +178,30 @@ dotnet build installer/OutOfTheBox.Msi -c Release
 dotnet build installer/OutOfTheBox.Bootstrapper -c Release
 ```
 
+or, equivalently, build both (plus the MSI's custom-action DLL and its own test project) in one
+step via `installer/OutOfTheBox.Installer.slnx`:
+
+```
+dotnet build installer/OutOfTheBox.Installer.slnx -c Release
+```
+
+The MSI must exist on disk before the bootstrapper links it in as a payload, so building the two
+`dotnet build installer/...` commands in the wrong order (or in parallel) fails — the solution
+file's `OutOfTheBox.Bootstrapper.wixproj` carries a `ReferenceOutputAssembly="false"`
+`ProjectReference` to `OutOfTheBox.Msi.wixproj` purely to force that ordering when built as a
+solution; a direct two-command build still has to run them in the order shown above by hand.
+
 Produces `installer/OutOfTheBox.Msi/bin/x64/Release/OutOfTheBox.Msi.msi` (~40 MB, cabinet embedded)
 and `installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe` (the thing an
 operator actually runs — the bootstrapper project's own `OutputName` renames it from the project's
-`OutOfTheBox.Bootstrapper` assembly name to this operator-facing one). Both projects are
-deliberately outside `OutOfTheBox.slnx` and outside the repository's Central Package Management
+`OutOfTheBox.Bootstrapper` assembly name to this operator-facing one). All four installer projects
+are deliberately outside `OutOfTheBox.slnx` and outside the repository's Central Package Management
 (`installer/Directory.Packages.props` opts out) — WiX's own project/package conventions don't fit
 either cleanly, and this keeps `dotnet build`/`dotnet test` on
-the main solution unaffected by installer changes. `WixToolset.Sdk` requires accepting the WiX v7
+the main solution unaffected by installer changes; `OutOfTheBox.Installer.slnx` is a second,
+installer-scoped solution file (also x64-only, since `OutOfTheBox.Msi`/`OutOfTheBox.Bootstrapper`
+only build for that platform) for opening or building them together without pulling them into the
+main one. `WixToolset.Sdk` requires accepting the WiX v7
 "Open Source Maintenance Fee" EULA once per machine (`wix eula accept wix7`, or pass
 `-p:AcceptEula=wix7`) — see [wixtoolset's OSMF terms](https://docs.firegiant.com/wix/osmf/) before
 building on a machine that hasn't accepted it; the terms are free unless the building organization's
