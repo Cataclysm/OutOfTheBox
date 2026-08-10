@@ -40,13 +40,13 @@
 
 ## 7. Live verification
 
-- [ ] 7.1 Start the real `Host`, call `find_files` with a recursive (`**/*.cs`) and a non-recursive (`*.md`) pattern against a real repository, and confirm the results match what's actually on disk (cross-check against a manual directory listing) - not just that the call succeeds structurally.
-- [ ] 7.2 Call `get_file_info` for a real file and a real directory, confirm every field (including owner and, for a deliberately-locked file, `IsLocked`) matches reality.
-- [ ] 7.3 Call `delete_path` for a real file and a real directory in a scratch repository, confirm both are actually gone from disk and a history row was recorded for each.
-- [ ] 7.4 Call `delete_repository` for a real scratch repository, confirm it's actually gone from disk, and confirm a confinement/not-found/busy rejection each produce a distinct, specific error message.
-- [ ] 7.5 Confirm an invalid/escaping path, a nonexistent target, and a locked-file failure each produce a distinct, actionable error message (not a generic "failed") across all four new tools.
+- [x] 7.1 Start the real `Host`, call `find_files` with a recursive (`**/*.cs`) and a non-recursive (`*.md`) pattern against a real repository, and confirm the results match what's actually on disk (cross-check against a manual directory listing) - not just that the call succeeds structurally.
+- [x] 7.2 Call `get_file_info` for a real file and a real directory, confirm every field (including owner and, for a deliberately-locked file, `IsLocked`) matches reality.
+- [x] 7.3 Call `delete_path` for a real file and a real directory in a scratch repository, confirm both are actually gone from disk and a history row was recorded for each.
+- [x] 7.4 Call `delete_repository` for a real scratch repository, confirm it's actually gone from disk, and confirm a confinement/not-found/busy rejection each produce a distinct, specific error message.
+- [x] 7.5 Confirm an invalid/escaping path, a nonexistent target, and a locked-file failure each produce a distinct, actionable error message (not a generic "failed") across all four new tools.
 
 ## 8. Wrap-up
 
-- [ ] 8.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
-- [ ] 8.2 Commit and push. Do not archive this change as part of implementation - archiving is a separate, deliberate step.
+- [x] 8.1 Before the final commit, check `git diff --staged` for leftover debug code, per this repository's standing convention.
+- [x] 8.2 Commit and push. Do not archive this change as part of implementation - archiving is a separate, deliberate step.

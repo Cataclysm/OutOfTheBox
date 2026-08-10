@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+## REMOVED Requirements
+
+### Requirement: No MCP tool exists for delete or any other dashboard-only repository action
+**Reason**: Reversed by direct request — `delete_repository` (below) and `delete_path` (per `mcp-file-management`) are now MCP-reachable; only pull/push/force-push/fetch/clean, branch switching, commit checkout, and rename remain dashboard-only.
+**Migration**: Replaced by "No MCP tool exists for any dashboard-only repository action except delete", added below.
+
+## ADDED Requirements
 
 ### Requirement: No MCP tool exists for any dashboard-only repository action except delete
 The system SHALL NOT expose pull/push/force-push/fetch/clean, branch switching, commit checkout, rename, or the file tree browser's rename operation as MCP tools — these remain reachable only through the authenticated dashboard, per `repository-management`'s own dashboard-only boundary for those actions. Repository deletion (`delete_repository`, below) and file/directory deletion within a repository (`delete_path`, per `mcp-file-management`) are no longer in this list.
@@ -6,8 +12,6 @@ The system SHALL NOT expose pull/push/force-push/fetch/clean, branch switching, 
 #### Scenario: No rename/branch-switch/checkout tool is discoverable or callable
 - **WHEN** an authenticated caller lists available MCP tools, or attempts to call a tool by any name associated with renaming, pulling, pushing, switching branches, or checking out a commit
 - **THEN** no such tool is listed, and any attempt to call one by an assumed name fails as an unknown tool
-
-## ADDED Requirements
 
 ### Requirement: delete_repository deletes an entire repository
 The system SHALL accept a `delete_repository` tool call carrying a repository name, resolve it under the configured root, and delete that repository's entire directory - the same deletion `repository-management`'s dashboard delete action already performs, including its per-repository locking.
