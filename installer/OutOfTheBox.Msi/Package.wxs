@@ -40,15 +40,16 @@
          stop/verify/copy/start script. RemoveExistingProducts defaults to scheduling after the new
          product's files are installed, which is what makes the Windows Service's file replacement
          safe around the service still (briefly) running the old binary.
-         AllowSameVersionUpgrades="yes" (WiX default is "no"): without it, re-running the installer
-         at an unchanged ProductVersion isn't recognized as an upgrade at all - the Upgrade table's
-         version range excludes an exact match, so RemoveExistingProducts never fires and the old
-         product just sits there, found on real-machine use (this project's Version has stayed
-         1.0.0 through many rebuilds). Note this only fixes upgrade *recognition* - a component's
-         file is still only overwritten if its own file-version resource is newer than what's on
-         disk, a separate MSI mechanism this flag doesn't touch; a same-ProductVersion reinstall
-         still won't replace unchanged-FileVersion binaries, only a real version bump does that. -->
-    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+         Back to the WiX default (AllowSameVersionUpgrades unset, i.e. "no") - a prior version of
+         this file set it to "yes" so re-running the installer at an unchanged ProductVersion (this
+         project's Version has stayed 1.0.0 through many rebuilds) would still be recognized as an
+         upgrade. That widens the Upgrade table's version range to include the current version
+         itself, which is exactly what ICE61 exists to flag (WIX1076: "This product should remove
+         only older versions of itself") - a real, if institutionally toothless, warning every build
+         surfaced. Per direct instruction, disabled again rather than suppressed: a same-
+         ProductVersion reinstall goes back to not being recognized as an upgrade at all (uninstall
+         then reinstall, or bump Version, are the ways to actually replace an existing install). -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
     <!-- Defense in depth (tasks.md 17.10): the Burn bootstrapper is expected to have already
          guaranteed git is present before this MSI ever runs, but the MSI can be invoked directly,

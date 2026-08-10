@@ -167,9 +167,19 @@ generated_code = true
 # are this project's deliberate test-naming convention, chosen for readability as a sentence, not a
 # lapse. CA1861 (prefer a static readonly field over a literal array argument, for methods called
 # repeatedly) is a real perf suggestion, but BDD step-definition methods run once per scenario, not
-# in a hot loop - not worth the extra field per call site for equally-negligible gain. Both scoped to
-# tests/, not disabled everywhere: src/ has no equivalent naming convention or hot-loop-adjacent code
-# these exceptions apply to.
+# in a hot loop - not worth the extra field per call site for equally-negligible gain. Neither
+# disabled everywhere: src/ has no equivalent naming convention or hot-loop-adjacent code these
+# exceptions apply to.
 [tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none
+
+# Same two rules, same reasoning, for the installer's own standalone test project
+# (installer/OutOfTheBox.Msi.CustomActions.Tests) plus its production CustomActions code - an MSI
+# custom action also runs once (or a handful of times) per install, never in a hot loop, so CA1861
+# buys nothing there either; CA1707 has no legitimate target in the production code today (it's
+# ordinary PascalCase), so scoping this to all of installer/ rather than just its .Tests project is
+# safe in practice, not just broad for convenience.
+[installer/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1861.severity = none

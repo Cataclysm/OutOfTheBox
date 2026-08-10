@@ -82,9 +82,7 @@ namespace OutOfTheBox.Msi.CustomActions
                 for (var i = chars.Length - 1; i > 0; i--)
                 {
                     var j = RandomInt(rng, i + 1);
-                    var temp = chars[i];
-                    chars[i] = chars[j];
-                    chars[j] = temp;
+                    (chars[i], chars[j]) = (chars[j], chars[i]);
                 }
 
                 return new string(chars);
