@@ -1312,16 +1312,29 @@ dd {
    its box model with the dashboard's own tokens (radius, border, scrollable height cap) rather than
    the vendored defaults (square corners, no border, unbounded height). */
 .file-preview-codemirror.CodeMirror {
-    /* auto + max-height/overflow (rather than a fixed height) is CodeMirror's own documented pattern
-       for "grow to fit content, up to a cap" - a short file isn't stretched to fill 65vh of mostly
-       empty editor the way a fixed height would. */
+    /* height: auto (not a fixed height) is CodeMirror's own documented pattern for "grow to fit
+       content, up to a cap" - a short file isn't stretched to fill 65vh of mostly empty editor the
+       way a fixed height would. The cap itself (max-height/overflow) deliberately does NOT live
+       here - see .CodeMirror-scroll below for why putting it on this outer wrapper instead broke
+       scrolling entirely. */
     height: auto;
-    max-height: 65vh;
-    overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
     font-size: 0.82rem;
+}
+
+/* CodeMirror manages its own internal scrolling (mouse wheel, its own custom-drawn scrollbar,
+   virtualized rendering) entirely through this inner element, which it already gives its own
+   `overflow: auto` - capping height/overflow on the OUTER .CodeMirror wrapper instead (as this rule
+   previously did) creates a second, competing native scroll container around CodeMirror's own, so
+   its custom scrollbar renders but no longer corresponds to anything actually being scrolled, and
+   wheel events get consumed by CodeMirror's own handler (which targets this inner element) before
+   ever reaching the outer wrapper's native scroll. Capping the height here instead is CodeMirror's
+   own documented pattern for "auto-height up to a cap" and keeps its internal scroll state in sync
+   with what's visually capped. */
+.file-preview-codemirror.CodeMirror .CodeMirror-scroll {
+    max-height: 65vh;
 }
 
 /* A rendered Markdown preview (FilePreviewDialog) - the dark-theme equivalent of GitHub's own
