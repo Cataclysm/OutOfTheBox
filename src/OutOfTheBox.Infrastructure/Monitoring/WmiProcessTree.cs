@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Globalization;
 using System.Management;
 using System.Runtime.Versioning;
 
@@ -32,8 +33,8 @@ public static class WmiProcessTree
                 cancellationToken.ThrowIfCancellationRequested();
 
                 using var process = raw;
-                var processId = Convert.ToInt32(process["ProcessId"]);
-                var parentProcessId = process["ParentProcessId"] is null ? 0 : Convert.ToInt32(process["ParentProcessId"]);
+                var processId = Convert.ToInt32(process["ProcessId"], CultureInfo.InvariantCulture);
+                var parentProcessId = process["ParentProcessId"] is null ? 0 : Convert.ToInt32(process["ParentProcessId"], CultureInfo.InvariantCulture);
                 var name = process["Name"] as string ?? string.Empty;
                 var creationTime = process["CreationDate"] is string creationDate
                     ? ManagementDateTimeConverter.ToDateTime(creationDate)

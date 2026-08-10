@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Globalization;
 using Serilog;
 using Serilog.Events;
 
@@ -29,7 +30,11 @@ public static class LoggingWebApplicationBuilderExtensions
             .MinimumLevel.Override("OutOfTheBox", LogEventLevel.Information)
             .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
             .Enrich.FromLogContext()
-            .WriteTo.Console()
+            // Invariant, not the host machine's own regional settings - a log file compared/aggregated
+            // across differently-configured machines (or just read by an operator on a different
+            // locale than the service account runs under) should format numbers/dates the same way
+            // every time.
+            .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
             .WriteTo.File(
                 Path.Combine(dataDirectory, "logs", "outofthebox-.log"),
                 rollingInterval: RollingInterval.Day,
@@ -40,6 +45,7 @@ public static class LoggingWebApplicationBuilderExtensions
                 fileSizeLimitBytes: 10 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
                 retainedFileCountLimit: 14,
-                shared: true));
+                shared: true,
+                formatProvider: CultureInfo.InvariantCulture));
     }
 }

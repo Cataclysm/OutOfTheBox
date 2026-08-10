@@ -138,8 +138,12 @@ public sealed class CommitDetailPageComponentTests : DashboardComponentTestConte
         });
     }
 
+    // Mirrors Avatar.razor's own GravatarHash - MD5 is Gravatar's documented hash-the-email API
+    // contract, not a security use; see that method's own remarks.
+#pragma warning disable CA5351
     private static string GravatarHash(string email) =>
         Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(email)));
+#pragma warning restore CA5351
 
     private static CommitDetail SampleDetail(
         string subject = "Sample subject",

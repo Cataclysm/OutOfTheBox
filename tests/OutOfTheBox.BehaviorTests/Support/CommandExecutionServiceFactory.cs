@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Globalization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -48,11 +49,11 @@ public sealed class CommandExecutionServiceFactory(
         {
             ["OutOfTheBox:RootDirectory"] = fixturesRoot,
             ["OutOfTheBox:BearerToken"] = TestBearerToken,
-            ["OutOfTheBox:DefaultExecutionTimeoutSeconds"] = defaultExecutionTimeoutSeconds.ToString(),
-            ["OutOfTheBox:MaximumExecutionTimeoutSeconds"] = maximumExecutionTimeoutSeconds.ToString(),
+            ["OutOfTheBox:DefaultExecutionTimeoutSeconds"] = defaultExecutionTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+            ["OutOfTheBox:MaximumExecutionTimeoutSeconds"] = maximumExecutionTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
             ["OutOfTheBox:OutputCapBytes"] = "5242880",
             ["OutOfTheBox:SqliteFilePath"] = SqliteFilePath,
-            ["OutOfTheBox:McpMaxFileTransferBytes"] = (mcpMaxFileTransferBytesOverride ?? (25 * 1024 * 1024)).ToString(),
+            ["OutOfTheBox:McpMaxFileTransferBytes"] = (mcpMaxFileTransferBytesOverride ?? (25 * 1024 * 1024)).ToString(CultureInfo.InvariantCulture),
         }));
     }
 

@@ -80,12 +80,21 @@ internal static class RestartManager
         }
         finally
         {
-            RmEndSession(sessionHandle);
+            // Cleanup call - its own failure here isn't actionable (the session handle is already
+            // being torn down regardless), so the result code is discarded explicitly rather than
+            // silently, per CA1806.
+            _ = RmEndSession(sessionHandle);
         }
     }
 
+    // StringBuilder marshaling here matches rstrtmgr.dll's own documented RmStartSession signature -
+    // the standard, well-established way to receive a native output string buffer in P/Invoke; a
+    // char[]/Span<char> rewrite would be a marshaling-risk-for-marginal-perf tradeoff not worth
+    // taking for this rarely-called (once per file-lock check), already-correct interop call.
+#pragma warning disable CA1838
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
     private static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, StringBuilder strSessionKey);
+#pragma warning restore CA1838
 
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
     private static extern int RmRegisterResources(

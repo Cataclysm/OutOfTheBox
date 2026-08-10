@@ -209,13 +209,13 @@ public sealed class McpCommandExecutionSteps : IDisposable
         return JsonDocument.Parse(result.ContentText).RootElement.GetProperty("runId").GetGuid();
     }
 
-    private async Task<JsonElement> PollUntilTerminalAsync(HttpClient client, Guid runId, TimeSpan timeout) =>
+    private static async Task<JsonElement> PollUntilTerminalAsync(HttpClient client, Guid runId, TimeSpan timeout) =>
         await PollAsync(client, runId, timeout, status => status != "running");
 
-    private async Task<JsonElement> PollUntilStatusAsync(HttpClient client, Guid runId, string targetStatus, TimeSpan timeout) =>
+    private static async Task<JsonElement> PollUntilStatusAsync(HttpClient client, Guid runId, string targetStatus, TimeSpan timeout) =>
         await PollAsync(client, runId, timeout, status => status == targetStatus);
 
-    private async Task<JsonElement> PollAsync(HttpClient client, Guid runId, TimeSpan timeout, Func<string, bool> isDone)
+    private static async Task<JsonElement> PollAsync(HttpClient client, Guid runId, TimeSpan timeout, Func<string, bool> isDone)
     {
         var deadline = DateTime.UtcNow + timeout;
 

@@ -31,6 +31,8 @@
     // MD5 here is Gravatar's own documented hash-the-email API contract (https://docs.gravatar.com/
     // general/hash-immutability/), not a security use - there's no cryptographic property being
     // relied on, just the specific algorithm Gravatar's API requires to look up a picture.
+#pragma warning disable CA5351
     private static string GravatarHash(string email) =>
         Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant())));
+#pragma warning restore CA5351
 }

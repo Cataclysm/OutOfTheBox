@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.Versioning;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Monitoring;
@@ -33,7 +34,7 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         _clock = clock;
 
         _totalCpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        _perCoreCpuCounters = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => new PerformanceCounter("Processor", "% Processor Time", core.ToString()))];
+        _perCoreCpuCounters = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => new PerformanceCounter("Processor", "% Processor Time", core.ToString(CultureInfo.InvariantCulture)))];
 
         // One pair of counters per network interface instance (there's no "_Total" instance for
         // this category, unlike Processor) - summed across all of them in SampleAsync, since this

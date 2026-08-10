@@ -142,8 +142,34 @@ dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 
 # CS1591 (missing XML doc comment on public API) is promoted to an error via Directory.Build.props
 
+# Built-in .NET analyzers (CAxxxx, Directory.Build.props's AnalysisMode=Recommended). Disabled only
+# where a rule conflicts with a convention this codebase already follows deliberately:
+# - CA1859 (return/accept concrete collection types instead of interfaces "for improved
+#   performance") fights this codebase's whole ports-and-adapters design - IReadOnlyList<T>/
+#   IReadOnlyDictionary<TKey,TValue> return types are a deliberate encapsulation choice (callers
+#   can't mutate what a repository/port hands back), not an oversight to "fix" for a marginal gain.
+# - CA1848 (use LoggerMessage source-generated delegates instead of ILogger.LogWarning/LogError(...))
+#   exists to avoid per-call string-formatting allocation on hot logging paths - this service's own
+#   logging philosophy (Warning floor, "not gigabytes of logs, just the stuff that really matters")
+#   means none of its log call sites are hot enough for that to matter, and the delegate-per-message
+#   boilerplate isn't worth it for occasional lifecycle/failure events.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1859.severity = none
+
 # EF Core migrations are scaffolded by `dotnet ef migrations add`, not hand-authored, and get
 # regenerated/appended to by that tooling - style-rule nagging on them is pure noise that would
 # just be overwritten anyway.
 [**/Migrations/*.cs]
 generated_code = true
+
+# CA1707 (identifiers should not contain underscores) would flag every test method in this codebase
+# - Given_When_Then-style underscore-separated names (e.g. Compute_returns_null_for_an_empty_series)
+# are this project's deliberate test-naming convention, chosen for readability as a sentence, not a
+# lapse. CA1861 (prefer a static readonly field over a literal array argument, for methods called
+# repeatedly) is a real perf suggestion, but BDD step-definition methods run once per scenario, not
+# in a hot loop - not worth the extra field per call site for equally-negligible gain. Both scoped to
+# tests/, not disabled everywhere: src/ has no equivalent naming convention or hot-loop-adjacent code
+# these exceptions apply to.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none

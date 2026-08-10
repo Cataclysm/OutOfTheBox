@@ -27,6 +27,12 @@
     <!-- CS1591: missing XML doc comment on a publicly visible member. Treated as an error so
          undocumented public API fails the build instead of just warning. -->
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <!-- Built-in .NET analyzers (CAxxxx) - ship with the SDK already, no new package. Recommended
+         (not All) turns on the rules the .NET team itself suggests as generally applicable, without
+         the noisier/more opinionated ones All also includes. Severities live in .editorconfig, same
+         dotnet_diagnostic.<id>.severity mechanism as every other rule override in this file. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
   </PropertyGroup>
 
 </Project>
