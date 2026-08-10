@@ -29,7 +29,6 @@ Vendored subset (dashboard action icons only, not the full icon set):
 | `pencil.svg` | File tree: rename |
 | `tag.svg` | Commit graph: tag ref pill |
 | `map-pin.svg` | Commit graph: checkout commit (as detached HEAD) |
-| `file-diff.svg` | Commit detail: view a changed file's diff |
 
 To add another icon, download the matching `<name>.svg` from
 `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`

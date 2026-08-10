@@ -72,16 +72,15 @@ else
     }
     else
     {
-        <table class="data-table">
+        <table class="data-table clickable-rows">
             <colgroup>
                 <col style="width:1%" />
                 <col />
-                <col style="width:1%" />
             </colgroup>
             <tbody>
                 @foreach (var file in _detail.Files)
                 {
-                    <tr>
+                    <tr @onclick="@(() => _diffDialog!.ShowAsync(Name, Hash, file.Path))">
                         <td class="col-shrink"><span class="kind-badge kind-file@(file.Kind.ToString().ToLowerInvariant())">@FileChangeLabel(file.Kind)</span></td>
                         <td class="ellipsis" title="@file.Path">
                             @if (file.OldPath is not null)
@@ -89,11 +88,6 @@ else
                                 @: @file.OldPath →
                             }
                             @file.Path
-                        </td>
-                        <td class="col-shrink">
-                            <button type="button" class="icon-button" title="View diff" @onclick="@(() => _diffDialog!.ShowAsync(Name, Hash, file.Path))">
-                                <Icon Name="diff" />
-                            </button>
                         </td>
                     </tr>
                 }
