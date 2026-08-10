@@ -17,11 +17,17 @@ window.outOfTheBoxDialogs = {
 // Clicking outside a modal <dialog>'s own content (its backdrop) dismisses it the same way pressing
 // Escape already does - the browser has no built-in gesture for this, only Escape. A backdrop click
 // lands on the <dialog> element itself (its own content is a child, e.g. the .dialog-body div), so
-// distinguishing "clicked the backdrop" from "clicked inside" comes down to comparing the click's
-// coordinates against the dialog's own content box, not the element the event happened to bubble
-// through. Firing the real "cancel" event first (rather than calling .close() directly) is what
-// makes this genuinely equivalent to Escape - same event, same default-prevention hook - instead of
-// a close that merely looks the same but skips whatever a future `@oncancel`-based handler expects.
+// distinguishing "clicked the backdrop" from "clicked inside" needs BOTH: event.target === element
+// (a click on any descendant - including one that bubbles up - always has target set to that
+// descendant, never the dialog itself) AND the coordinates falling outside the dialog's own content
+// box (target === element is also true for a click that lands in the dialog's own padding, which is
+// still visually "inside", not the backdrop). Coordinates alone aren't enough: a keyboard-activated
+// click (Enter/Space on a focused control) or a script-dispatched .click() carries clientX/clientY
+// of 0, which reads as "outside" no matter where the actual control sits - requiring target ===
+// element first rules those out, since their target is the focused/dispatched-on element, not the
+// dialog. Firing the real "cancel" event first (rather than calling .close() directly) is what makes
+// this genuinely equivalent to Escape - same event, same default-prevention hook - instead of a
+// close that merely looks the same but skips whatever a future `@oncancel`-based handler expects.
 function attachBackdropDismiss(element) {
     if (element.dataset.backdropDismissAttached) {
         return;
@@ -29,6 +35,10 @@ function attachBackdropDismiss(element) {
 
     element.dataset.backdropDismissAttached = "true";
     element.addEventListener("click", function (event) {
+        if (event.target !== element) {
+            return;
+        }
+
         const rect = element.getBoundingClientRect();
         const clickedInsideContent = event.clientX >= rect.left && event.clientX <= rect.right
             && event.clientY >= rect.top && event.clientY <= rect.bottom;
