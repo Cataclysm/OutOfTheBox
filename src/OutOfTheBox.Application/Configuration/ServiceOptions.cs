@@ -52,6 +52,14 @@ public sealed class ServiceOptions
     public long McpMaxFileTransferBytes { get; set; } = 25 * 1024 * 1024;
 
     /// <summary>
+    /// Maximum number of entries the MCP <c>find_files</c> tool will return for a single call. A
+    /// pattern matching more than this stops collecting once the cap is reached rather than building
+    /// an unbounded result, and the result is marked truncated so a caller knows to narrow its
+    /// pattern rather than trusting an apparently-complete list.
+    /// </summary>
+    public int McpMaxFindFilesResults { get; set; } = 2000;
+
+    /// <summary>
     /// Absolute path to the SQLite database file used for run history and resource-sample persistence.
     /// </summary>
     public string SqliteFilePath { get; set; } = string.Empty;

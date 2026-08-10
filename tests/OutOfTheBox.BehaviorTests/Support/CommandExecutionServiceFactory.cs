@@ -18,7 +18,8 @@ public sealed class CommandExecutionServiceFactory(
     int maximumExecutionTimeoutSeconds = 3600,
     string? rootDirectoryOverride = null,
     string? sqliteFilePathOverride = null,
-    long? mcpMaxFileTransferBytesOverride = null)
+    long? mcpMaxFileTransferBytesOverride = null,
+    int? mcpMaxFindFilesResultsOverride = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>The bearer token configured for this test instance.</summary>
@@ -54,6 +55,7 @@ public sealed class CommandExecutionServiceFactory(
             ["OutOfTheBox:OutputCapBytes"] = "5242880",
             ["OutOfTheBox:SqliteFilePath"] = SqliteFilePath,
             ["OutOfTheBox:McpMaxFileTransferBytes"] = (mcpMaxFileTransferBytesOverride ?? (25 * 1024 * 1024)).ToString(CultureInfo.InvariantCulture),
+            ["OutOfTheBox:McpMaxFindFilesResults"] = (mcpMaxFindFilesResultsOverride ?? 2000).ToString(CultureInfo.InvariantCulture),
         }));
     }
 

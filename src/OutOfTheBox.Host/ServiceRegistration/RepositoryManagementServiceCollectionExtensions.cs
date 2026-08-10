@@ -6,8 +6,11 @@ using OutOfTheBox.Infrastructure.Repositories;
 namespace OutOfTheBox.Host.ServiceRegistration;
 
 /// <summary>
-/// Registers repository listing/clone/delete/git-actions and the file tree browser (both
-/// dashboard-only - no REST/MCP surface, called directly from Blazor component code-behind).
+/// Registers repository listing/clone/delete/git-actions (dashboard-only - no REST/MCP surface,
+/// called directly from Blazor component code-behind, except list/clone/delete which
+/// <c>CommandExecutionServiceCollectionExtensions</c>' MCP tools also reach) and the file tree
+/// browser (both the dashboard's own tree and, per specs/mcp-file-management, the MCP
+/// <c>find_files</c>/<c>get_file_info</c>/<c>delete_path</c> tools).
 /// </summary>
 public static class RepositoryManagementServiceCollectionExtensions
 {
@@ -23,10 +26,10 @@ public static class RepositoryManagementServiceCollectionExtensions
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
 
-        // File tree browser (Section 23) - same dashboard-only reasoning as IRepositoryManager above,
-        // but has no scoped dependency of its own (only the singleton WorkingDirectoryResolver/
-        // RunRegistry), so it's registered singleton rather than scoped.
-        services.AddSingleton<IRepositoryFileBrowser, RepositoryFileBrowser>();
+        // File tree browser (Section 23) - scoped, not singleton, for the same reason
+        // IRepositoryManager just above is: it now depends on the scoped IRunRepository too
+        // (DeleteAsync's own history recording, added alongside FindEntriesAsync/GetMetadataAsync).
+        services.AddScoped<IRepositoryFileBrowser, RepositoryFileBrowser>();
 
         return services;
     }

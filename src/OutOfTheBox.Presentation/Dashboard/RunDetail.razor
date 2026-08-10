@@ -48,6 +48,11 @@ else
             <dt>File size</dt>
             <dd>@(_run.FileSizeBytes is { } sizeBytes ? $"{sizeBytes:N0} bytes" : "-")</dd>
         }
+        else if (_run.Kind is RunKind.RepositoryFileDelete)
+        {
+            <dt>Deleted path</dt>
+            <dd>@_run.FilePath</dd>
+        }
     </dl>
 
     <RunHistoryGraph RunId="@RunId" Note="@(_run.Kind == RunKind.FileTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />

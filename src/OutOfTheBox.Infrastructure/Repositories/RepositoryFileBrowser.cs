@@ -1,16 +1,31 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Security.AccessControl;
 using OutOfTheBox.Application.Concurrency;
+using OutOfTheBox.Application.Configuration;
+using OutOfTheBox.Application.Diagnostics;
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.PathConfinement;
 using OutOfTheBox.Domain.Repositories;
+using OutOfTheBox.Domain.Runs;
+using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
 
 /// <inheritdoc cref="IRepositoryFileBrowser" />
-public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirectoryResolver, RunRegistry runRegistry, ILogger<RepositoryFileBrowser> logger) : IRepositoryFileBrowser
+public sealed class RepositoryFileBrowser(
+    IWorkingDirectoryResolver workingDirectoryResolver,
+    RunRegistry runRegistry,
+    IRunRepository runRepository,
+    IRunEventBus runEventBus,
+    IFileLockInspector fileLockInspector,
+    IOptions<ServiceOptions> options,
+    ILogger<RepositoryFileBrowser> logger) : IRepositoryFileBrowser
 {
     /// <inheritdoc />
     public Task<IReadOnlyList<RepositoryFileEntry>> ListDirectoryAsync(string repositoryName, string relativePath, CancellationToken cancellationToken)
@@ -68,6 +83,137 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
     }
 
     /// <inheritdoc />
+    public Task<RepositoryEntrySearchResult> FindEntriesAsync(string repositoryName, string pattern, CancellationToken cancellationToken)
+    {
+        var repositoryRoot = ResolveRepositoryRoot(repositoryName);
+        if (repositoryRoot is null || !Directory.Exists(repositoryRoot))
+        {
+            return Task.FromResult(new RepositoryEntrySearchResult([], Truncated: false));
+        }
+
+        var matcher = new Matcher();
+        matcher.AddInclude(string.IsNullOrWhiteSpace(pattern) ? "**/*" : pattern);
+
+        var matches = new List<RepositoryEntryMatch>();
+        var truncated = false;
+        var cap = options.Value.McpMaxFindFilesResults;
+
+        try
+        {
+            foreach (var entryPath in Directory.EnumerateFileSystemEntries(repositoryRoot, "*", SearchOption.AllDirectories))
+            {
+                if (matches.Count >= cap)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                try
+                {
+                    // Matcher.Match tests a plain relative-path string against the configured
+                    // patterns - it has no filesystem opinions of its own, so it works identically
+                    // for a file's or a directory's relative path (see design.md's "Glob matching"
+                    // decision for why this - not Matcher's own file-only Execute - is used here).
+                    var relativePath = Path.GetRelativePath(repositoryRoot, entryPath).Replace('\\', '/');
+                    if (!matcher.Match(relativePath).HasMatches)
+                    {
+                        continue;
+                    }
+
+                    if (Directory.Exists(entryPath))
+                    {
+                        var directoryInfo = new DirectoryInfo(entryPath);
+                        matches.Add(new RepositoryEntryMatch(relativePath, directoryInfo.Name, IsDirectory: true, SizeBytes: null, directoryInfo.LastWriteTimeUtc));
+                    }
+                    else
+                    {
+                        var fileInfo = new FileInfo(entryPath);
+                        matches.Add(new RepositoryEntryMatch(relativePath, fileInfo.Name, IsDirectory: false, fileInfo.Length, fileInfo.LastWriteTimeUtc));
+                    }
+                }
+                catch (IOException)
+                {
+                    // Same transient-entry reasoning as ListDirectoryAsync above.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Failed to search repository '{RepositoryName}' for pattern '{Pattern}'.", repositoryName, pattern);
+        }
+
+        return Task.FromResult(new RepositoryEntrySearchResult(
+            [.. matches.OrderBy(e => e.RelativePath, StringComparer.OrdinalIgnoreCase)], truncated));
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryEntryMetadata?> GetMetadataAsync(string repositoryName, string relativePath, CancellationToken cancellationToken)
+    {
+        var resolvedPath = ResolveWithinRepository(repositoryName, relativePath);
+        if (resolvedPath is null)
+        {
+            return null;
+        }
+
+        var isDirectory = Directory.Exists(resolvedPath);
+        if (!isDirectory && !File.Exists(resolvedPath))
+        {
+            return null;
+        }
+
+        FileSystemInfo info = isDirectory ? new DirectoryInfo(resolvedPath) : new FileInfo(resolvedPath);
+        var owner = TryGetOwner(resolvedPath, isDirectory);
+
+        // Restart Manager's own model is file-based - a directory can't itself be "locked" the way
+        // an open file can, so this stays null rather than a misleading false.
+        bool? isLocked = null;
+        if (!isDirectory)
+        {
+            var lockingProcesses = await fileLockInspector.GetLockingProcessesAsync(resolvedPath, cancellationToken);
+            isLocked = lockingProcesses.Count > 0;
+        }
+
+        return new RepositoryEntryMetadata(
+            RelativePath: relativePath.Replace('\\', '/'),
+            Name: info.Name,
+            IsDirectory: isDirectory,
+            SizeBytes: isDirectory ? null : ((FileInfo)info).Length,
+            Attributes: info.Attributes,
+            CreatedUtc: info.CreationTimeUtc,
+            LastModifiedUtc: info.LastWriteTimeUtc,
+            LastAccessedUtc: info.LastAccessTimeUtc,
+            Owner: owner,
+            IsLocked: isLocked);
+    }
+
+    // The owning account, as a friendly "DOMAIN\name" if it resolves, falling back to the raw SID if
+    // not (e.g. an orphaned account no longer in Active Directory/local accounts) - either way beats
+    // silently omitting a field the caller explicitly asked for. Reading the ACL itself can fail
+    // independently (e.g. a permissions problem on the entry) without that being fatal to every
+    // other metadata field already gathered, so this degrades to null rather than throwing.
+    private static string? TryGetOwner(string path, bool isDirectory)
+    {
+        try
+        {
+            var security = isDirectory
+                ? (FileSystemSecurity)new DirectoryInfo(path).GetAccessControl()
+                : new FileInfo(path).GetAccessControl();
+            var owner = security.GetOwner(typeof(System.Security.Principal.NTAccount))
+                ?? security.GetOwner(typeof(System.Security.Principal.SecurityIdentifier));
+            return owner?.Value;
+        }
+        catch (SystemException)
+        {
+            // Covers IOException/UnauthorizedAccessException/InvalidOperationException/
+            // PlatformNotSupportedException - every documented GetAccessControl() failure mode.
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public Task<RepositoryFileActionResult> DeleteAsync(string repositoryName, string relativePath, CancellationToken cancellationToken) =>
         DeleteCoreAsync(repositoryName, relativePath, cancellationToken);
 
@@ -99,6 +245,10 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
             return new RepositoryFileActionResult.Rejected(RepositoryActionRejectionReason.Busy, conflictingRunId);
         }
 
+        RepositoryFileActionResult result;
+        var startedAt = DateTimeOffset.UtcNow;
+        string? errorMessage = null;
+
         try
         {
             if (isDirectory)
@@ -110,17 +260,38 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
                 await RecursiveDelete.FileAsync(resolvedPath, cancellationToken);
             }
 
-            return new RepositoryFileActionResult.Succeeded();
+            result = new RepositoryFileActionResult.Succeeded();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Failed to delete {ResolvedPath} in repository '{RepositoryName}'.", resolvedPath, repositoryName);
-            return new RepositoryFileActionResult.Failed(ex.Message);
+            errorMessage = ex.Message;
+            result = new RepositoryFileActionResult.Failed(ex.Message);
         }
         finally
         {
             runRegistry.Release(repositoryRoot);
         }
+
+        // Recorded here (not just by the MCP tool that also reaches this method) so the dashboard's
+        // own file tree browser delete gets the same history trail - previously neither caller left
+        // any trace at all of who deleted what and when, per design.md's "gains its own run-history
+        // record" decision.
+        var now = DateTimeOffset.UtcNow;
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.RepositoryFileDelete,
+            RepositoryPath = repositoryRoot,
+            FilePath = relativePath,
+            StartedAt = startedAt,
+            CompletedAt = now,
+            Outcome = result is RepositoryFileActionResult.Succeeded ? RunOutcome.Completed : RunOutcome.Failed,
+            Stderr = errorMessage,
+        }, CancellationToken.None);
+        runEventBus.Publish(new RunEvent(runId, RunKind.RepositoryFileDelete, RunEventType.Terminal, repositoryRoot));
+
+        return result;
     }
 
     /// <inheritdoc />

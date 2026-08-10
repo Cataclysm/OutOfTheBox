@@ -17,6 +17,9 @@ public enum RunKind
     /// <summary>A repository clone, performed from the dashboard or via the MCP <c>clone_repository</c> tool (see specs/repository-management).</summary>
     RepositoryClone,
 
-    /// <summary>A repository deletion performed from the dashboard only - not reachable via any MCP tool (see specs/repository-management).</summary>
+    /// <summary>A repository deletion, performed from the dashboard or via the MCP <c>delete_repository</c> tool (see specs/repository-management).</summary>
     RepositoryDelete,
+
+    /// <summary>A file or directory deletion within a repository, performed from the dashboard's file tree browser or via the MCP <c>delete_path</c> tool (see specs/mcp-file-management).</summary>
+    RepositoryFileDelete,
 }

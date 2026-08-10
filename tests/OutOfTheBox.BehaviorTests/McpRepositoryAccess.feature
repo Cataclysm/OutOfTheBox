@@ -1,5 +1,5 @@
 Feature: MCP Repository Access
-    Mirrors specs/mcp-repository-access/spec.md - list and clone only, the subset of
+    Mirrors specs/mcp-repository-access/spec.md - list, clone, and delete, the subset of
     repository-management that's MCP-reachable at all. Driven against a real running instance of the
     service (Host, via WebApplicationFactory), reusing GitFixture so clone_repository genuinely runs
     `git clone`.
@@ -23,3 +23,12 @@ Feature: MCP Repository Access
         When an authenticated caller calls clone_repository for the fixture repository under "mcp-cancellable-clone"
         And the caller cancels that clone via cancel_run
         Then cancel_run does not reject the clone's run id as unknown
+
+    Scenario: Deleting an existing repository
+        Given an existing repository named "repository-to-delete" is on disk for MCP access
+        When an authenticated caller calls delete_repository for "repository-to-delete"
+        Then delete_repository reports success and "repository-to-delete" no longer appears via list_repositories
+
+    Scenario: Deleting a repository that does not exist is rejected
+        When an authenticated caller calls delete_repository for "does-not-exist"
+        Then the delete_repository call is rejected as not found

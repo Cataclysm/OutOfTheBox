@@ -393,6 +393,12 @@ public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDis
             return Task.FromResult(entries);
         }
 
+        public Task<RepositoryEntrySearchResult> FindEntriesAsync(string repositoryName, string pattern, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("Not exercised by these tests.");
+
+        public Task<RepositoryEntryMetadata?> GetMetadataAsync(string repositoryName, string relativePath, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("Not exercised by these tests.");
+
         public Task<RepositoryFileActionResult> DeleteAsync(string repositoryName, string relativePath, CancellationToken cancellationToken) =>
             throw new NotSupportedException("Not exercised by these tests - only opening the confirm dialog is, not confirming it.");
 

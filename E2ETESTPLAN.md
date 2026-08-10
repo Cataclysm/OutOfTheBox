@@ -16,15 +16,19 @@ pull/push/force-push/fetch/clean, clone branch selection, branch-switch, icon/di
 ## Scope split: what an sbx agent can automate vs. what needs a human + browser
 
 This matters because half of what §22 added is **dashboard-only, with no MCP tool** (per direct
-instruction — pull/push/force-push/fetch/clean, branch-switch, and repository deletion are all
-unreachable to an sbx caller by design). An automated agent following only the MCP tools cannot
-exercise those directly; it can only exercise their *effects* indirectly (e.g. running `git push`
-itself via `git_run` and confirming the dashboard reflects it), or by treating the equivalent
-generic `git` subcommand as a stand-in.
+instruction — pull/push/force-push/fetch/clean and branch-switch are unreachable to an sbx caller
+by design). An automated agent following only the MCP tools cannot exercise those directly; it can
+only exercise their *effects* indirectly (e.g. running `git push` itself via `git_run` and
+confirming the dashboard reflects it), or by treating the equivalent generic `git` subcommand as a
+stand-in. Repository and file/directory deletion were dashboard-only at the time this plan was
+written, but that decision has since been reversed — `delete_repository` and `delete_path` are now
+MCP-reachable too (see `openspec/changes/expose-file-management-mcp/`) and belong with Phases 1–7,
+not Phase 8; this plan hasn't been re-run against that change yet.
 
 - **Phases 1–7**: fully automatable by an sbx agent using only the MCP tools (`dotnet_run`,
   `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`,
-  `clone_repository`) over the bearer-authenticated `/mcp` endpoint — no browser needed.
+  `clone_repository`, `delete_repository`, `find_files`, `get_file_info`, `delete_path`) over the
+  bearer-authenticated `/mcp` endpoint — no browser needed.
 - **Phase 8**: requires a human operator with a browser (or a browser-automation tool the agent has
   been explicitly given). Listed separately so an sbx-only run can still produce a complete report for
   Phases 1–7 and flag Phase 8 as "not executed in this environment" rather than silently skipping it.
@@ -61,9 +65,9 @@ generic `git` subcommand as a stand-in.
      header (or a wrong bearer token) → expect the connection/request to be rejected (`401`).
 1.2. Same, with the correct `Authorization: Bearer <token>` header → expect the session to establish
      and tool discovery (the client library's own initialize/list-tools handshake) to succeed, listing
-     all ten tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`,
-     `list_repositories`, `clone_repository`, `get_run_resources`, `get_environment_info`,
-     `get_file_lock_info`).
+     all fourteen tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`,
+     `list_repositories`, `clone_repository`, `delete_repository`, `find_files`, `get_file_info`,
+     `delete_path`, `get_run_resources`, `get_environment_info`, `get_file_lock_info`).
 1.3. Call `list_repositories` with no arguments → expect a well-formed (possibly empty) result array.
 
 **Pass criteria**: 1.1 rejects, 1.2/1.3 succeed.

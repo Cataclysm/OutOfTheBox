@@ -154,6 +154,33 @@ public sealed class McpRepositoryAccessSteps : IDisposable
         Assert.True(status is "cancelled" or "completed", $"Expected 'cancelled' or 'completed', got '{status}'.");
     }
 
+    [When(@"an authenticated caller calls delete_repository for ""(.*)""")]
+    public async Task WhenAnAuthenticatedCallerCallsDeleteRepositoryFor(string name)
+    {
+        await EnsureFactoryAsync();
+        _toolCallResult = await McpTestClient.CallToolAsync(
+            Client, "delete_repository", new { name }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+    }
+
+    [Then(@"delete_repository reports success and ""(.*)"" no longer appears via list_repositories")]
+    public async Task ThenDeleteRepositoryReportsSuccessAndNoLongerAppearsViaListRepositories(string name)
+    {
+        Assert.False(_toolCallResult!.IsToolError, _toolCallResult.ContentText);
+
+        var result = await McpTestClient.CallToolAsync(
+            Client, "list_repositories", new { }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+        var summaries = JsonDocument.Parse(result.ContentText!).RootElement;
+
+        Assert.DoesNotContain(summaries.EnumerateArray(), s => s.GetProperty("name").GetString() == name);
+    }
+
+    [Then(@"the delete_repository call is rejected as not found")]
+    public void ThenTheDeleteRepositoryCallIsRejectedAsNotFound()
+    {
+        Assert.True(_toolCallResult!.IsToolError, "Expected delete_repository to be rejected.");
+        Assert.Contains("does not exist", _toolCallResult.ContentText, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

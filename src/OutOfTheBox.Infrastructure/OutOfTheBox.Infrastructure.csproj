@@ -7,6 +7,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- Glob (*, **, ?) matching for the MCP find_files tool - Directory.EnumerateFileSystemEntries'
+         own wildcard support is limited to a single path segment and doesn't understand **. -->
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <!-- BackgroundService, for RepositoryStatsSampler (and, later, the host-resource sampler). -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

@@ -715,6 +715,13 @@ dialog::backdrop {
     color: #ffb3b3;
 }
 
+/* Same red as .kind-repositorydelete above, deliberately - both are deletions, same danger
+   semantics, no need for a whole new hue just to distinguish "a file" from "a repository". */
+.kind-repositoryfiledelete {
+    background: rgba(255, 92, 92, 0.16);
+    color: #ffb3b3;
+}
+
 .history-filters {
     display: flex;
     flex-wrap: wrap;

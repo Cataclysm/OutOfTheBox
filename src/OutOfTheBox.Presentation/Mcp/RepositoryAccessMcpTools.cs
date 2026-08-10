@@ -52,6 +52,48 @@ public sealed class RepositoryAccessMcpTools(
     public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync() =>
         repositoryManager.ListAsync(CancellationToken.None);
 
+    /// <summary>Deletes an entire repository from the host.</summary>
+    /// <param name="name">The repository name (as returned by <c>list_repositories</c>).</param>
+    [McpServerTool]
+    [Description("Permanently deletes an entire repository's directory from the host - to delete a single file or subdirectory instead, use delete_path. Rejects a name that escapes the configured root, one that doesn't exist, or one with another run currently in flight - each with a distinct, specific error.")]
+    public async Task<McpDeleteRepositoryResult> DeleteRepositoryAsync(
+        [Description("The repository name (as returned by list_repositories).")] string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new McpException("name must be supplied.");
+        }
+
+        var result = await repositoryManager.DeleteAsync(name, CancellationToken.None);
+
+        return result switch
+        {
+            RepositoryActionResult.Rejected { Reason: RepositoryActionRejectionReason.NotFound } =>
+                throw new McpException($"Repository '{name}' does not exist."),
+            RepositoryActionResult.Rejected { Reason: RepositoryActionRejectionReason.Busy } rejected =>
+                throw new McpException($"Repository '{name}' is busy with in-flight run '{rejected.ConflictingRunId}'."),
+            RepositoryActionResult.Rejected =>
+                throw new McpException($"name '{name}' is invalid or outside the configured root."),
+            // DeleteAsync runs synchronously to completion despite the "Accepted" naming (unlike
+            // CloneAsync, it isn't fire-and-forget) - the actual outcome lives only in the Run row it
+            // just persisted, not in this result itself, so it's looked up here to give the caller a
+            // definitive answer (and the real error, on failure) rather than a bare "accepted".
+            RepositoryActionResult.Accepted accepted => await BuildDeleteResultAsync(name, accepted.RunId),
+            _ => throw new McpException("Unexpected result deleting the repository."),
+        };
+    }
+
+    private async Task<McpDeleteRepositoryResult> BuildDeleteResultAsync(string name, Guid runId)
+    {
+        var run = await runRepository.FindByIdAsync(runId, CancellationToken.None);
+        if (run is { Outcome: RunOutcome.Completed })
+        {
+            return new McpDeleteRepositoryResult(true);
+        }
+
+        throw new McpException($"Failed to delete repository '{name}': {run?.Stderr ?? "unknown error"}");
+    }
+
     /// <summary>Starts cloning a repository into a new, not-yet-existing directory under the configured root, and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result, or <c>cancel_run</c> to abort it.</summary>
     /// <param name="url">The source URL to clone.</param>
     /// <param name="name">The new repository's name (must not already exist under the configured root).</param>
@@ -175,3 +217,7 @@ public sealed class RepositoryAccessMcpTools(
         }
     }
 }
+
+/// <summary>The result of a successful <c>delete_repository</c> call.</summary>
+/// <param name="Deleted">Always <see langword="true"/> - a failure throws instead of returning a result with this <see langword="false"/>.</param>
+public sealed record McpDeleteRepositoryResult(bool Deleted);

@@ -26,7 +26,8 @@ public static class RunDisplay
         RunKind.GitCommand => "Git",
         RunKind.FileTransfer => "Transfer",
         RunKind.RepositoryClone => "Clone",
-        RunKind.RepositoryDelete => "Delete",
+        RunKind.RepositoryDelete => "Repo Delete",
+        RunKind.RepositoryFileDelete => "File Delete",
         _ => kind.ToString(),
     };
 
@@ -38,6 +39,7 @@ public static class RunDisplay
         RunKind.FileTransfer => "File Transfer",
         RunKind.RepositoryClone => "Repository Clone",
         RunKind.RepositoryDelete => "Repository Delete",
+        RunKind.RepositoryFileDelete => "File Delete",
         _ => kind.ToString(),
     };
 
@@ -70,6 +72,7 @@ public static class RunDisplay
             RunKind.GitCommand => run.Arguments is null ? string.Empty : "git " + string.Join(' ', run.Arguments),
             RunKind.FileTransfer => run.FilePath ?? string.Empty,
             RunKind.RepositoryClone => run.SourceUrl ?? string.Empty,
+            RunKind.RepositoryFileDelete => run.FilePath ?? string.Empty,
             _ => string.Empty,
         };
 
