@@ -175,6 +175,62 @@ public sealed class RepositoryManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteAsync_retries_and_succeeds_once_a_transient_file_lock_clears()
+    {
+        // Reproduces the real-machine report this retry was added for: a file briefly still open
+        // (there, believed to be an AV/indexer handle release race after the contents were already
+        // cleared) makes the first delete attempt(s) fail, but the operation succeeds without the
+        // operator needing to manually retry, once the lock actually clears within the retry window.
+        var repositoryPath = Path.Combine(_root, "transiently-locked-repository");
+        Directory.CreateDirectory(repositoryPath);
+        var filePath = Path.Combine(repositoryPath, "file.txt");
+        File.WriteAllText(filePath, "content");
+
+        var lockingStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            await lockingStream.DisposeAsync();
+        });
+
+        var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
+        var manager = CreateManager(new RunRegistry(), runRepository);
+
+        var result = await manager.DeleteAsync("transiently-locked-repository", CancellationToken.None);
+
+        Assert.IsType<RepositoryActionResult.Accepted>(result);
+        Assert.False(Directory.Exists(repositoryPath));
+
+        var recorded = await runRepository.ListAsync(new RunQuery { Kinds = [RunKind.RepositoryDelete] }, CancellationToken.None);
+        var row = Assert.Single(recorded);
+        Assert.Equal(RunOutcome.Completed, row.Outcome);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_fails_cleanly_when_a_file_stays_locked_past_the_retry_window()
+    {
+        var repositoryPath = Path.Combine(_root, "permanently-locked-repository");
+        Directory.CreateDirectory(repositoryPath);
+        var filePath = Path.Combine(repositoryPath, "file.txt");
+        File.WriteAllText(filePath, "content");
+
+        await using var lockingStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
+        var manager = CreateManager(new RunRegistry(), runRepository);
+
+        var result = await manager.DeleteAsync("permanently-locked-repository", CancellationToken.None);
+
+        Assert.IsType<RepositoryActionResult.Accepted>(result);
+        Assert.True(Directory.Exists(repositoryPath));
+
+        var recorded = await runRepository.ListAsync(new RunQuery { Kinds = [RunKind.RepositoryDelete] }, CancellationToken.None);
+        var row = Assert.Single(recorded);
+        Assert.Equal(RunOutcome.Failed, row.Outcome);
+        Assert.False(string.IsNullOrEmpty(row.Stderr));
+    }
+
+    [Fact]
     public async Task RenameAsync_rejects_a_name_that_escapes_the_root()
     {
         var manager = CreateManager(new RunRegistry());

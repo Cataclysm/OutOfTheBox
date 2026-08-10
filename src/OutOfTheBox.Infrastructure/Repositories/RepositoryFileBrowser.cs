@@ -69,9 +69,9 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
 
     /// <inheritdoc />
     public Task<RepositoryFileActionResult> DeleteAsync(string repositoryName, string relativePath, CancellationToken cancellationToken) =>
-        Task.FromResult(DeleteCore(repositoryName, relativePath));
+        DeleteCoreAsync(repositoryName, relativePath, cancellationToken);
 
-    private RepositoryFileActionResult DeleteCore(string repositoryName, string relativePath)
+    private async Task<RepositoryFileActionResult> DeleteCoreAsync(string repositoryName, string relativePath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
         {
@@ -103,13 +103,11 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
         {
             if (isDirectory)
             {
-                ClearReadOnlyAttributes(resolvedPath);
-                Directory.Delete(resolvedPath, recursive: true);
+                await RecursiveDelete.DirectoryAsync(resolvedPath, cancellationToken);
             }
             else
             {
-                File.SetAttributes(resolvedPath, FileAttributes.Normal);
-                File.Delete(resolvedPath);
+                await RecursiveDelete.FileAsync(resolvedPath, cancellationToken);
             }
 
             return new RepositoryFileActionResult.Succeeded();
@@ -231,15 +229,4 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
         return resolution.IsAllowed ? resolution.ResolvedPath : null;
     }
 
-    /// <summary>Same read-only-clearing workaround <see cref="RepositoryManager"/>'s own delete uses - a git checkout can leave pack/object-adjacent files read-only, which <see cref="Directory.Delete(string, bool)"/> otherwise throws on.</summary>
-    private static void ClearReadOnlyAttributes(string path)
-    {
-        foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
-        {
-            if (file.Attributes.HasFlag(FileAttributes.ReadOnly))
-            {
-                file.Attributes &= ~FileAttributes.ReadOnly;
-            }
-        }
-    }
 }

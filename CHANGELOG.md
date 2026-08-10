@@ -61,6 +61,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - The commit graph's SVG overlay could drift out of sync with its table (a row's content, e.g. a ref pill or the checkout button, could silently render taller than the overlay's fixed row-height assumption); dots are now reliably centered on their row, the newest commit's line no longer extends above its own dot, and fork/merge connectors now terminate exactly at the relevant commit's dot instead of a row edge, colored by the lane they actually represent
 - Clicking a commit's parent-hash link on the commit detail page updated the URL but kept showing the previous commit's data - Blazor reuses the component instance across same-route navigations, so the data reload was moved from `OnInitializedAsync` (runs once per instance) to `OnParametersSetAsync` (runs on every navigation)
 - The About page's MCP tool list was missing `get_run_resources`, `get_environment_info`, and `get_file_lock_info`, and still said "eight tools"
+- Repository deletion could fail with a transient "directory in use"/"not empty" error even though every file inside had already been removed - a Windows filesystem race (AV/indexer handle release lag) between the last file disappearing and the now-empty directory itself becoming deletable. Both repository deletion and the file tree browser's own delete now retry with backoff instead of failing on the first attempt
 
 ### In progress
 

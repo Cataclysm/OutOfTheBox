@@ -99,6 +99,17 @@ The system SHALL let an operator delete an existing repository, permanently and 
 - **WHEN** an operator attempts to delete a name that does not resolve to an existing repository under the root
 - **THEN** the system rejects the request with a not-found signal rather than silently succeeding
 
+### Requirement: Deletion retries a transiently locked file or directory
+Deleting a repository's directory tree SHALL retry with backoff (rather than failing on the first attempt) when a file or the directory itself cannot be removed due to a transient lock (e.g. an antivirus scanner or file indexer briefly holding a handle after the file's own contents have already been deleted) — the same retry behavior SHALL apply to file/folder deletion in the file tree browser. A lock that persists for the full retry window SHALL still surface as a failed outcome rather than retrying indefinitely.
+
+#### Scenario: A transient lock clears within the retry window
+- **WHEN** a file inside a repository being deleted is briefly locked open by another process but the lock clears before the retry window elapses
+- **THEN** the deletion succeeds once the lock clears, rather than failing on the first attempt
+
+#### Scenario: A lock that outlives the retry window still fails cleanly
+- **WHEN** a file inside a repository being deleted stays locked for the entire retry window
+- **THEN** the deletion is recorded as a failed outcome with error detail, the same as before this retry behavior existed
+
 ### Requirement: Deletion is rejected while the repository is active
 The system SHALL require a repository's per-repository command lock to be free before deleting it, and SHALL reject a deletion request for a repository that currently has an in-flight `dotnet`/`git` run (or clone) rather than deleting out from under it.
 

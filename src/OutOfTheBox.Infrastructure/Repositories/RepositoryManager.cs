@@ -193,15 +193,12 @@ public sealed class RepositoryManager(
 
         try
         {
-            // Directory.Delete(recursive: true) throws UnauthorizedAccessException on Windows for
-            // any read-only file in the tree instead of just deleting it - a real, common case for
-            // a git checkout (git itself sometimes leaves pack/object files read-only), found on
-            // real-machine use: deletion kept failing (silently, before the catch below existed)
-            // even though nothing else held the directory open. Clearing the attribute first is the
-            // standard workaround; a genuinely locked file (open elsewhere) still fails below, now
-            // with the actual reason captured instead of just a bare "it failed."
-            ClearReadOnlyAttributes(targetPath);
-            Directory.Delete(targetPath, recursive: true);
+            // See RecursiveDelete's own remarks for the two real Windows failure modes this works
+            // around (read-only files, and a brief transient "in use" on the directory itself even
+            // after every file under it is gone) - a genuinely locked file (still open elsewhere
+            // well past the retry window) still fails below, now with the actual reason captured
+            // instead of just a bare "it failed."
+            await RecursiveDelete.DirectoryAsync(targetPath, cancellationToken);
             run.Outcome = RunOutcome.Completed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -907,21 +904,6 @@ public sealed class RepositoryManager(
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .Where(line => line.Length > 0);
-
-    /// <summary>
-    /// Recursively clears the read-only attribute from every file under <paramref name="path"/> -
-    /// see <see cref="DeleteAsync"/>'s own remarks for why this is necessary before a recursive delete.
-    /// </summary>
-    private static void ClearReadOnlyAttributes(string path)
-    {
-        foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
-        {
-            if (file.Attributes.HasFlag(FileAttributes.ReadOnly))
-            {
-                file.Attributes &= ~FileAttributes.ReadOnly;
-            }
-        }
-    }
 
     private async Task RunCloneToCompletionAsync(Run run, string targetPath, string url, string? branch, CancellationTokenSource cancelRequestCts)
     {
