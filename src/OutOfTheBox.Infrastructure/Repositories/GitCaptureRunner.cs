@@ -45,12 +45,19 @@ internal static class GitCaptureRunner
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     /// <summary>Runs <paramref name="arguments"/> as a `git` invocation and returns its captured stdout, or <see langword="null"/> on non-zero exit, cancellation, or the process failing to start.</summary>
+    /// <param name="processRunner">Spawns the `git` child process.</param>
+    /// <param name="logger">Logs a `git.exe` unreachable failure.</param>
+    /// <param name="workingDirectory">The directory to run `git` in.</param>
+    /// <param name="arguments">The `git` subcommand and its own arguments.</param>
+    /// <param name="cancellationToken">Cancels the invocation; combined with this method's own timeout.</param>
+    /// <param name="standardInput">Text piped to the process's standard input, or <see langword="null"/> to leave it unredirected - see <see cref="ProcessRunRequest.StandardInput"/>.</param>
     public static async Task<string?> CaptureAsync(
         IProcessRunner processRunner,
         ILogger logger,
         string workingDirectory,
         string[] arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? standardInput = null)
     {
         using var timeoutCts = new CancellationTokenSource(Timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
@@ -58,7 +65,7 @@ internal static class GitCaptureRunner
 
         try
         {
-            var result = await processRunner.RunAsync(new ProcessRunRequest(arguments, workingDirectory, "git"), sink, linkedCts.Token);
+            var result = await processRunner.RunAsync(new ProcessRunRequest(arguments, workingDirectory, "git", standardInput), sink, linkedCts.Token);
             return result.ExitCode == 0 ? sink.Stdout : null;
         }
         catch (OperationCanceledException)

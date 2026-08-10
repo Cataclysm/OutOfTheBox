@@ -6,6 +6,7 @@ using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
@@ -558,6 +559,7 @@ public sealed class RepositoryManagerTests : IDisposable
             new UnreachableStatsProvider(),
             statsCache ?? new RepositoryStatsCache(),
             new NoOpRepositoryStatsEventBus(),
+            new NoOpGitCredentialStore(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ServiceOptions
             {
@@ -616,5 +618,23 @@ public sealed class RepositoryManagerTests : IDisposable
 
         public Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A rejection-path test unexpectedly reached stats computation.");
+    }
+
+    /// <summary>No credential ever needs attention - none of the scenarios here exercise git operations that would record an outcome.</summary>
+    private sealed class NoOpGitCredentialStore : IGitCredentialStore
+    {
+        public Task<GitCredentialAuthorizeResult> AuthorizeAsync(string host, string token, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A rejection-path test unexpectedly reached credential authorization.");
+
+        public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedHostsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GitHostAuthorizationSummary>>([]);
+
+        public Task<GitCredentialRevokeResult> RevokeAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A rejection-path test unexpectedly reached credential revocation.");
+
+        public Task RecordOutcomeAsync(string host, bool succeeded, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
+            Task.FromResult<GitHostCredentialHealth?>(null);
     }
 }

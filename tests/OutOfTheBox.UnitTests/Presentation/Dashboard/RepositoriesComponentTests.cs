@@ -6,6 +6,7 @@ using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
@@ -59,6 +60,7 @@ public sealed class RepositoriesComponentTests : DashboardComponentTestContext, 
             new UnreachableStatsProvider(),
             _statsCache,
             _repositoryStatsEventBus,
+            new NoOpGitCredentialStore(),
             _scopeFactoryProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             NullLogger<RepositoryManager>.Instance);
@@ -188,5 +190,24 @@ public sealed class RepositoriesComponentTests : DashboardComponentTestContext, 
 
         public Task<long> ComputeSizeAsync(string repositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("This test seeds RepositoryStatsCache directly.");
+    }
+
+    /// <summary>No credential ever needs attention - this test seeds RepositoryStatsCache directly, never reaching a real git invocation that would consult this.</summary>
+    private sealed class NoOpGitCredentialStore : IGitCredentialStore
+    {
+        public Task<GitCredentialAuthorizeResult> AuthorizeAsync(string host, string token, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedHostsAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<GitCredentialRevokeResult> RevokeAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task RecordOutcomeAsync(string host, bool succeeded, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
+            Task.FromResult<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?>(null);
     }
 }

@@ -23,6 +23,14 @@ public static class RepositoryManagementServiceCollectionExtensions
         services.AddSingleton<RepositoryStatsCache>();
         services.AddSingleton<IRepositoryStatsProvider, GitRepositoryStatsProvider>();
         services.AddSingleton<IRepositoryStatsEventBus, InMemoryRepositoryStatsEventBus>();
+
+        // Singleton, not scoped, despite persisting via the scoped OutOfTheBoxDbContext - it resolves
+        // a fresh scope/DbContext per call internally (see GitCredentialStore's own remarks), since
+        // GitRepositoryStatsProvider (itself singleton, consumed by the singleton-lifetime
+        // RepositoryStatsSampler background service) depends on it too and can't consume a scoped
+        // service directly.
+        services.AddSingleton<IGitCredentialStore, GitCredentialStore>();
+
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
 

@@ -44,6 +44,12 @@ public sealed class CliProcessRunner : IProcessRunner
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
+        if (request.StandardInput is not null)
+        {
+            await process.StandardInput.WriteAsync(request.StandardInput);
+            process.StandardInput.Close();
+        }
+
         using var killRegistration = cancellationToken.Register(() =>
         {
             try
@@ -98,6 +104,7 @@ public sealed class CliProcessRunner : IProcessRunner
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = request.StandardInput is not null,
             CreateNoWindow = true,
             // Without this, .NET decodes the child's redirected streams using the console's own
             // output code page (on Windows, typically a legacy ANSI/OEM one, not UTF-8) - but git

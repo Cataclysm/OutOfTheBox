@@ -64,4 +64,13 @@ public sealed class RepositorySummary
 
     /// <summary>Whether this repository currently holds the per-repository command lock (an in-flight <c>dotnet</c>/<c>git</c> run or clone). Sourced live, never cached.</summary>
     public required bool IsActive { get; init; }
+
+    /// <summary>
+    /// Whether this repository's <c>origin</c> remote resolves to a host that currently appears to
+    /// need a working git credential - derived from whether the most recent pull/push/force-push/
+    /// fetch/clone against that host actually failed for an authentication reason, per
+    /// <see cref="GitHostCredentialHealth"/>. Never true merely because no credential has been
+    /// stored - a fully public/anonymous-read remote never needs one at all.
+    /// </summary>
+    public bool NeedsCredential { get; init; }
 }

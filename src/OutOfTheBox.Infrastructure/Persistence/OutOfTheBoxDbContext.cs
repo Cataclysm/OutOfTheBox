@@ -1,15 +1,18 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Text.Json;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.EntityFrameworkCore;
 
 namespace OutOfTheBox.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core mapping for the Domain entities in <see cref="OutOfTheBox.Domain.Runs"/> - the one
-/// place that knows how <see cref="Run"/>/<see cref="RunResourceSample"/> are actually stored;
-/// those types themselves stay plain, framework-free data holders.
+/// EF Core mapping for the Domain entities in <see cref="OutOfTheBox.Domain.Runs"/> and the git
+/// credential tracking types in <see cref="OutOfTheBox.Domain.Repositories"/> - the one place that
+/// knows how <see cref="Run"/>/<see cref="RunResourceSample"/>/<see cref="GitHostAuthorization"/>/
+/// <see cref="GitHostCredentialHealth"/> are actually stored; those types themselves stay plain,
+/// framework-free data holders.
 /// </summary>
 public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> options) : DbContext(options)
 {
@@ -18,6 +21,12 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
 
     /// <summary>Every run's resource-usage time series, per specs/run-history.</summary>
     public DbSet<RunResourceSample> RunResourceSamples => Set<RunResourceSample>();
+
+    /// <summary>Every host explicitly authorized via <c>authorize_git_host</c>/the dashboard's PAT prompt, per specs/mcp-git-credentials. Never the token itself.</summary>
+    public DbSet<GitHostAuthorization> GitHostAuthorizations => Set<GitHostAuthorization>();
+
+    /// <summary>Every host's observed authentication health, per specs/repository-management's needs-credential tracking.</summary>
+    public DbSet<GitHostCredentialHealth> GitHostCredentialHealth => Set<GitHostCredentialHealth>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -46,5 +55,10 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
             sample.HasKey("Id");
             sample.HasIndex(s => new { s.RunId, s.Timestamp });
         });
+
+        // Host is stored lower-invariant (see GitCredentialStore) and used as the key directly,
+        // rather than relying on a provider-specific collation for case-insensitive matching.
+        modelBuilder.Entity<GitHostAuthorization>().HasKey(a => a.Host);
+        modelBuilder.Entity<GitHostCredentialHealth>().HasKey(h => h.Host);
     }
 }

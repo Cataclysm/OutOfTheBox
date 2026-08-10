@@ -2,6 +2,7 @@
 
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Repositories;
@@ -13,7 +14,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// telemetry sampling, not an operator-triggered run, so its output is captured into a plain string
 /// via <see cref="GitCaptureRunner"/>, not streamed or persisted anywhere.
 /// </remarks>
-public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILogger<GitRepositoryStatsProvider> logger) : IRepositoryStatsProvider
+public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, IGitCredentialStore gitCredentialStore, ILogger<GitRepositoryStatsProvider> logger) : IRepositoryStatsProvider
 {
     /// <inheritdoc />
     public async Task<RepositoryStats> ComputeAsync(string repositoryPath, CancellationToken cancellationToken)
@@ -88,11 +89,32 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         }
 
         var remotes = await ComputeRemotesAsync(repositoryPath, cancellationToken);
+        var needsCredential = await ComputeNeedsCredentialAsync(remotes, cancellationToken);
 
-        return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes, isDetachedHead);
+        return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes, isDetachedHead, needsCredential);
     }
 
-    private async Task<IReadOnlyList<RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves this repository's <c>origin</c> remote to a host and looks up its recorded
+    /// credential health - folded into this same sampling pass since <paramref name="remotes"/> is
+    /// already fetched on every pass for the detail page's remote list, so deriving the host costs
+    /// nothing extra (per design.md's "computed into the existing repository-stats pass" decision).
+    /// A repository with no <c>origin</c> remote, or one whose URL doesn't resolve to a host, never
+    /// needs a credential (nothing to check against).
+    /// </summary>
+    private async Task<bool> ComputeNeedsCredentialAsync(IReadOnlyList<Application.Repositories.RepositoryRemote> remotes, CancellationToken cancellationToken)
+    {
+        var origin = remotes.FirstOrDefault(r => r.Name == "origin");
+        if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var host))
+        {
+            return false;
+        }
+
+        var health = await gitCredentialStore.GetHealthAsync(host, cancellationToken);
+        return GitHostCredentialHealth.NeedsCredential(health);
+    }
+
+    private async Task<IReadOnlyList<Application.Repositories.RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)
     {
         var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, repositoryPath, ["remote", "-v"], cancellationToken);
         if (string.IsNullOrEmpty(output))
@@ -104,7 +126,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
         // direction; de-duplicated to one entry per remote name, keeping whichever URL is seen first
         // (fetch and push URLs are almost always identical, and this is a display summary, not a
         // config editor).
-        var remotes = new List<RepositoryRemote>();
+        var remotes = new List<Application.Repositories.RepositoryRemote>();
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -122,7 +144,7 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILo
                 continue;
             }
 
-            remotes.Add(new RepositoryRemote(name, urlAndDirection[0]));
+            remotes.Add(new Application.Repositories.RepositoryRemote(name, urlAndDirection[0]));
         }
 
         return remotes;

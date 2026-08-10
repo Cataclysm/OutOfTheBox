@@ -2,6 +2,8 @@
 
 using System.ComponentModel;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -36,7 +38,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
     [Fact]
     public async Task ComputeAsync_reports_a_non_git_directory_without_invoking_git()
     {
-        var provider = new GitRepositoryStatsProvider(new UnreachableProcessRunner(), NullLogger<GitRepositoryStatsProvider>.Instance);
+        var provider = new GitRepositoryStatsProvider(new UnreachableProcessRunner(), new NoOpGitCredentialStore(), NullLogger<GitRepositoryStatsProvider>.Instance);
 
         var stats = await provider.ComputeAsync(_root, CancellationToken.None);
 
@@ -56,7 +58,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
         // previously propagated straight out of this method, which - left uncaught two layers up in
         // RepositoryStatsSampler - crashed the whole BackgroundService (and, by default, the host).
         Directory.CreateDirectory(Path.Combine(_root, ".git"));
-        var provider = new GitRepositoryStatsProvider(new Win32ExceptionProcessRunner(), NullLogger<GitRepositoryStatsProvider>.Instance);
+        var provider = new GitRepositoryStatsProvider(new Win32ExceptionProcessRunner(), new NoOpGitCredentialStore(), NullLogger<GitRepositoryStatsProvider>.Instance);
 
         var status = await provider.ComputeGitStatusAsync(_root, CancellationToken.None);
 
@@ -67,6 +69,7 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
         Assert.Null(status.BehindCount);
         Assert.False(status.IsRemoteGone);
         Assert.Empty(status.Remotes);
+        Assert.False(status.NeedsCredential);
     }
 
     private sealed class UnreachableProcessRunner : IProcessRunner
@@ -79,5 +82,24 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
     {
         public Task<ProcessRunResult> RunAsync(ProcessRunRequest request, IProcessOutputSink outputSink, CancellationToken cancellationToken, Action<int>? onStarted = null) =>
             throw new Win32Exception("The system cannot find the file specified.");
+    }
+
+    /// <summary>No credential ever needs attention - these tests never resolve a real `origin` remote, so this is never actually called.</summary>
+    private sealed class NoOpGitCredentialStore : IGitCredentialStore
+    {
+        public Task<GitCredentialAuthorizeResult> AuthorizeAsync(string host, string token, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedHostsAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<GitCredentialRevokeResult> RevokeAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task RecordOutcomeAsync(string host, bool succeeded, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
+            Task.FromResult<GitHostCredentialHealth?>(null);
     }
 }

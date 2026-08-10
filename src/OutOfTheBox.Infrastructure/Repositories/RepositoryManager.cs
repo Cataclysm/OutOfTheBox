@@ -34,6 +34,7 @@ public sealed class RepositoryManager(
     IRepositoryStatsProvider statsProvider,
     RepositoryStatsCache statsCache,
     IRepositoryStatsEventBus statsEventBus,
+    IGitCredentialStore gitCredentialStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ILogger<RepositoryManager> logger) : IRepositoryManager
@@ -230,23 +231,23 @@ public sealed class RepositoryManager(
 
     /// <inheritdoc />
     public Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken) =>
-        RunGitActionAsync(name, ["pull"], cancellationToken);
+        RunGitActionAsync(name, ["pull"], touchesNetwork: true, cancellationToken);
 
     /// <inheritdoc />
     public Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken) =>
-        RunGitActionAsync(name, ["push"], cancellationToken);
+        RunGitActionAsync(name, ["push"], touchesNetwork: true, cancellationToken);
 
     /// <inheritdoc />
     public Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken) =>
-        RunGitActionAsync(name, ["push", "--force"], cancellationToken);
+        RunGitActionAsync(name, ["push", "--force"], touchesNetwork: true, cancellationToken);
 
     /// <inheritdoc />
     public Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken) =>
-        RunGitActionAsync(name, ["fetch"], cancellationToken);
+        RunGitActionAsync(name, ["fetch"], touchesNetwork: true, cancellationToken);
 
     /// <inheritdoc />
     public Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken) =>
-        RunGitActionAsync(name, ["clean", "-xdf"], cancellationToken);
+        RunGitActionAsync(name, ["clean", "-xdf"], touchesNetwork: false, cancellationToken);
 
     /// <inheritdoc />
     public async Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken)
@@ -914,7 +915,16 @@ public sealed class RepositoryManager(
     /// streamed output, no history record - per specs/repository-management's "Dashboard-only
     /// pull/push/force-push/fetch/clean actions" requirement), and refreshes cached stats on success.
     /// </summary>
-    private async Task<RepositoryGitActionResult> RunGitActionAsync(string name, string[] gitArguments, CancellationToken cancellationToken)
+    /// <param name="name">The repository's name.</param>
+    /// <param name="gitArguments">The git subcommand and its own arguments.</param>
+    /// <param name="touchesNetwork">
+    /// Whether this invocation touches the remote (pull/push/force-push/fetch) versus purely local
+    /// (clean) - gates whether the outcome is recorded against the repository's <c>origin</c> host's
+    /// credential health, per specs/repository-management's "A host's needs-credential state
+    /// reflects the most recent network-touching git operation against it" requirement.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the invocation.</param>
+    private async Task<RepositoryGitActionResult> RunGitActionAsync(string name, string[] gitArguments, bool touchesNetwork, CancellationToken cancellationToken)
     {
         var resolution = workingDirectoryResolver.Resolve(name);
         if (!resolution.IsAllowed)
@@ -947,6 +957,11 @@ public sealed class RepositoryManager(
                 var result = await processRunner.RunAsync(new ProcessRunRequest(gitArguments, targetPath, "git"), sink, linkedCts.Token);
                 if (result.ExitCode != 0)
                 {
+                    if (touchesNetwork)
+                    {
+                        await RecordCredentialOutcomeAsync(targetPath, sink.Stderr, succeeded: false, cancellationToken);
+                    }
+
                     return new RepositoryGitActionResult.Failed(sink.Stderr);
                 }
             }
@@ -961,6 +976,11 @@ public sealed class RepositoryManager(
                 return new RepositoryGitActionResult.Failed(ex.Message);
             }
 
+            if (touchesNetwork)
+            {
+                await RecordCredentialOutcomeAsync(targetPath, stderr: null, succeeded: true, cancellationToken);
+            }
+
             // Recompute+publish immediately, the same as a clone's completion already does - so the
             // row reflects the result without waiting for the next background sampler tick.
             await RefreshStatsAsync(name, targetPath);
@@ -971,6 +991,32 @@ public sealed class RepositoryManager(
         {
             runRegistry.Release(targetPath);
         }
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="targetPath"/>'s <c>origin</c> host and records a network-touching
+    /// git operation's outcome against it, per <see cref="IGitCredentialStore.RecordOutcomeAsync"/>.
+    /// A failure is only recorded when <paramref name="stderr"/> classifies as an authentication
+    /// failure (an unrelated failure - network down, bad ref - must not misattribute the host's
+    /// credential as broken); a success is always recorded regardless of whether the host actually
+    /// needed a credential at all (harmless - it just means <c>NeedsCredential</c> stays false).
+    /// Best-effort: a host that can't be resolved (no <c>origin</c>, or an unparseable URL) is
+    /// silently skipped, not treated as a failure of the action itself.
+    /// </summary>
+    private async Task RecordCredentialOutcomeAsync(string targetPath, string? stderr, bool succeeded, CancellationToken cancellationToken)
+    {
+        if (!succeeded && !GitAuthFailureClassifier.IsLikelyAuthFailure(stderr))
+        {
+            return;
+        }
+
+        var originUrl = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["remote", "get-url", "origin"], cancellationToken);
+        if (originUrl is null || !GitRemoteUrlParser.TryGetHost(originUrl.Trim(), out var host))
+        {
+            return;
+        }
+
+        await gitCredentialStore.RecordOutcomeAsync(host, succeeded, cancellationToken);
     }
 
     private async Task<string?> FindRemoteRefAsync(string targetPath, string branch, CancellationToken cancellationToken)
@@ -1059,6 +1105,24 @@ public sealed class RepositoryManager(
             await using var scope = serviceScopeFactory.CreateAsyncScope();
             var scopedRunRepository = scope.ServiceProvider.GetRequiredService<IRunRepository>();
             await scopedRunRepository.UpdateAsync(run, CancellationToken.None);
+
+            // Recorded before RefreshStatsAsync below, for the same reason RefreshStatsAsync itself
+            // runs before the Terminal event - so the stats it recomputes (including NeedsCredential)
+            // already reflect this outcome. Host resolved from the clone's own source URL (no git
+            // query needed, unlike RunGitActionAsync's pull/push/fetch, which resolve it from an
+            // already-existing repository's `origin` remote instead) - a non-Completed outcome
+            // (cancelled/timed out/git unreachable) records nothing, same reasoning as
+            // RecordCredentialOutcomeAsync's own "unrelated failure must not misattribute the host's
+            // credential" comment.
+            if (run.Outcome == RunOutcome.Completed && GitRemoteUrlParser.TryGetHost(url, out var cloneHost))
+            {
+                var cloneSucceeded = run.ExitCode == 0;
+                if (cloneSucceeded || GitAuthFailureClassifier.IsLikelyAuthFailure(run.Stderr))
+                {
+                    var scopedCredentialStore = scope.ServiceProvider.GetRequiredService<IGitCredentialStore>();
+                    await scopedCredentialStore.RecordOutcomeAsync(cloneHost, cloneSucceeded, CancellationToken.None);
+                }
+            }
 
             // Computed and cached BEFORE the Terminal event below, not after - found on real-machine
             // use: Repositories.razor refreshes exactly once, synchronously, off that event, so

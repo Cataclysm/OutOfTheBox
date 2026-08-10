@@ -16,4 +16,5 @@ public sealed record GitStatusSnapshot(
     int? BehindCount,
     bool IsRemoteGone,
     IReadOnlyList<RepositoryRemote> Remotes,
-    bool IsDetachedHead = false);
+    bool IsDetachedHead = false,
+    bool NeedsCredential = false);
