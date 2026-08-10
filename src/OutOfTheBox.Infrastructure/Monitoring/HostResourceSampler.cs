@@ -51,10 +51,12 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         {
             counter.NextValue();
         }
+
         foreach (var counter in _networkSentCounters)
         {
             counter.NextValue();
         }
+
         foreach (var counter in _networkReceivedCounters)
         {
             counter.NextValue();
@@ -150,10 +152,12 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         {
             counter.Dispose();
         }
+
         foreach (var counter in _networkSentCounters)
         {
             counter.Dispose();
         }
+
         foreach (var counter in _networkReceivedCounters)
         {
             counter.Dispose();

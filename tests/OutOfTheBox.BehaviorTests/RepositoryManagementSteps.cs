@@ -296,7 +296,6 @@ public sealed class RepositoryManagementSteps : IDisposable
         Assert.True(RunRegistry.IsHeld(_inFlightTargetPath));
     }
 
-
     private string? _diffResult;
 
     [When(@"an operator requests the diff for ""(.*)"" in the fixture repository's initial commit")]

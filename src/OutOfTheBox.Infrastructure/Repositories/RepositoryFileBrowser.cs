@@ -228,5 +228,4 @@ public sealed class RepositoryFileBrowser(IWorkingDirectoryResolver workingDirec
         var resolution = workingDirectoryResolver.ResolveWithinRoot(repositoryRoot, relativePath);
         return resolution.IsAllowed ? resolution.ResolvedPath : null;
     }
-
 }
