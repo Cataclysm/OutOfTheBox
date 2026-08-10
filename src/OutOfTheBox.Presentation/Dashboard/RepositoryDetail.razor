@@ -31,9 +31,13 @@ else
         <dt>Size</dt>
         <dd>@(_summary.StatsComputed ? $"{_summary.TotalSizeBytes:N0} bytes" : "Computing…")</dd>
         <dt>Git status</dt>
-        <dd>@RepositoryDisplay.GitStatusText(_summary)</dd>
+        <dd><GitStatusIndicator Repository="_summary" /></dd>
         @if (_summary.IsGitRepository)
         {
+            <dt>Actions</dt>
+            <dd class="repository-detail-actions">
+                <RepositoryQuickActions RepositoryName="@Name" OnActionCompleted="RefreshSummaryAsync" />
+            </dd>
             <dt>Branch</dt>
             <dd>
                 <select value="@_summary.Branch" @onchange="OnBranchSelectedAsync" disabled="@(_branches.Count == 0)">

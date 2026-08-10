@@ -50,6 +50,9 @@
         ["pencil"] = "pencil.svg",
         ["tag"] = "tag.svg",
         ["checkout"] = "map-pin.svg",
+        ["ahead"] = "arrow-up.svg",
+        ["behind"] = "arrow-down.svg",
+        ["remote-gone"] = "triangle-alert.svg",
     };
 
     private MarkupString GetPaths() => new(_pathsCache.GetOrAdd(Name, LoadInnerMarkup));

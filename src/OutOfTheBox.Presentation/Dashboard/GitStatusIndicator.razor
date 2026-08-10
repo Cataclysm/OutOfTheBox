@@ -1,0 +1,49 @@
+@using OutOfTheBox.Domain.Repositories
+
+@if (!Repository.StatsComputed)
+{
+    <span class="git-status-indicator git-status-empty">Computing…</span>
+}
+else if (!Repository.IsGitRepository)
+{
+    <span class="git-status-indicator git-status-empty">Not a git repository</span>
+}
+else
+{
+    <span class="git-status-indicator" title="@RepositoryDisplay.GitStatusText(Repository)">
+        <span class="git-status-dot @(Repository.IsDirty ? "dirty" : "clean")"></span>
+        <Icon Name="branch" CssClass="icon-inline" />
+        <span class="git-status-branch">@BranchText</span>
+        @if (Repository.IsRemoteGone)
+        {
+            <Icon Name="remote-gone" CssClass="icon-inline git-status-remote-gone" />
+        }
+        else
+        {
+            @if (Repository.AheadCount is > 0)
+            {
+                <span class="git-status-ahead"><Icon Name="ahead" CssClass="icon-inline" />@Repository.AheadCount</span>
+            }
+            @if (Repository.BehindCount is > 0)
+            {
+                <span class="git-status-behind"><Icon Name="behind" CssClass="icon-inline" />@Repository.BehindCount</span>
+            }
+        }
+    </span>
+}
+
+@code {
+    /// <summary>
+    /// Compact, icon-driven rendering of a repository's git status (branch, dirty/clean, commits
+    /// ahead/behind, remote-gone) - shared by <c>Repositories.razor</c>'s list, <c>RepositoryDetail.razor</c>,
+    /// and <c>CommitDetailPage.razor</c> so the three stay visually consistent and can't drift out
+    /// of sync, the same centralization reasoning <see cref="RepositoryDisplay"/> itself already
+    /// documents for the substantial-enough-to-share case. The full text form
+    /// (<see cref="RepositoryDisplay.GitStatusText"/>) is still available via this element's own
+    /// tooltip, so nothing shown by the older all-text rendering is actually lost.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public RepositorySummary Repository { get; set; } = null!;
+
+    private string BranchText => Repository.IsDetachedHead ? $"detached at {Repository.Branch}" : Repository.Branch ?? "(no branch)";
+}

@@ -885,6 +885,14 @@ dialog::backdrop {
     align-items: center;
 }
 
+/* Same row-of-icon-buttons layout as .data-table td.actions above, for RepositoryQuickActions when
+   it's placed in RepositoryDetail.razor's <dl> instead of a table cell. */
+.repository-detail-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 /* Long free-text cell content (repository paths, commands, file paths, URLs) - truncated with an
    ellipsis rather than wrapping or overflowing the table; the full value is on the title tooltip.
    No max-width:0 here (that was a table-layout: fixed-only trick to stop content from fighting a
@@ -1106,6 +1114,53 @@ dd {
 
 .diff-stat-added {
     color: var(--success);
+}
+
+/* Compact icon-driven git status (GitStatusIndicator.razor) - branch/dirty/ahead/behind/remote-gone
+   in one row, full text detail still available via the element's own title tooltip. */
+.git-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+
+.git-status-empty {
+    color: var(--text-muted);
+}
+
+/* Dirty/clean, as a plain colored dot rather than another icon - a fourth+ icon in an already
+   icon-dense row would start reading as noise; a dot reads as a status light at a glance. */
+.git-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.git-status-dot.clean {
+    background: var(--success);
+}
+
+.git-status-dot.dirty {
+    background: var(--accent-2);
+}
+
+.git-status-branch {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.git-status-ahead,
+.git-status-behind {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+}
+
+.git-status-remote-gone {
+    color: var(--danger);
 }
 
 .diff-stat-removed {

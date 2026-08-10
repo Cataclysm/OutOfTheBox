@@ -4,6 +4,8 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
+@inject IRepositoryStatsEventBus RepositoryStatsEventBus
+@implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Commit @Hash</PageTitle>
 
@@ -22,6 +24,11 @@ else
     <h1>@_detail.ShortHash</h1>
 
     <dl>
+        @if (_summary is not null)
+        {
+            <dt>Repository status</dt>
+            <dd><GitStatusIndicator Repository="_summary" /></dd>
+        }
         <dt>Hash</dt>
         <dd>@_detail.Hash</dd>
         <dt>Parents</dt>
@@ -116,9 +123,11 @@ else
     public string Hash { get; set; } = string.Empty;
 
     private CommitDetail? _detail;
+    private RepositorySummary? _summary;
     private bool _loading = true;
     private string? _loadedKey;
     private CommitFileDiffDialog? _diffDialog;
+    private IDisposable? _statsSubscription;
 
     // OnParametersSetAsync, not OnInitializedAsync: clicking a parent-commit link navigates from
     // this route to itself with a different Hash, which Blazor resolves by reusing the existing
@@ -133,12 +142,47 @@ else
             return;
         }
 
+        var isFirstLoad = _loadedKey is null;
         _loadedKey = key;
         _loading = true;
         _detail = null;
         _detail = await RepositoryManager.GetCommitDetailAsync(Name, Hash, CancellationToken.None);
         _loading = false;
+
+        await RefreshSummaryAsync();
+
+        // Subscribed once, on the very first load, rather than per-navigation - unsubscribing and
+        // re-subscribing on every parent-hash click would work too, but there's no reason to churn
+        // it when the repository name (what OnRepositoryStatsChanged actually filters on) usually
+        // doesn't change between clicks.
+        if (isFirstLoad)
+        {
+            _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
+        }
     }
+
+    private async Task RefreshSummaryAsync()
+    {
+        var summaries = await RepositoryManager.ListAsync(CancellationToken.None);
+        _summary = summaries.FirstOrDefault(r => string.Equals(r.Name, Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnRepositoryStatsChanged(string repositoryName)
+    {
+        if (!string.Equals(repositoryName, Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshSummaryAsync();
+            StateHasChanged();
+        });
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _statsSubscription?.Dispose();
 
     private static string FileChangeLabel(CommitFileChangeKind kind) => kind switch
     {

@@ -77,7 +77,7 @@ else
                         <td class="col-shrink"><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
                         <td class="ellipsis" title="@repository.Name">@repository.Name</td>
                         <td class="col-shrink">@(repository.StatsComputed ? RepositoryDisplay.FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
-                        <td class="col-shrink ellipsis" title="@RepositoryDisplay.GitStatusText(repository)">@RepositoryDisplay.GitStatusText(repository)</td>
+                        <td class="col-shrink"><GitStatusIndicator Repository="repository" /></td>
                         <td class="col-shrink actions" @onclick:stopPropagation="true">
                             @if (_inFlightClonesByRepositoryName.TryGetValue(repository.Name, out var cloneRunId))
                             {
@@ -87,21 +87,7 @@ else
                             }
                             else
                             {
-                                <button type="button" class="icon-button @FlashClass(repository.Name, "pull")" title="Pull" @onclick="@(() => RunGitActionAsync(repository.Name, "pull", RepositoryManager.PullAsync))">
-                                    <Icon Name="pull" />
-                                </button>
-                                <button type="button" class="icon-button @FlashClass(repository.Name, "push")" title="Push" @onclick="@(() => RunGitActionAsync(repository.Name, "push", RepositoryManager.PushAsync))">
-                                    <Icon Name="push" />
-                                </button>
-                                <button type="button" class="icon-button @FlashClass(repository.Name, "force-push")" title="Force push" @onclick="@(() => ConfirmAndRunAsync(repository.Name, "force-push", "Force push", $"Force-push '{repository.Name}'? This can overwrite the remote's history.", RepositoryManager.ForcePushAsync))">
-                                    <Icon Name="force-push" />
-                                </button>
-                                <button type="button" class="icon-button @FlashClass(repository.Name, "fetch")" title="Fetch" @onclick="@(() => RunGitActionAsync(repository.Name, "fetch", RepositoryManager.FetchAsync))">
-                                    <Icon Name="fetch" />
-                                </button>
-                                <button type="button" class="icon-button @FlashClass(repository.Name, "clean")" title="Clean (git clean -xdf)" @onclick="@(() => ConfirmAndRunAsync(repository.Name, "clean", "Clean", $"Run 'git clean -xdf' on '{repository.Name}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
-                                    <Icon Name="clean" />
-                                </button>
+                                <RepositoryQuickActions RepositoryName="@repository.Name" OnActionCompleted="RefreshAsync" />
                                 <button type="button" class="icon-button" title="Rename" @onclick="@(() => _renameDialog!.ShowAsync(repository.Name))">
                                     <Icon Name="pencil" />
                                 </button>
@@ -134,9 +120,6 @@ else
     private ConfirmDialog? _confirmDialog;
     private CloneDialog? _cloneDialog;
     private RenameDialog? _renameDialog;
-
-    /// <summary>Per "repositoryName:action" (e.g. "my-repo:pull"), the CSS class briefly applied to that row's icon to report the outcome - no streamed output, per specs/repository-management's "Outcome is shown without a console view" requirement.</summary>
-    private readonly Dictionary<string, string> _flashClasses = [];
 
     private enum SortColumn
     {
@@ -267,31 +250,6 @@ else
         await RepositoryManager.DeleteAsync(name, CancellationToken.None);
         await RefreshAsync();
     }
-
-    private Task ConfirmAndRunAsync(string name, string action, string title, string message, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation) =>
-        _confirmDialog!.ShowAsync(title, message, () => RunGitActionAsync(name, action, operation));
-
-    /// <summary>Runs a pull/push/force-push/fetch/clean action to completion, then flashes that row's icon green/success or red/failure - no streamed output/console, per specs/repository-management's "Dashboard-only pull/push/force-push/fetch/clean actions" requirement.</summary>
-    private async Task RunGitActionAsync(string name, string action, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation)
-    {
-        var result = await operation(name, CancellationToken.None);
-        var key = $"{name}:{action}";
-        _flashClasses[key] = result is RepositoryGitActionResult.Succeeded ? "flash-success" : "flash-fail";
-        StateHasChanged();
-
-        await RefreshAsync();
-
-        _ = ClearFlashAfterDelayAsync(key);
-    }
-
-    private async Task ClearFlashAfterDelayAsync(string key)
-    {
-        await Task.Delay(TimeSpan.FromSeconds(2.5));
-        _flashClasses.Remove(key);
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private string FlashClass(string name, string action) => _flashClasses.GetValueOrDefault($"{name}:{action}", string.Empty);
 
     /// <inheritdoc />
     public void Dispose()

@@ -24,6 +24,24 @@ The system SHALL enumerate every top-level directory under the configured root a
 - **WHEN** a repository's current branch has a configured upstream but that upstream's remote-side branch no longer exists
 - **THEN** the system's git status summary states the remote branch is gone, rather than reporting it the same way as a branch with no upstream configured at all
 
+### Requirement: Git status is shown as a single compact icon column, consistently everywhere it appears
+The system SHALL present a repository's git status (branch, clean/dirty, ahead/behind, remote-gone) as a single, compact, icon-based column/line — not separate columns or a wall of text — and SHALL use the same presentation for that status wherever it's shown: the repository list, a repository's own detail subpage, and a commit's detail subpage (for the repository the commit belongs to).
+
+#### Scenario: Git status is a single column in the repository list
+- **WHEN** an operator views the repository list
+- **THEN** each repository's git status (branch, clean/dirty, ahead/behind, remote-gone) is shown as one compact icon-based column, not spread across multiple columns
+
+#### Scenario: The same git status presentation appears on commit detail
+- **WHEN** an operator opens a commit's detail subpage
+- **THEN** that commit's repository's git status is shown using the same compact icon-based presentation as the repository list and repository detail subpage
+
+### Requirement: Repository detail offers the same quick actions as the repository list
+The system SHALL let an operator trigger the same pull/push/force-push/fetch/clean actions from a repository's own detail subpage as are available from the Repositories list (per "Dashboard-only pull/push/force-push/fetch/clean actions per repository"), rather than requiring the operator to return to the list to perform them.
+
+#### Scenario: Quick actions are available on repository detail
+- **WHEN** an operator is on a repository's detail subpage
+- **THEN** they can trigger pull, push, force-push, fetch, or clean directly from that page, with the same confirmation and outcome-feedback behavior as the repository list
+
 ### Requirement: Repository stats update on two independent cadences
 The system SHALL recompute a repository's git status (branch, dirty/clean, ahead/behind, gone-remote detection) after any run (of any kind) against it reaches a terminal state, and SHALL periodically recompute git status on a fast background cadence and total on-disk size on a separate, slower background cadence — both independent of the command-resource sampler — so the list reflects reality without the operator needing to reload the page. Size computation (a full recursive directory walk) is materially more expensive than git status (a handful of short-lived `git` invocations), so it SHALL be polled less frequently by default. The system SHALL reflect a repository's active/idle transitions live, sourced from the same run-started/run-terminal signals `service-dashboard` already subscribes to.
 

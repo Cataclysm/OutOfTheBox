@@ -29,6 +29,9 @@ Vendored subset (dashboard action icons only, not the full icon set):
 | `pencil.svg` | File tree: rename |
 | `tag.svg` | Commit graph: tag ref pill |
 | `map-pin.svg` | Commit graph: checkout commit (as detached HEAD) |
+| `arrow-up.svg` | Git status indicator: commits ahead of upstream |
+| `arrow-down.svg` | Git status indicator: commits behind upstream |
+| `triangle-alert.svg` | Git status indicator: upstream remote branch gone |
 
 To add another icon, download the matching `<name>.svg` from
 `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`
