@@ -73,6 +73,36 @@ public sealed class CommitDetailPageComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
+    public void Author_and_committer_names_are_bold_emails_are_mailto_links_and_dates_are_on_their_own_line()
+    {
+        _repositoryManager.Detail = SampleDetail(authorEmail: "author@example.com", committerEmail: "committer@example.com");
+
+        var cut = Render<CommitDetailPage>(parameters => parameters
+            .Add(p => p.Name, "repo")
+            .Add(p => p.Hash, "abc1234"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var rows = cut.FindAll(".commit-person");
+            Assert.Equal(2, rows.Count);
+
+            foreach (var row in rows)
+            {
+                Assert.NotNull(row.QuerySelector("strong"));
+                Assert.NotEmpty(row.QuerySelectorAll(".commit-person-date"));
+            }
+
+            var mailtoLinks = cut.FindAll(".commit-person a");
+            Assert.Equal(2, mailtoLinks.Count);
+            Assert.Equal("mailto:author@example.com", mailtoLinks[0].GetAttribute("href"));
+            Assert.Equal("mailto:committer@example.com", mailtoLinks[1].GetAttribute("href"));
+
+            // The date used to be rendered inline as "... on <date>" - removed per direct instruction.
+            Assert.DoesNotContain(" on ", cut.Markup);
+        });
+    }
+
+    [Fact]
     public void A_root_commit_shows_no_parents()
     {
         _repositoryManager.Detail = SampleDetail(parents: []);

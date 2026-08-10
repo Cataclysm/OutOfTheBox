@@ -963,39 +963,84 @@ dd {
     word-break: break-word;
 }
 
-/* Commit detail's Author/Committer rows - the Avatar component sits inline with the existing
-   name/email/date text rather than stacking above it, so these two rows don't grow noticeably
-   taller than every other <dd> in the same <dl>. */
+/* Commit detail's Author/Committer rows - the Avatar sits beside its own two-line name/email/date
+   block. Grid, not flex: align-items: stretch is what makes the avatar exactly as tall as that
+   block (stretched to the row's auto-sized cross axis, which the text block's own two lines of
+   content establish), and both ending up the same height is what actually centers them relative to
+   each other - nothing needs separate vertical-centering logic on top. That part alone would work
+   under flex too, but flex's own aspect-ratio spec explicitly leaves the *main*-axis size (.avatar's
+   width, derived from its stretched height via aspect-ratio below) as content-based/indefinite
+   whenever the flex container's own cross size is itself auto rather than definite - confirmed live,
+   it measured 0 under flex. Grid's sizing algorithm has no such restriction: a grid item's
+   aspect-ratio can consult its stretch-resolved block size even when the row track itself is
+   auto-sized, so the same avatar/.avatar CSS below only needs the container swapped to grid. */
 .commit-person {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: stretch;
+    gap: 0.6rem;
 }
 
-/* Fixed-size circle for both states (a loaded Gravatar image and the vendored fallback icon) so
-   nothing reflows when the image fails and onerror swaps in the fallback. */
+.commit-person-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+}
+
+.commit-person-date {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* No fixed size, unlike this rule's own earlier version - aspect-ratio: 1 plus the parent's
+   align-items: stretch is what makes this exactly as tall as .commit-person-details' own two lines
+   (whatever that resolves to, not a guessed pixel value) while staying perfectly circular, without
+   needing to know that height in advance. position: relative (paired with .avatar-image/.avatar-
+   fallback's own position: absolute; inset: 0 below) is load-bearing, not decorative: without it, an
+   <img> with no size of its own defaults to the CSS spec's classic 300x300 replaced-element
+   fallback, which - since .avatar's own width was "auto" (shrink-to-fit its content) - fed straight
+   back into .avatar's own width, and from there into its height via aspect-ratio, ballooning the
+   whole row to 300px (confirmed live: every element in the row measured exactly 300px tall).
+   Absolutely-positioned children are removed from normal flow entirely, so neither one can influence
+   .avatar's own size the way a normal-flow child does - .avatar's size is then governed purely by
+   aspect-ratio + stretch, with nothing left to circle back on. */
 .avatar {
+    position: relative;
     display: inline-flex;
-    width: 28px;
-    height: 28px;
-    flex: none;
+    aspect-ratio: 1;
+    height: auto;
 }
 
 .avatar-image {
-    width: 28px;
-    height: 28px;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     object-fit: cover;
 }
 
 .avatar-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
     border-radius: 50%;
     background: var(--bg-sunken);
     color: var(--text-muted);
+}
+
+/* .icon's own default (a fixed 18px, sized for a button/inline-text context) would look lost inside
+   an avatar circle that now scales with its row's own content instead of staying a small fixed
+   size - this scales the fallback glyph proportionally to whatever size the circle actually ends up
+   at. The compound selector (not just .avatar-fallback-icon alone) guarantees this wins over .icon's
+   own width/height regardless of the two rules' order in this file, since both are otherwise
+   equal-specificity single-class selectors. */
+.icon.avatar-fallback-icon {
+    width: 55%;
+    height: 55%;
 }
 
 /* Commit detail's Parents field - one row per parent (a merge commit has two), each showing that

@@ -68,12 +68,18 @@ else
         <dt>Author</dt>
         <dd class="commit-person">
             <Avatar Name="@_detail.AuthorName" Email="@_detail.AuthorEmail" />
-            <span>@_detail.AuthorName &lt;@_detail.AuthorEmail&gt; on @FormatDate(_detail.AuthorDate)</span>
+            <span class="commit-person-details">
+                <span><strong>@_detail.AuthorName</strong> &lt;<a href="mailto:@_detail.AuthorEmail">@_detail.AuthorEmail</a>&gt;</span>
+                <span class="commit-person-date">@FormatDate(_detail.AuthorDate)</span>
+            </span>
         </dd>
         <dt>Committer</dt>
         <dd class="commit-person">
             <Avatar Name="@_detail.CommitterName" Email="@_detail.CommitterEmail" />
-            <span>@_detail.CommitterName &lt;@_detail.CommitterEmail&gt; on @FormatDate(_detail.CommitterDate)</span>
+            <span class="commit-person-details">
+                <span><strong>@_detail.CommitterName</strong> &lt;<a href="mailto:@_detail.CommitterEmail">@_detail.CommitterEmail</a>&gt;</span>
+                <span class="commit-person-date">@FormatDate(_detail.CommitterDate)</span>
+            </span>
         </dd>
     </dl>
 
