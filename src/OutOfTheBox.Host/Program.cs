@@ -18,6 +18,7 @@ using OutOfTheBox.Host;
 using OutOfTheBox.Presentation.Authentication;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Dashboard.Charts;
+using OutOfTheBox.Presentation.Dashboard.CodePreview;
 using OutOfTheBox.Presentation.Execution;
 using OutOfTheBox.Presentation.Mcp;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -181,6 +182,9 @@ builder.Services.AddHostedService<HostResourceSamplerService>();
 // Server circuit-scoped service itself, so a chart-interop instance must live no longer than the
 // circuit that created it.
 builder.Services.AddScoped<IChartInterop, ChartInterop>();
+
+// File preview code highlighting - same scoped-IJSRuntime-wrapper reasoning as IChartInterop above.
+builder.Services.AddScoped<ICodePreviewInterop, CodePreviewInterop>();
 
 // Wrapped so a fatal startup failure (a failed migration, a DI resolution error, ...) is captured
 // in the log file before the process exits - not just left to whatever ephemeral console window or

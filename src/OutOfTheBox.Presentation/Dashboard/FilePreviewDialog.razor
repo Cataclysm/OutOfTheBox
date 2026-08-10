@@ -2,8 +2,11 @@
 @using Markdig
 @using Microsoft.JSInterop
 @using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Presentation.Dashboard.CodePreview
 @inject IRepositoryFileBrowser FileBrowser
 @inject IJSRuntime JS
+@inject ICodePreviewInterop CodePreviewInterop
+@implements IAsyncDisposable
 
 <dialog @ref="_dialogElement" class="file-preview-dialog">
     <div class="dialog-body">
@@ -18,7 +21,19 @@
         }
         else if (_kind == PreviewKind.Image)
         {
-            <img class="file-preview-image" src="@_imageUrl" alt="@_name" />
+            <img class="file-preview-image" src="@_mediaUrl" alt="@_name" />
+        }
+        else if (_kind == PreviewKind.Pdf)
+        {
+            <iframe class="file-preview-pdf" src="@_mediaUrl" title="@_name"></iframe>
+        }
+        else if (_kind == PreviewKind.Audio)
+        {
+            <audio class="file-preview-audio" controls src="@_mediaUrl">Your browser cannot play this audio file.</audio>
+        }
+        else if (_kind == PreviewKind.Video)
+        {
+            <video class="file-preview-video" controls src="@_mediaUrl">Your browser cannot play this video file.</video>
         }
         else if (_kind == PreviewKind.Text)
         {
@@ -28,7 +43,7 @@
             }
             else
             {
-                <pre class="run-output file-preview-text">@_text</pre>
+                <textarea id="@_previewElementId" class="file-preview-code" data-mime="@_codeMime" readonly>@_text</textarea>
             }
             @if (_truncated)
             {
@@ -63,6 +78,13 @@
     private static readonly byte[] IcoSignature = [0x00, 0x00, 0x01, 0x00];
     private static readonly byte[] RiffSignature = "RIFF"u8.ToArray();
     private static readonly byte[] WebpSignature = "WEBP"u8.ToArray();
+    private static readonly byte[] WaveSignature = "WAVE"u8.ToArray();
+    private static readonly byte[] PdfSignature = "%PDF-"u8.ToArray();
+    private static readonly byte[] Id3Signature = "ID3"u8.ToArray();
+    private static readonly byte[] OggSignature = "OggS"u8.ToArray();
+    private static readonly byte[] FlacSignature = "fLaC"u8.ToArray();
+    private static readonly byte[] Mp4Signature = "ftyp"u8.ToArray();
+    private static readonly byte[] WebmSignature = [0x1A, 0x45, 0xDF, 0xA3];
 
     // Rejects any byte that isn't valid UTF-8 instead of silently substituting U+FFFD (the BCL's
     // default Encoding.UTF8 behavior) - substitution would make binary data look like "text with a
@@ -83,32 +105,49 @@
         Unsupported,
         Text,
         Image,
+        Pdf,
+        Audio,
+        Video,
     }
 
     private ElementReference _dialogElement;
+    private readonly string _previewElementId = $"file-preview-code-{Guid.NewGuid():N}";
     private string _name = string.Empty;
-    private string _imageUrl = string.Empty;
+    private string _mediaUrl = string.Empty;
     private string _text = string.Empty;
     private string? _html;
+    private string? _codeMime;
+    private bool _pendingCodeRender;
     private bool _truncated;
     private bool _loading;
     private string? _error;
     private PreviewKind _kind;
 
     /// <summary>
-    /// Opens the dialog and loads a preview for the given file. What kind of preview - text, image,
-    /// or none - is decided from the file's actual content (magic bytes for images, a binary/text
-    /// sniff for everything else), not its extension, so a mislabeled or extensionless file still
-    /// previews correctly. The one exception is Markdown rendering specifically: there is no reliable
-    /// way to detect "this text is meant as Markdown" from content alone, so a `.md`/`.markdown` name
-    /// is what decides whether text renders as formatted HTML instead of a plain preformatted block.
+    /// Opens the dialog and loads a preview for the given file. What kind of preview - code, image,
+    /// PDF, audio, video, or none - is decided from the file's actual content (magic bytes for
+    /// images/PDF/audio/video, a binary/text sniff for everything else), not its extension, so a
+    /// mislabeled or extensionless file still previews correctly. The one exception is Markdown
+    /// rendering: there is no reliable way to detect "this text is meant as Markdown" from content
+    /// alone, so a `.md`/`.markdown` name is what decides whether text renders as formatted HTML
+    /// instead of a syntax-highlighted code view.
     /// </summary>
     public async Task ShowAsync(string repositoryName, string relativePath, string name, string downloadUrl)
     {
+        // Tears down any CodeMirror instance left over from a previously previewed file *before*
+        // touching any state below - CodeMirror.fromTextArea inserts its own wrapper element as a
+        // sibling of the <textarea> it enhances, a DOM node Blazor's own diffing doesn't know about;
+        // destroying it first (reverting that region to the plain, Blazor-recognized <textarea>)
+        // avoids handing Blazor's next re-render a DOM shape it didn't create. Safe to call even when
+        // no editor is currently mounted (see codemirror-interop.js's own no-op guard).
+        await CodePreviewInterop.DestroyAsync(_previewElementId);
+
         _name = name;
         _error = null;
         _text = string.Empty;
         _html = null;
+        _codeMime = null;
+        _pendingCodeRender = false;
         _truncated = false;
         _kind = PreviewKind.Unsupported;
         _loading = true;
@@ -136,9 +175,9 @@
             return;
         }
 
-        if (_kind == PreviewKind.Image)
+        if (_kind is PreviewKind.Image or PreviewKind.Pdf or PreviewKind.Audio or PreviewKind.Video)
         {
-            _imageUrl = downloadUrl;
+            _mediaUrl = downloadUrl;
             _loading = false;
             StateHasChanged();
             return;
@@ -171,6 +210,11 @@
             {
                 _html = Markdown.ToHtml(_text, MarkdownPipeline);
             }
+            else
+            {
+                _codeMime = CodePreviewLanguage.GetMimeType(name);
+                _pendingCodeRender = true;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -179,6 +223,18 @@
 
         _loading = false;
         StateHasChanged();
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_pendingCodeRender)
+        {
+            return;
+        }
+
+        _pendingCodeRender = false;
+        await CodePreviewInterop.RenderAsync(_previewElementId, _codeMime);
     }
 
     private static async Task<PreviewKind> ClassifyAsync(string filePath)
@@ -198,6 +254,21 @@
             return PreviewKind.Image;
         }
 
+        if (StartsWith(sampleSpan, PdfSignature))
+        {
+            return PreviewKind.Pdf;
+        }
+
+        if (LooksLikeVideo(sampleSpan))
+        {
+            return PreviewKind.Video;
+        }
+
+        if (LooksLikeAudio(sampleSpan))
+        {
+            return PreviewKind.Audio;
+        }
+
         if (!LooksLikeText(sampleSpan, out var decodedSample))
         {
             return PreviewKind.Unsupported;
@@ -214,6 +285,22 @@
         || StartsWith(sample, BmpSignature)
         || StartsWith(sample, IcoSignature)
         || (sample.Length >= 12 && StartsWith(sample, RiffSignature) && sample.Slice(8, 4).SequenceEqual(WebpSignature));
+
+    // MP4/M4A (ISO base media "ftyp" box at offset 4) and WebM/MKV (EBML header) - both are
+    // container formats a full parse would identify more precisely, but these prefixes are reliable
+    // enough in practice for a preview decision, the same magic-byte-only spirit as the image checks.
+    private static bool LooksLikeVideo(ReadOnlySpan<byte> sample) =>
+        StartsWith(sample, WebmSignature)
+        || (sample.Length >= 8 && sample.Slice(4, 4).SequenceEqual(Mp4Signature));
+
+    // OggS covers both Ogg audio and Ogg video (.ogv) - treated as audio here since an audio test
+    // fixture is by far the more common case in a repository, and <audio>/<video> both just play
+    // whatever the browser's own demuxer decides the container actually holds.
+    private static bool LooksLikeAudio(ReadOnlySpan<byte> sample) =>
+        StartsWith(sample, Id3Signature)
+        || StartsWith(sample, OggSignature)
+        || StartsWith(sample, FlacSignature)
+        || (sample.Length >= 12 && StartsWith(sample, RiffSignature) && sample.Slice(8, 4).SequenceEqual(WaveSignature));
 
     private static bool StartsWith(ReadOnlySpan<byte> sample, ReadOnlySpan<byte> signature) =>
         sample.Length >= signature.Length && sample[..signature.Length].SequenceEqual(signature);
@@ -263,4 +350,7 @@
     }
 
     private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);
 }

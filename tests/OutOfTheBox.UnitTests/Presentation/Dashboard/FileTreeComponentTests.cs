@@ -3,6 +3,7 @@
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Presentation.Dashboard;
+using OutOfTheBox.Presentation.Dashboard.CodePreview;
 using Bunit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,12 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     // the text sniff regardless of what follows it.
     private static readonly byte[] TrueBinaryBytes = [0x00, 0x01, 0x02, 0xFF, 0xFE, 0x10];
 
+    // Just enough of each magic number for FilePreviewDialog's sniff to recognize the format - same
+    // "prefix is enough, no need for a well-formed file" reasoning as PngMagicBytes above.
+    private static readonly byte[] PdfMagicBytes = "%PDF-1.4\n"u8.ToArray();
+    private static readonly byte[] WavMagicBytes = [(byte)'R', (byte)'I', (byte)'F', (byte)'F', 0x24, 0x00, 0x00, 0x00, (byte)'W', (byte)'A', (byte)'V', (byte)'E'];
+    private static readonly byte[] Mp4MagicBytes = [0x00, 0x00, 0x00, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'i', (byte)'s', (byte)'o', (byte)'m'];
+
     private readonly string _repositoryRoot = Directory.CreateTempSubdirectory("filetree-tests-").FullName;
 
     public FileTreeComponentTests()
@@ -42,6 +49,7 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryFileBrowser>(new FakeRepositoryFileBrowser(_repositoryRoot));
+        Services.AddScoped<ICodePreviewInterop, CodePreviewInterop>();
     }
 
     [Fact]
@@ -103,6 +111,82 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
             Assert.DoesNotContain("<img", cut.Markup);
             Assert.Contains("just plain text, not image bytes", cut.Markup);
         });
+    }
+
+    [Theory]
+    [InlineData("Program.cs", "text/x-csharp")]
+    [InlineData("data.json", "application/json")]
+    [InlineData("app.csproj", "application/xml")]
+    [InlineData("index.html", "text/html")]
+    [InlineData("styles.css", "text/css")]
+    [InlineData("values.yml", "text/x-yaml")]
+    [InlineData("Dockerfile", "text/x-dockerfile")]
+    public void A_recognized_code_file_previews_with_the_matching_CodeMirror_mime_type(string fileName, string expectedMime)
+    {
+        File.WriteAllText(Path.Combine(_repositoryRoot, fileName), "content");
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains(fileName, cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains($"data-mime=\"{expectedMime}\"", cut.Markup));
+    }
+
+    [Fact]
+    public void An_unrecognized_extension_still_previews_as_code_without_a_mime_type()
+    {
+        File.WriteAllText(Path.Combine(_repositoryRoot, "notes.log"), "some log content");
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("notes.log", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("class=\"file-preview-code\"", cut.Markup);
+            Assert.Contains("some log content", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void Clicking_a_PDF_file_row_opens_the_preview_dialog_with_an_iframe()
+    {
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "doc.pdf"), PdfMagicBytes);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("doc.pdf", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("<iframe", cut.Markup));
+    }
+
+    [Fact]
+    public void Clicking_an_audio_file_row_opens_the_preview_dialog_with_an_audio_tag()
+    {
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "sound.wav"), WavMagicBytes);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("sound.wav", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("<audio", cut.Markup));
+    }
+
+    [Fact]
+    public void Clicking_a_video_file_row_opens_the_preview_dialog_with_a_video_tag()
+    {
+        File.WriteAllBytes(Path.Combine(_repositoryRoot, "clip.mp4"), Mp4MagicBytes);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("clip.mp4", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("<video", cut.Markup));
     }
 
     [Fact]
