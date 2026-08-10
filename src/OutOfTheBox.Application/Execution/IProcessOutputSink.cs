@@ -3,9 +3,8 @@
 namespace OutOfTheBox.Application.Execution;
 
 /// <summary>
-/// Receives a running process's stdout/stderr lines as they're produced, so a caller (the
-/// SSE-writing endpoint handler) can forward each one immediately rather than waiting for the
-/// process to exit.
+/// Receives a running process's stdout/stderr lines as they're produced, so a caller (an MCP tool's
+/// output buffer) can forward each one immediately rather than waiting for the process to exit.
 /// </summary>
 public interface IProcessOutputSink
 {

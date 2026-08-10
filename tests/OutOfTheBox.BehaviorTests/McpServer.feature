@@ -2,8 +2,7 @@ Feature: MCP Server
     Mirrors specs/mcp-server: hosting, authentication, and tool discovery for the MCP Streamable HTTP
     endpoint - the foundation every tool defined by mcp-command-execution/mcp-file-transfer/
     mcp-repository-access builds on. Driven over real HTTP against a real running instance of the
-    service (Host, via WebApplicationFactory), the same way RepositoryRestEndpoints.feature covers
-    the REST API's own HTTP contract.
+    service (Host, via WebApplicationFactory).
 
     Scenario: Successful initialization
         When an authenticated caller completes the MCP initialize handshake

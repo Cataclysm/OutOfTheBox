@@ -9,10 +9,9 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// byte offset, so <c>read_run_output</c> (per <c>mcp-command-execution</c>'s spec) can be polled
 /// repeatedly - including after the run reaches a terminal state - and each call returns only what's
 /// new since the offset it was given. Enforces the same output size cap
-/// (<see cref="OutOfTheBox.Application.Configuration.ServiceOptions.OutputCapBytes"/>) the REST
-/// API's <c>SseProcessOutputSink</c> already enforces, via the same "stop accepting further output,
-/// flag truncated, let the process keep running" policy - this is a separate, MCP-only buffer, not a
-/// change to that existing sink, per design.md's "existing REST/SSE path is unaffected" goal.
+/// (<see cref="OutOfTheBox.Application.Configuration.ServiceOptions.OutputCapBytes"/>) every
+/// run-output path in this service enforces, via the same "stop accepting further output, flag
+/// truncated, let the process keep running" policy.
 /// </summary>
 /// <remarks>
 /// Retained for the process's lifetime once created - there is no eviction in this version. Bounded
@@ -48,7 +47,7 @@ public sealed class McpRunOutputBuffer(long capBytes)
     /// <summary>
     /// Appends one line from <paramref name="stream"/> ("stdout" or "stderr"). Returns
     /// <see langword="false"/>, without appending, once the cap has already been reached or this
-    /// line would exceed it - matching <c>SseProcessOutputSink</c>'s own "drop, don't wrap" policy.
+    /// line would exceed it - matching this service's own "drop, don't wrap" output-cap policy.
     /// </summary>
     public bool Append(string stream, string line)
     {

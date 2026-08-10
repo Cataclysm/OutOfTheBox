@@ -9,10 +9,9 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// <inheritdoc cref="IRepositoryStatsProvider" />
 /// <remarks>
 /// Reuses <see cref="IProcessRunner"/>'s process-spawning mechanics (per task 13.3) for the
-/// internal git invocations, but never goes through <c>RunEndpoints</c>/SSE/<c>RunRegistry</c>/
-/// history - this is background telemetry sampling, not an operator-triggered run, so its output
-/// is captured into a plain string via <see cref="GitCaptureRunner"/>, not streamed or persisted
-/// anywhere.
+/// internal git invocations, but never goes through <c>RunRegistry</c>/history - this is background
+/// telemetry sampling, not an operator-triggered run, so its output is captured into a plain string
+/// via <see cref="GitCaptureRunner"/>, not streamed or persisted anywhere.
 /// </remarks>
 public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, ILogger<GitRepositoryStatsProvider> logger) : IRepositoryStatsProvider
 {

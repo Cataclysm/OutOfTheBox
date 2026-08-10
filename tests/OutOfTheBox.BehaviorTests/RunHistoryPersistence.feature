@@ -2,9 +2,9 @@ Feature: Run History Persistence
     Mirrors specs/run-history/spec.md's restart-durability requirement: a run's persisted history
     record survives the service process restarting. Driven against a real running instance of the
     service (Host, via WebApplicationFactory), restarted by disposing the first factory instance
-    and creating a second one pointed at the same SQLite file - there is no dashboard/REST surface
-    for run history yet (Section 12), so the assertion reads the persisted row directly through
-    IRunRepository, the same way the future dashboard will.
+    and creating a second one pointed at the same SQLite file - the assertion reads the persisted
+    row directly through IRunRepository (the same store the dashboard's History view reads from)
+    rather than through the dashboard UI itself, to isolate this scenario from any UI concern.
 
     Scenario: A completed dotnet run's history record survives a service restart
         When a dotnet run completes against "PassingFixture"

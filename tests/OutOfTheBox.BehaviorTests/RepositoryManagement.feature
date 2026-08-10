@@ -1,8 +1,8 @@
 Feature: Repository Management
     Mirrors specs/repository-management/spec.md - full repository management (delete, pull/push/
     force-push/fetch/clean, branch switching, commit checkout, the file tree browser) is
-    dashboard-only, reachable neither via REST (removed) nor MCP (mcp-repository-access deliberately
-    covers only list/clone). These scenarios call IRepositoryManager directly from a resolved DI
+    dashboard-only, not reachable via MCP (mcp-repository-access deliberately covers only
+    list/clone). These scenarios call IRepositoryManager directly from a resolved DI
     scope - the same way Blazor component code-behind would - rather than through HTTP, against a
     real local git source (reusing GitFixture, the same fixture used elsewhere) so `git clone`
     genuinely runs, not a network-dependent remote URL.

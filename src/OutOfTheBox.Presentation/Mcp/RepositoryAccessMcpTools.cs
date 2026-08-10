@@ -46,7 +46,7 @@ public sealed class RepositoryAccessMcpTools(
     IOptions<ServiceOptions> options,
     ILogger<RepositoryAccessMcpTools> logger)
 {
-    /// <summary>Lists every repository under the configured root, with the same stats the dashboard and <c>GET /repositories</c> already show.</summary>
+    /// <summary>Lists every repository under the configured root, with the same stats the dashboard already shows.</summary>
     [McpServerTool]
     [Description("Lists every repository under the configured root, with its name, total size, git status, and active/idle state.")]
     public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync() =>

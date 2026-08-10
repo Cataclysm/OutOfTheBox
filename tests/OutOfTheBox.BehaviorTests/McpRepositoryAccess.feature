@@ -1,8 +1,8 @@
 Feature: MCP Repository Access
-    Mirrors specs/mcp-repository-access/spec.md - list and clone only, the same REST-reachable
-    subset RepositoryRestEndpoints.feature already covers for the REST API. Driven against a real
-    running instance of the service (Host, via WebApplicationFactory), reusing GitFixture so
-    clone_repository genuinely runs `git clone`.
+    Mirrors specs/mcp-repository-access/spec.md - list and clone only, the subset of
+    repository-management that's MCP-reachable at all. Driven against a real running instance of the
+    service (Host, via WebApplicationFactory), reusing GitFixture so clone_repository genuinely runs
+    `git clone`.
 
     Scenario: Listing repositories
         Given an existing repository named "existing-repository" is on disk for MCP access
@@ -19,7 +19,7 @@ Feature: MCP Repository Access
         When an authenticated caller calls clone_repository with the name "existing-repository"
         Then the clone_repository call is rejected
 
-    Scenario: A clone's run id is accepted by cancel_run, unlike the REST cancel endpoint
+    Scenario: A clone's run id is accepted by cancel_run
         When an authenticated caller calls clone_repository for the fixture repository under "mcp-cancellable-clone"
         And the caller cancels that clone via cancel_run
         Then cancel_run does not reject the clone's run id as unknown

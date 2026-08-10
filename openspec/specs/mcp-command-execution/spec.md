@@ -1,7 +1,7 @@
 # mcp-command-execution Specification
 
 ## Purpose
-Lets an MCP caller run `dotnet` and `git` commands against a repository checked out on the host, with per-repository locking, a caller-overridable timeout, and cancellation - as a start-then-poll pair of tool calls, since MCP tool calls are fundamentally request/response, not a blocking call or a persistent stream. (`dotnet-command-execution`/`git-command-execution` originally described the same guarantees against a REST+SSE API, since removed - see `openspec/changes/sbx-remove-rest-api/` - this is now the only interface for this behavior.)
+Lets an MCP caller run `dotnet` and `git` commands against a repository checked out on the host, with per-repository locking, a caller-overridable timeout, and cancellation - as a start-then-poll pair of tool calls, since MCP tool calls are fundamentally request/response, not a blocking call or a persistent stream.
 ## Requirements
 ### Requirement: Starting a command returns immediately with a run id
 The system SHALL accept a `dotnet_run` or `git_run` tool call carrying an argument list and a target working directory, begin executing `dotnet.exe`/`git.exe` with those arguments, and return a result carrying a run id and a status of "running" without waiting for the process to exit.

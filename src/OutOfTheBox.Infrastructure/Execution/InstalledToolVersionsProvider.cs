@@ -11,8 +11,8 @@ namespace OutOfTheBox.Infrastructure.Execution;
 /// <remarks>
 /// Deliberately spawns <c>dotnet --version</c>/<c>git --version</c> directly via
 /// <see cref="Process"/> rather than through <see cref="IProcessRunner"/> - that abstraction is
-/// built for a caller-facing, run-tracked, per-repository-locked command execution (SSE output, cancel
-/// endpoint, resource sampling), none of which applies to this internal one-off version probe.
+/// built for a caller-facing, run-tracked, per-repository-locked command execution (buffered output,
+/// cancellation, resource sampling), none of which applies to this internal one-off version probe.
 /// Registered as a singleton and caches its result for the service's lifetime (see
 /// <see cref="IInstalledToolVersionsProvider.GetVersionsAsync"/>'s own doc comment) via
 /// <see cref="Lazy{T}"/>, the standard thread-safe pattern for a cached async value computed at

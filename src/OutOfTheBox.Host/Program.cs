@@ -95,8 +95,7 @@ builder.Services
     .Bind(builder.Configuration.GetSection(ServiceOptions.SectionName));
 
 // MCP server (sbx-mcp-server) - this service's sole command-execution/file-transfer/repository-access
-// entry point for the sbx sandbox caller (the REST+SSE API this originally sat alongside was removed
-// - see openspec/changes/sbx-remove-rest-api/), reached over Streamable HTTP at /mcp. Stateless mode:
+// entry point for the sbx sandbox caller, reached over Streamable HTTP at /mcp. Stateless mode:
 // every tool call here is already independently bearer-token-authenticated and none of this
 // service's tools need a server-initiated request back to the caller (sampling/elicitation), so
 // there is nothing a stateful MCP session would buy that plain per-call statelessness doesn't

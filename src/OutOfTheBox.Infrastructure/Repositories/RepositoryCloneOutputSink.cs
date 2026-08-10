@@ -10,9 +10,10 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// <summary>
 /// Accumulates a repository clone's stdout/stderr (cap-respecting, for persistence into its
 /// <see cref="Run"/> row) and publishes an <see cref="RunEventType.OutputLine"/> event per forwarded
-/// line, the same way <c>SseProcessOutputSink</c> does for <c>dotnet</c>/<c>git</c> runs - a clone
-/// has no SSE consumer (it's started from Blazor, not an HTTP request), so this is the same
-/// accumulate-and-publish behavior without the SSE-writing half.
+/// line, the same accumulate-and-publish pattern <c>McpProcessOutputSink</c> uses for
+/// <c>dotnet</c>/<c>git</c> runs - a clone has no <c>read_run_output</c>-style poll consumer of its
+/// own (it's started from Blazor, not an MCP tool call), so this is that same pattern without the
+/// offset-addressable buffer half.
 /// </summary>
 public sealed class RepositoryCloneOutputSink(IRunEventBus runEventBus, Guid runId, string repositoryPath, long capBytes) : IProcessOutputSink
 {

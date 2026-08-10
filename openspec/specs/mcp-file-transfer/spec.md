@@ -1,7 +1,7 @@
 # mcp-file-transfer Specification
 
 ## Purpose
-Lets an MCP caller retrieve a single file's contents from within one specific repository's directory tree, with two-level path confinement (root→repository, then repository→file), returned as a single base64-encoded MCP tool result rather than a streamed byte response - the only file-transfer path this service's sbx-facing interface offers (`file-transfer` originally described the same behavior against a REST API, since removed - see `openspec/changes/sbx-remove-rest-api/`).
+Lets an MCP caller retrieve a single file's contents from within one specific repository's directory tree, with two-level path confinement (root→repository, then repository→file), returned as a single base64-encoded MCP tool result rather than a streamed byte response - the only file-transfer path this service's sbx-facing interface offers.
 ## Requirements
 ### Requirement: transfer_file returns a confined file's contents
 The system SHALL accept a `transfer_file` tool call carrying a repository name and a repository-relative file path, resolve that path under the named repository's directory (itself resolved under the configured root), and return the file's contents as the tool result — applying two-level confinement (root→repository, then repository→file), rejecting a path that would escape either boundary.

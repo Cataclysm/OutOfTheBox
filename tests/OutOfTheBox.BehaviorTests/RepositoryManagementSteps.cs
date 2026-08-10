@@ -301,11 +301,11 @@ public sealed class RepositoryManagementSteps : IDisposable
     [When(@"an operator cancels that clone from the dashboard")]
     public void WhenAnOperatorCancelsThatCloneFromTheDashboard() =>
         // The same in-process call a Blazor "Cancel clone" button makes - RunRegistry.TryCancel
-        // directly, never the REST cancel endpoint (per specs/repository-management). This
-        // scenario's Given pre-acquires the lock directly (see the note there) rather than driving
-        // a real, controllably-slow clone process, so what's verifiable here is the cancellation
-        // signal itself being accepted for an in-flight repository-management run id - the same
-        // contract RunEndpoints' cancel handler already relies on for dotnet/git runs (§8/§9).
+        // directly (per specs/repository-management). This scenario's Given pre-acquires the lock
+        // directly (see the note there) rather than driving a real, controllably-slow clone process,
+        // so what's verifiable here is the cancellation signal itself being accepted for an
+        // in-flight repository-management run id - the same contract the cancel_run MCP tool relies
+        // on for dotnet/git runs (per mcp-command-execution).
         _cancelAccepted = RunRegistry.TryCancel(_inFlightRunId);
 
     [Then(@"the cancellation is accepted")]

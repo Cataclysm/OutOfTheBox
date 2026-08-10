@@ -215,11 +215,10 @@ public sealed class CommandExecutionMcpTools(
             }
             catch (Win32Exception ex)
             {
-                // The executable failing to even start (missing/corrupted dotnet or git) - same
-                // class of "operation attempted but failed outside caller control" RunEndpoints'
-                // matching catch handles for the REST path. No SSE stream to write an error event
-                // onto here - the message is captured into Stderr, which read_run_output surfaces
-                // the same way it surfaces any other output.
+                // The executable failing to even start (missing/corrupted dotnet or git) - an
+                // "operation attempted but failed outside caller control" case. There's no stream to
+                // write an error event onto here - the message is captured into Stderr, which
+                // read_run_output surfaces the same way it surfaces any other output.
                 run.CompletedAt = DateTimeOffset.UtcNow;
                 run.Outcome = RunOutcome.Failed;
                 run.Stderr = ex.Message;

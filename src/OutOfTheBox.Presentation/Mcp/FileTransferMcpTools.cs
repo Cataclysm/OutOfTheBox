@@ -85,8 +85,7 @@ public sealed class FileTransferMcpTools(
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The file exists (already checked above) but can't actually be read - locked by another
-            // process, or a permission problem, the same class of failure
-            // FileTransferEndpoints' matching catch handles for the REST path.
+            // process, or a permission problem.
             await RecordAsync(runId, repositoryRoot, path, RunOutcome.Failed, null);
             logger.LogError(ex, "Failed to read file for MCP transfer: {FilePath} (run {RunId}).", filePath, runId);
             throw new McpException($"Failed to read file '{path}': {ex.Message}");

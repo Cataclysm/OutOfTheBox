@@ -82,7 +82,7 @@ public sealed class HostResourceMonitoringSteps : IDisposable
     [Then(@"the run's process sublist is empty on the next tick")]
     public async Task ThenTheRunSProcessSublistIsEmptyOnTheNextTick()
     {
-        // The kill causes the spawned dotnet.exe to exit, which the SSE handler observes and
+        // The kill causes the spawned dotnet.exe to exit, which the process runner observes and
         // reacts to (releasing the RunRegistry entry) on its own schedule - poll rather than
         // assume it's already released by the time this step runs.
         for (var i = 0; i < 100 && RunRegistry.GetTrackedProcessRoots().Any(r => r.RunId == _runId); i++)

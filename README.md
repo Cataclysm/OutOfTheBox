@@ -2,7 +2,7 @@
 
 *(repository/codebase name: `OutOfTheBox`)*
 
-A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet`/`git` commands, transfer files, and list/clone repositories on this host, since the sandbox has no local .NET toolchain. Two interfaces only: an MCP server for the sbx-side caller, and a Blazor Server web dashboard for the human operator — no REST API, no client-side skill/doc dependency (MCP tools are self-describing).
+A Windows-hosted service that lets a Claude Code instance running in a remote sbx sandbox run `dotnet`/`git` commands, transfer files, and list/clone repositories on this host, since the sandbox has no local .NET toolchain. Two interfaces only: an MCP server for the sbx-side caller, and a Blazor Server web dashboard for the human operator — no client-side skill/doc dependency, since MCP tools are self-describing.
 
 ## Status
 

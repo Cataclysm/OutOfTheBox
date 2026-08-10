@@ -96,7 +96,7 @@ public sealed class EfRunRepositoryTests : IDisposable
         };
         await repository.AddAsync(run, CancellationToken.None);
 
-        // What the SSE sink would have accumulated before hitting the output cap.
+        // What the run's output sink would have accumulated before hitting the output cap.
         var truncatedStdout = string.Concat(Enumerable.Repeat("a line of output\n", 50));
         run.CompletedAt = DateTimeOffset.UtcNow;
         run.Outcome = RunOutcome.Completed;

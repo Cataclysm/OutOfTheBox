@@ -59,10 +59,9 @@ public sealed class RunRegistryTests
     {
         // RunRegistry is keyed purely by resolved repository root - it has no notion of "run kind" at
         // all, so a dotnet run and a git run contend for exactly the same lock, in both
-        // directions. Per specs/dotnet-command-execution's and specs/git-command-execution's
-        // "shared per-repository lock" scenarios: this requires no code change here, only proof it
-        // already holds - the run id is what distinguishes them, not which endpoint (POST /run vs
-        // POST /run/git) called TryAcquire.
+        // directions. Per mcp-command-execution's "shared per-repository lock" scenarios: this
+        // requires no code change here, only proof it already holds - the run id is what
+        // distinguishes them, not which tool (dotnet_run vs git_run) called TryAcquire.
         var registry = new RunRegistry();
         var dotnetRunId = Guid.NewGuid();
         var gitRunId = Guid.NewGuid();

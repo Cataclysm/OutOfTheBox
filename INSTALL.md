@@ -104,8 +104,8 @@ command above documents narrowing that to specific remote addresses afterward.
 
 ### Connecting an MCP client
 
-The MCP server needs no special transport handling the way SSE did - an MCP-aware client (Claude
-Code configured with a remote MCP server) handles the Streamable HTTP transport itself. Point it at
+An MCP-aware client (Claude Code configured with a remote MCP server) handles the Streamable HTTP
+transport itself, no special transport handling needed on your end. Point it at
 `https://<host>:<port>/mcp` with an `Authorization: Bearer <token>` header; tool discovery, calling,
 and result parsing are all handled by the client library, not something this deployment doc needs to
 walk through. `dotnet_run`/`git_run`/`clone_repository` return a run id immediately - poll

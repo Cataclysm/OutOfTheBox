@@ -1,13 +1,12 @@
 Feature: MCP Command Execution
     Mirrors specs/mcp-command-execution/spec.md, driven against a real running instance of the
     service (Host, via WebApplicationFactory) pointed at the checked-in fixture repositories, so real
-    dotnet.exe/git.exe child processes are genuinely spawned. MCP is now this service's only
-    command-execution interface (the REST+SSE API was removed - see
-    openspec/changes/sbx-remove-rest-api/), so this feature also carries the locking/concurrency
-    coverage the old ConcurrencyAndLocking.feature/Cancellation.feature used to provide against REST -
-    dotnet_run/git_run share one RunRegistry lock per repository regardless of which tool (or which
-    kind) is asking, since both funnel through the same internal start/run-to-completion code path,
-    parameterized only by which executable runs.
+    dotnet.exe/git.exe child processes are genuinely spawned. MCP is this service's only
+    command-execution interface, so this feature also carries the locking/concurrency coverage
+    previously split across separate ConcurrencyAndLocking/Cancellation features - dotnet_run/git_run
+    share one RunRegistry lock per repository regardless of which tool (or which kind) is asking,
+    since both funnel through the same internal start/run-to-completion code path, parameterized only
+    by which executable runs.
 
     Scenario: Starting a dotnet command and polling it to completion
         When an authenticated caller starts a dotnet_run "test" against "PassingFixture"

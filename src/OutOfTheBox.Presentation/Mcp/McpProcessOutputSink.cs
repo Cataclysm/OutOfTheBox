@@ -7,12 +7,11 @@ using OutOfTheBox.Domain.Runs;
 namespace OutOfTheBox.Presentation.Mcp;
 
 /// <summary>
-/// Forwards process output lines into an <see cref="McpRunOutputBuffer"/> instead of an SSE stream -
-/// the MCP-tool-call equivalent of <c>SseProcessOutputSink</c>, for runs started by
-/// <c>dotnet_run</c>/<c>git_run</c>. Also publishes an <see cref="RunEventType.OutputLine"/> event
-/// per accepted line, the same way the REST path's sink does, so a run started via MCP shows live
-/// output on its dashboard run-detail subpage exactly like a REST-started one would - a run's
-/// behavior elsewhere in the system shouldn't depend on which interface started it.
+/// Forwards process output lines into an <see cref="McpRunOutputBuffer"/> so <c>read_run_output</c>
+/// can poll them, for runs started by <c>dotnet_run</c>/<c>git_run</c>. Also publishes an
+/// <see cref="RunEventType.OutputLine"/> event per accepted line, so a run started via MCP shows live
+/// output on its dashboard run-detail subpage too - a run's behavior elsewhere in the system
+/// shouldn't depend on which interface started it.
 /// </summary>
 public sealed class McpProcessOutputSink(McpRunOutputBuffer buffer, IRunEventBus runEventBus, Guid runId, RunKind kind, string repositoryPath) : IProcessOutputSink
 {

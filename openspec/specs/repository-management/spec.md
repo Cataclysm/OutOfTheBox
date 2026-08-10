@@ -1,7 +1,7 @@
 # repository-management Specification
 
 ## Purpose
-Lets the human operator — not the sbx sandbox caller — manage the inventory of repositories the service operates on directly from the dashboard: see what's there and its current state at a glance, clone a new one in, and remove one that's no longer needed. Unlike `dotnet-command-execution`, `git-command-execution`, and `file-transfer`, this capability has no bearer-token REST surface: it's exposed only as authenticated in-process actions inside the Blazor dashboard, the same way process-kill (per `host-resource-monitoring`) is — the sbx caller has no way to clone or delete a repository.
+Lets the human operator manage the inventory of repositories the service operates on: see what's there and its current state at a glance, clone a new one in, and remove one that's no longer needed. Repository listing and cloning are reachable both from the dashboard and by the sbx sandbox caller via MCP tools (`list_repositories`/`clone_repository`, per `mcp-repository-access`); every other action here — deletion, the pull/push/force-push/fetch/clean/branch-switch actions, the commit graph and commit checkout, and the file tree browser — is exposed only as an authenticated in-process action inside the Blazor dashboard, the same way process-kill (per `host-resource-monitoring`) is, keeping every irreversible or history-rewriting action unreachable to the sbx caller.
 
 A "repository" for the purposes of this capability is a top-level directory directly under the configured root.
 ## Requirements
@@ -44,7 +44,7 @@ The system SHALL recompute a repository's git status (branch, dirty/clean, ahead
 - **THEN** the system skips that repository for the current cycle and continues computing and publishing stats for every other repository, rather than the failure interrupting the background sampler entirely
 
 ### Requirement: A new repository can be cloned, optionally on a specific initial branch
-The system SHALL let an operator clone a new repository by supplying a source URL, a name, and an optional initial branch, resolve the name under the configured root (rejecting a name that would escape the root or that already exists), and run `git clone <url>` (with `--branch <branch>` appended when one was supplied) targeting that resolved, not-yet-existing directory — streaming its output the same way `git-command-execution` streams output, assigning it a run id, and recording it in history (per `run-history`) with a distinct kind. This branch parameter SHALL be accepted both from the dashboard's clone dialog and from the bearer-token `POST /repositories/clone` endpoint.
+The system SHALL let an operator clone a new repository by supplying a source URL, a name, and an optional initial branch, resolve the name under the configured root (rejecting a name that would escape the root or that already exists), and run `git clone <url>` (with `--branch <branch>` appended when one was supplied) targeting that resolved, not-yet-existing directory — streaming its output the same way `git-command-execution` streams output, assigning it a run id, and recording it in history (per `run-history`) with a distinct kind. This branch parameter SHALL be accepted both from the dashboard's clone dialog and from the `clone_repository` MCP tool.
 
 #### Scenario: Successful clone
 - **WHEN** an operator clones a repository by URL under a name that doesn't already exist
@@ -59,7 +59,7 @@ The system SHALL let an operator clone a new repository by supplying a source UR
 - **THEN** the system attempts the clone without validating the URL against an allowlist — the same unrestricted trust model as `git-command-execution`
 
 #### Scenario: Cloning with an explicit initial branch
-- **WHEN** an operator (or a `POST /repositories/clone` caller) supplies a branch name along with the URL and name
+- **WHEN** an operator (or an MCP caller via `clone_repository`) supplies a branch name along with the URL and name
 - **THEN** the system runs `git clone --branch <branch> <url>` and the cloned repository is checked out on that branch
 
 #### Scenario: Cloning without a branch uses the remote's default
@@ -190,7 +190,7 @@ The system SHALL provide, on a repository's detail subpage, a tree-structured, e
 - **THEN** the system rejects it — removing or renaming a repository is `repository-management`'s own dedicated deletion action, not a file-browser operation
 
 ### Requirement: An in-flight clone can be cancelled from the dashboard or via cancel_run
-The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL accept a repository-clone run's id on the `cancel_run` MCP tool (per `mcp-command-execution`) - unlike the REST cancel endpoint this service originally shipped (since removed), which refused a repository-management run's id entirely, `cancel_run` deliberately accepts one, per `mcp-repository-access`'s "An in-flight clone is accepted by cancel_run" requirement and design.md's "one shared cancel_run" decision.
+The system SHALL let an operator cancel an in-flight repository clone from the dashboard, and SHALL accept a repository-clone run's id on the `cancel_run` MCP tool (per `mcp-command-execution`), per `mcp-repository-access`'s "An in-flight clone is accepted by cancel_run" requirement and design.md's "one shared cancel_run" decision.
 
 #### Scenario: Cancelling a clone from the dashboard
 - **WHEN** an operator cancels an in-flight clone from the Repositories or Status view

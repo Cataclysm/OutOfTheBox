@@ -52,9 +52,9 @@ public sealed class CliProcessRunnerTests
     [Fact]
     public void BuildStartInfo_sets_git_as_the_file_name_when_requested()
     {
-        // The executable is always fixed by the calling endpoint, never read from caller
+        // The executable is always fixed by the calling MCP tool, never read from caller
         // arguments - this confirms the runner honors whatever Executable it's given rather than
-        // hardcoding "dotnet" (a regression here would silently break POST /run/git).
+        // hardcoding "dotnet" (a regression here would silently break git_run).
         var request = new ProcessRunRequest(["status"], @"C:\repositories\myrepo", "git");
 
         var startInfo = CliProcessRunner.BuildStartInfo(request);

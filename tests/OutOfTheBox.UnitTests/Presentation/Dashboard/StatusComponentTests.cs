@@ -91,7 +91,7 @@ public sealed class StatusComponentTests : BunitContext, IDisposable
         }, CancellationToken.None);
 
         // The component never sees this DB write directly - only the published event, exactly like
-        // a second HTTP client's POST /run/git would trigger via RunEndpoints in production.
+        // a real git_run MCP tool call would trigger via CommandExecutionMcpTools in production.
         _runEventBus.Publish(new RunEvent(runId, RunKind.GitCommand, RunEventType.Started, repositoryPath));
 
         cut.WaitForAssertion(() => Assert.Contains(Path.GetFileName(repositoryPath), cut.Markup), TimeSpan.FromSeconds(2));

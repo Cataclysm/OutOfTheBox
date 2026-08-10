@@ -46,10 +46,6 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Renamed the project from `BuildAndTestService` to `OutOfTheBox`
 - Replaced the originally-planned `install.ps1`/`upgrade.ps1` scripts with the WiX Toolset installer above, on explicit request — native upgrade/uninstall semantics and a proper config UI a hand-rolled script couldn't match
 
-### Removed
-
-- The bearer-token REST+SSE API (`POST /run`, `POST /run/git`, `POST /run/{runId}/cancel`, `POST /files`, `GET /repositories`, `POST /repositories/clone`) and the Claude Code skill (`skills/dotnet-command-service/SKILL.md`) documenting it, on explicit request — this project had no production callers yet, so removing an already-built but never-shipped interface carried none of the usual breaking-change risk. The MCP server (see Added, above) and the dashboard are now the only two ways to reach this service; every capability the REST API offered is still available, through `dotnet_run`/`git_run`/`read_run_output`/`cancel_run`/`transfer_file`/`list_repositories`/`clone_repository` instead
-
 ### Fixed
 
 - Repository stats silently stopping forever after computing once at startup: a `git.exe` invocation failure (e.g. unreachable for the service account's PATH) inside the background stats sampler was left uncaught, which - since an unhandled exception in a `BackgroundService` stops the entire host by default - could silently kill the whole service, not just the sampler. One repository's stats computation failing can no longer affect any other repository or the sampler itself, let alone the host

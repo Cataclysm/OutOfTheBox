@@ -1,7 +1,7 @@
 # service-authentication Specification
 
 ## Purpose
-Prevents any network caller other than the trusted sbx sandbox from invoking the service's MCP server on the Windows host — `dotnet` command execution, `git` command execution, file transfer, and repository list/clone (per `mcp-command-execution`/`mcp-file-transfer`/`mcp-repository-access`) — since the service exposes it to a remote, network-reachable caller. (Originally written against a REST+SSE API, since removed - see `openspec/changes/sbx-remove-rest-api/` - the requirements below were already worded generically enough that only this line needed correcting.)
+Prevents any network caller other than the trusted sbx sandbox from invoking the service's MCP server on the Windows host — `dotnet` command execution, `git` command execution, file transfer, and repository list/clone (per `mcp-command-execution`/`mcp-file-transfer`/`mcp-repository-access`) — since the service exposes it to a remote, network-reachable caller.
 ## Requirements
 ### Requirement: Every execution request requires a valid credential
 The system SHALL require a bearer/API-key credential on every request to any of the service's authenticated endpoints (`dotnet` command execution, `git` command execution, file transfer, cancellation) and SHALL reject any request missing that credential before taking any other action.
