@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Text;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Infrastructure.Execution;
 
@@ -71,5 +72,24 @@ public sealed class CliProcessRunnerTests
 
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
+    }
+
+    [Theory]
+    [InlineData("dotnet")]
+    [InlineData("git")]
+    public void BuildStartInfo_decodes_both_output_streams_as_utf8(string executable)
+    {
+        // Without this, .NET falls back to the console's own output code page (on Windows, typically
+        // a legacy ANSI/OEM one, not UTF-8) to decode the child's redirected streams - git itself
+        // writes commit messages as UTF-8 regardless of console codepage, so decoding with the wrong
+        // one doesn't fail outright, it just mangles any multi-byte sequence (accented characters,
+        // emoji) into mojibake. Regression coverage for a commit message with an emoji rendering
+        // incorrectly on the dashboard.
+        var request = new ProcessRunRequest(["log"], @"C:\repositories\myrepo", executable);
+
+        var startInfo = CliProcessRunner.BuildStartInfo(request);
+
+        Assert.Equal(Encoding.UTF8, startInfo.StandardOutputEncoding);
+        Assert.Equal(Encoding.UTF8, startInfo.StandardErrorEncoding);
     }
 }

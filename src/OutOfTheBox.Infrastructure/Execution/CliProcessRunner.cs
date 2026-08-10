@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Diagnostics;
+using System.Text;
 using System.Threading.Channels;
 using OutOfTheBox.Application.Execution;
 
@@ -98,6 +99,16 @@ public sealed class CliProcessRunner : IProcessRunner
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
+            // Without this, .NET decodes the child's redirected streams using the console's own
+            // output code page (on Windows, typically a legacy ANSI/OEM one, not UTF-8) - but git
+            // itself writes commit messages (author names, subjects, bodies) as UTF-8 by default
+            // regardless of console codepage, since that's how git stores commit objects. Decoding
+            // those UTF-8 bytes with the wrong codepage doesn't fail outright, it just mangles any
+            // multi-byte sequence (accented characters, emoji, other symbols) into mojibake -
+            // exactly what a commit message containing an emoji rendered as on the dashboard. `dotnet`
+            // itself already defaults to UTF-8 output, so this is a no-op for that executable.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         foreach (var argument in request.Arguments)
