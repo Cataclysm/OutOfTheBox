@@ -276,6 +276,17 @@ dialog {
        Applied here, not just on the specific known-scrollable regions below, so any future dialog
        content that ends up scrollable is covered by default. */
     overscroll-behavior: contain;
+    /* showModal() promotes a <dialog> to the browser's top layer for visual stacking/positioning,
+       but that's a rendering concept only - the element is still exactly where it was written in the
+       DOM tree for CSS inheritance purposes. RepositoryQuickActions.razor's own <ConfirmDialog>
+       lives inside the repository list's actions <td> (so it can be a per-row component), which sets
+       white-space: nowrap for its own icon-button row's benefit - the dialog, despite rendering as a
+       centered modal nowhere near that cell, silently inherited that nowrap too, so a message too
+       long for one line (the "Clean" confirmation, unlike the shorter "Delete") never got the chance
+       to wrap and just overflowed the dialog's own box with a horizontal scrollbar instead. Resetting
+       white-space here makes every dialog's content immune to whatever white-space its ancestor in
+       the DOM happens to set, not just this one already-found case. */
+    white-space: normal;
 }
 
 dialog::backdrop {
@@ -287,6 +298,19 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+}
+
+/* A flex item's default min-width is auto, which for text content resolves to its full unwrapped
+   (single-line) width rather than the normal "wrap at word boundaries" minimum - the classic
+   flexbox gotcha where text refuses to wrap and the item just overflows its container instead. A
+   short confirmation message (e.g. delete's) never got long enough to hit this; a longer one
+   (clean's) did, forcing this dialog wider than its own box and adding a horizontal scrollbar
+   instead of wrapping. min-width: 0 on every direct child overrides that default, letting each one
+   shrink to the dialog's actual width and wrap normally - the standard fix for this specific
+   flexbox behavior, and safe to apply blanket here since nothing in a dialog body needs to resist
+   shrinking below its container's own width. */
+.dialog-body > * {
+    min-width: 0;
 }
 
 .dialog-body h2 {
