@@ -8,6 +8,7 @@
 @inject IRunRepository RunRepository
 @inject IWorkingDirectoryResolver WorkingDirectoryResolver
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
+@inject IRunEventBus RunEventBus
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
@@ -146,6 +147,8 @@ else
     private SortColumn _sortColumn = SortColumn.Started;
     private bool _sortAscending;
     private IDisposable? _statsSubscription;
+    private IDisposable? _runSubscription;
+    private string? _resolvedRepositoryPath;
     private string? _cloneSourceUrl;
     private IReadOnlyList<RepositoryBranch> _branches = [];
     private string? _branchSwitchError;
@@ -185,9 +188,8 @@ else
         // (per task 13.14), pre-filtered to this repository's resolved path - the route only carries the
         // repository's name, so it's resolved the same way any repository-relative path is before querying.
         var resolution = WorkingDirectoryResolver.Resolve(Name);
-        _runs = resolution.IsAllowed
-            ? await RunRepository.ListAsync(new RunQuery { RepositoryPath = resolution.ResolvedPath }, CancellationToken.None)
-            : [];
+        _resolvedRepositoryPath = resolution.IsAllowed ? resolution.ResolvedPath : null;
+        await RefreshRunsAsync();
 
         _cloneSourceUrl = await RepositoryManager.GetCloneSourceUrlAsync(Name, CancellationToken.None);
         _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
@@ -196,7 +198,32 @@ else
         // showing "Computing…" forever - unlike Repositories.razor, it has no other event subscription
         // at all to piggyback a refresh onto. See IRepositoryStatsEventBus's own remarks.
         _statsSubscription = RepositoryStatsEventBus.Subscribe(OnRepositoryStatsChanged);
+
+        // The History tab's own run list had the exact same gap History.razor did before it was
+        // fixed - no live subscription at all, so a run started or completed against this
+        // repository (from the dashboard or, just as validly, an MCP dotnet_run/git_run call) never
+        // showed up here without a manual reload.
+        _runSubscription = RunEventBus.Subscribe(OnRunEvent);
     }
+
+    private void OnRunEvent(RunEvent runEvent)
+    {
+        if (runEvent.Type is RunEventType.OutputLine || !string.Equals(runEvent.RepositoryPath, _resolvedRepositoryPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshRunsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshRunsAsync() =>
+        _runs = _resolvedRepositoryPath is not null
+            ? await RunRepository.ListAsync(new RunQuery { RepositoryPath = _resolvedRepositoryPath }, CancellationToken.None)
+            : [];
 
     private async Task OnBranchSelectedAsync(ChangeEventArgs e)
     {
@@ -256,7 +283,11 @@ else
     }
 
     /// <inheritdoc />
-    public void Dispose() => _statsSubscription?.Dispose();
+    public void Dispose()
+    {
+        _statsSubscription?.Dispose();
+        _runSubscription?.Dispose();
+    }
 
     private void SortBy(SortColumn column)
     {

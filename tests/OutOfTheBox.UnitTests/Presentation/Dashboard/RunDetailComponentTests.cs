@@ -1,13 +1,16 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
+using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Dashboard.Charts;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 
@@ -21,12 +24,14 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly SpyChartInterop _chartInterop = new();
+    private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
 
     public RunDetailComponentTests()
     {
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton<IRunResourceSampleRepository>(_ => new EfRunResourceSampleRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton<IChartInterop>(_chartInterop);
+        Services.AddSingleton(_runEventBus);
     }
 
     [Fact]
@@ -319,6 +324,45 @@ public sealed class RunDetailComponentTests : BunitContext, IDisposable
             Assert.DoesNotContain('+', cut.Markup);
             Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", cut.Markup);
         });
+    }
+
+    [Fact]
+    public async Task A_still_running_runs_page_reflects_completion_live_without_reload()
+    {
+        // Reproduces the reported gap directly: an operator opens a still-in-flight run's own detail
+        // page (reachable from History or a repository's History tab, both of which list
+        // Running-outcome runs) and watches it sit there - the page must pick up the run's own
+        // Terminal event, the same way Status/History/Repositories already do, per
+        // service-dashboard's "Dashboard updates live without manual refresh" requirement.
+        var runId = Guid.NewGuid();
+        var repositoryPath = @"C:\repositories\still-running";
+        var run = await AddRunAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = repositoryPath,
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        });
+
+        var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
+        cut.WaitForAssertion(() => Assert.Contains("Running", cut.Markup));
+
+        run.Outcome = RunOutcome.Completed;
+        run.CompletedAt = DateTimeOffset.UtcNow;
+        run.ExitCode = 0;
+        run.Stdout = "all tests passed";
+        run.Stderr = string.Empty;
+        await Services.GetRequiredService<IRunRepository>().UpdateAsync(run, CancellationToken.None);
+
+        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repositoryPath));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Completed", cut.Markup);
+            Assert.Contains("all tests passed", cut.Markup);
+        }, TimeSpan.FromSeconds(2));
     }
 
     private async Task<Run> AddRunAsync(Run run)

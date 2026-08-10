@@ -3,6 +3,8 @@
 @using System.Globalization
 @using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
+@inject IRunEventBus RunEventBus
+@implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Run detail</PageTitle>
 
@@ -74,10 +76,41 @@ else
     public Guid RunId { get; set; }
 
     private Run? _run;
+    private IDisposable? _runSubscription;
 
     /// <inheritdoc />
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
         _run = await RunRepository.FindByIdAsync(RunId, CancellationToken.None);
+
+        // A still-in-flight run's detail page (reachable from History or a repository's own History
+        // tab, both of which list Running-outcome runs, not just completed ones) previously showed
+        // whatever stdout/stderr/outcome happened to be persisted at page load and then never
+        // updated again - not even once the run actually finished. Mirrors every other live-updating
+        // view's subscribe-in-OnInitialized/unsubscribe-in-Dispose pattern.
+        _runSubscription = RunEventBus.Subscribe(OnRunEvent);
+    }
+
+    private void OnRunEvent(RunEvent runEvent)
+    {
+        // OutputLine is skipped like every other live-updating view does - Run.Stdout/Stderr are
+        // only ever written to the Runs table once, at the run's terminal transition (see e.g.
+        // CommandExecutionMcpTools' own completion handling), never incrementally while running, so
+        // re-querying on an OutputLine event would just re-fetch the same not-yet-populated fields.
+        if (runEvent.RunId != RunId || runEvent.Type is RunEventType.OutputLine)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            _run = await RunRepository.FindByIdAsync(RunId, CancellationToken.None);
+            StateHasChanged();
+        });
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _runSubscription?.Dispose();
 
     // Local time, no offset suffix - DateTimeOffset's own default ToString() keeps the "+HH:mm"
     // offset even after ToLocalTime(), which is redundant clutter for an operator who only ever
