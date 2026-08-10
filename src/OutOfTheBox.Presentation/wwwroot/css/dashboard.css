@@ -1292,6 +1292,24 @@ dd {
     border-radius: var(--radius-sm);
 }
 
+/* The word-wrap checkbox sitting directly above a code/diff preview (FilePreviewDialog,
+   CommitFileDiffDialog) - right-aligned and compact, unlike .history-filters' own full-width
+   card treatment, since this is one lone control inside an already-dense dialog, not a filter bar. */
+.code-preview-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.code-preview-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
 /* The plain <textarea> FilePreviewDialog server-renders is progressively enhanced into a CodeMirror
    editor by codemirror-interop.js - these rules apply to both states, so there's no unstyled flash
    between the server-rendered markup arriving and the JS interop call actually mounting CodeMirror. */
@@ -1308,9 +1326,9 @@ dd {
     resize: none;
 }
 
-/* Scopes the vendored CodeMirror/darcula-theme rules to this dialog's own preview, and reconciles
-   its box model with the dashboard's own tokens (radius, border, scrollable height cap) rather than
-   the vendored defaults (square corners, no border, unbounded height). */
+/* Scopes the vendored CodeMirror rules to this dialog's own preview, and reconciles its box model
+   with the dashboard's own tokens (radius, border, scrollable height cap) rather than the vendored
+   defaults (square corners, no border, unbounded height). */
 .file-preview-codemirror.CodeMirror {
     /* height: auto (not a fixed height) is CodeMirror's own documented pattern for "grow to fit
        content, up to a cap" - a short file isn't stretched to fill 65vh of mostly empty editor the
@@ -1336,6 +1354,55 @@ dd {
 .file-preview-codemirror.CodeMirror .CodeMirror-scroll {
     max-height: 65vh;
 }
+
+/* Hand-authored "visual-studio-dark" CodeMirror theme (selector convention/scoping matches how
+   vendor/codemirror.min.css's own theme files are written - see codemirror-interop.js's `theme:
+   "visual-studio-dark"` option, which is what tells CodeMirror to look for a `.cm-s-visual-studio-
+   dark` class). CodeMirror ships no official Visual Studio theme to vendor (its bundled theme list
+   covers IntelliJ/Rider's "darcula", Sublime's "monokai", etc., but nothing VS-branded), so this
+   approximates the color values Visual Studio/VS Code's own default dark theme ("Dark+") is well
+   known for - keyword blue #569cd6, string orange #ce9178, comment green #6a9955, and so on - rather
+   than leaving an IDE-styled preview that doesn't match the operator's own editor. Deliberately skips
+   darcula's bold/italic treatment of keywords/comments/tags: stock Visual Studio doesn't apply either
+   by default, and matching that (not just the color palette) is the actual "looks like Visual
+   Studio" ask. */
+.cm-s-visual-studio-dark.CodeMirror {
+    background: #1e1e1e;
+    color: #d4d4d4;
+}
+
+.cm-s-visual-studio-dark span.cm-meta { color: #9b9b9b; }
+.cm-s-visual-studio-dark span.cm-number { color: #b5cea8; }
+.cm-s-visual-studio-dark span.cm-keyword { color: #569cd6; }
+.cm-s-visual-studio-dark span.cm-def { color: #dcdcaa; }
+.cm-s-visual-studio-dark span.cm-variable { color: #9cdcfe; }
+.cm-s-visual-studio-dark span.cm-variable-2 { color: #9cdcfe; }
+.cm-s-visual-studio-dark span.cm-variable-3,
+.cm-s-visual-studio-dark span.cm-type { color: #4ec9b0; }
+.cm-s-visual-studio-dark span.cm-property { color: #9cdcfe; }
+.cm-s-visual-studio-dark span.cm-operator { color: #d4d4d4; }
+.cm-s-visual-studio-dark span.cm-string { color: #ce9178; }
+.cm-s-visual-studio-dark span.cm-string-2 { color: #d16969; }
+.cm-s-visual-studio-dark span.cm-comment { color: #6a9955; }
+.cm-s-visual-studio-dark span.cm-link { color: #569cd6; }
+.cm-s-visual-studio-dark span.cm-atom { color: #569cd6; }
+.cm-s-visual-studio-dark span.cm-error { color: #f44747; }
+.cm-s-visual-studio-dark span.cm-tag { color: #569cd6; }
+.cm-s-visual-studio-dark span.cm-attribute { color: #9cdcfe; }
+.cm-s-visual-studio-dark span.cm-qualifier { color: #d4d4d4; }
+.cm-s-visual-studio-dark span.cm-bracket { color: #d4d4d4; }
+.cm-s-visual-studio-dark span.cm-builtin,
+.cm-s-visual-studio-dark span.cm-special { color: #dcdcaa; }
+.cm-s-visual-studio-dark span.cm-matchhighlight { color: #fff; background-color: rgba(38, 79, 120, 0.7); }
+.cm-s-visual-studio-dark span.cm-searching { color: #fff; background-color: rgba(38, 79, 120, 0.5); }
+.cm-s-visual-studio-dark .CodeMirror-cursor { border-left: 1px solid #d4d4d4; }
+.cm-s-visual-studio-dark .CodeMirror-activeline-background { background: #282828; }
+.cm-s-visual-studio-dark .CodeMirror-gutters { background: #1e1e1e; border-right: 1px solid #1e1e1e; }
+.cm-s-visual-studio-dark .CodeMirror-guttermarker { color: #ffee80; }
+.cm-s-visual-studio-dark .CodeMirror-guttermarker-subtle { color: #d0d0d0; }
+.cm-s-visual-studio-dark .CodeMirror-linenumber { color: #858585; }
+.cm-s-visual-studio-dark .CodeMirror-matchingbracket { background-color: #3a3d41; color: inherit !important; }
+.cm-s-visual-studio-dark div.CodeMirror-selected { background: #264f78; }
 
 /* A rendered Markdown preview (FilePreviewDialog) - the dark-theme equivalent of GitHub's own
    Markdown body styling, since the browser's UA stylesheet alone (transparent background, default

@@ -43,6 +43,12 @@
             }
             else
             {
+                <div class="code-preview-controls">
+                    <label>
+                        <input type="checkbox" checked="@_wordWrap" @onchange="OnWordWrapChangedAsync" />
+                        Wrap lines
+                    </label>
+                </div>
                 <textarea id="@_previewElementId" class="file-preview-code" data-mime="@_codeMime" readonly>@_text</textarea>
             }
             @if (_truncated)
@@ -118,6 +124,7 @@
     private string? _html;
     private string? _codeMime;
     private bool _pendingCodeRender;
+    private bool _wordWrap = true;
     private bool _truncated;
     private bool _loading;
     private string? _error;
@@ -141,6 +148,11 @@
         // avoids handing Blazor's next re-render a DOM shape it didn't create. Safe to call even when
         // no editor is currently mounted (see codemirror-interop.js's own no-op guard).
         await CodePreviewInterop.DestroyAsync(_previewElementId);
+
+        // Read once per open (not once per component instance) - matches the "set correctly when a
+        // preview is opened" ask, so a change made via a different, since-closed preview's checkbox
+        // is picked up immediately rather than only on the next page load.
+        _wordWrap = await CodePreviewInterop.GetWordWrapPreferenceAsync();
 
         _name = name;
         _error = null;
@@ -234,7 +246,13 @@
         }
 
         _pendingCodeRender = false;
-        await CodePreviewInterop.RenderAsync(_previewElementId, _codeMime);
+        await CodePreviewInterop.RenderAsync(_previewElementId, _codeMime, _wordWrap);
+    }
+
+    private async Task OnWordWrapChangedAsync(ChangeEventArgs e)
+    {
+        _wordWrap = e.Value is true;
+        await CodePreviewInterop.SetWordWrapAsync(_previewElementId, _wordWrap);
     }
 
     private static async Task<PreviewKind> ClassifyAsync(string filePath)

@@ -68,6 +68,47 @@ public sealed class FileTreeComponentTests : BunitContext, IDisposable
     }
 
     [Fact]
+    public void Word_wrap_checkbox_and_editor_start_from_the_saved_client_side_preference()
+    {
+        File.WriteAllText(Path.Combine(_repositoryRoot, "readme.txt"), "hello from the preview test");
+        JSInterop.Setup<bool>("outOfTheBoxCodePreview.getWordWrapPreference").SetResult(false);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("readme.txt", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked"));
+            var render = JSInterop.VerifyInvoke("outOfTheBoxCodePreview.render");
+            Assert.False((bool)render.Arguments[2]!);
+        });
+    }
+
+    [Fact]
+    public void Toggling_word_wrap_updates_the_live_editor_and_saves_the_new_preference()
+    {
+        File.WriteAllText(Path.Combine(_repositoryRoot, "readme.txt"), "hello from the preview test");
+        JSInterop.Setup<bool>("outOfTheBoxCodePreview.getWordWrapPreference").SetResult(true);
+
+        var cut = Render<FileTree>(parameters => parameters.Add(p => p.RepositoryName, "repo"));
+        cut.WaitForAssertion(() => Assert.Contains("readme.txt", cut.Markup));
+
+        cut.Find(".file-tree-row").Click();
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked")));
+
+        cut.Find(".code-preview-controls input[type=checkbox]").Change(false);
+
+        cut.WaitForAssertion(() =>
+        {
+            var setWordWrap = JSInterop.VerifyInvoke("outOfTheBoxCodePreview.setWordWrap");
+            Assert.False((bool)setWordWrap.Arguments[1]!);
+            Assert.False(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked"));
+        });
+    }
+
+    [Fact]
     public void Clicking_an_image_file_row_opens_the_preview_dialog_with_an_img_tag()
     {
         File.WriteAllBytes(Path.Combine(_repositoryRoot, "pixel.png"), PngMagicBytes);

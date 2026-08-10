@@ -44,6 +44,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Repository detail page now offers the same pull/push/force-push/fetch/clean quick actions the Repositories list already had, not just via the list
 - File tree browser gained a "Dirty files only" filter (`git status --porcelain`) that hides clean files/folders and auto-expands any folder containing a dirty file
 - Every popup dialog (confirmation, clone, rename, file preview, commit diff) can now be dismissed by clicking anywhere outside it, the same as pressing Escape or its own Cancel/Close control - previously the only way to dismiss one was an explicit in-dialog control
+- Code/diff preview switched from the "darcula" (Rider/IntelliJ-style) theme to a hand-authored one matching Visual Studio/VS Code's well-known "Dark+" color scheme - CodeMirror ships no Visual Studio theme to vendor, so this approximates its actual palette (keyword blue, string orange, comment green, ...) directly in dashboard.css
+- Code/diff preview gained a "Wrap lines" checkbox (default on) - the choice is remembered client-side (a browser cookie, not server state) and applied to the next preview opened, in this dialog or any other, without needing to be set again
 
 ### Changed
 

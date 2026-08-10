@@ -19,6 +19,12 @@
         }
         else
         {
+            <div class="code-preview-controls">
+                <label>
+                    <input type="checkbox" checked="@_wordWrap" @onchange="OnWordWrapChangedAsync" />
+                    Wrap lines
+                </label>
+            </div>
             <textarea id="@_previewElementId" class="file-preview-code" data-mime="@DiffMimeType" readonly>@_diff</textarea>
         }
         <div class="dialog-actions">
@@ -42,6 +48,7 @@
     private string? _diff;
     private bool _loading;
     private bool _pendingRender;
+    private bool _wordWrap = true;
 
     /// <summary>Opens the dialog and loads the unified diff for <paramref name="path"/> as changed by <paramref name="hash"/>.</summary>
     public async Task ShowAsync(string repositoryName, string hash, string path)
@@ -49,6 +56,10 @@
         // Same destroy-before-any-state-change reasoning as FilePreviewDialog.ShowAsync - see that
         // method's own remarks for why this has to happen before the first StateHasChanged below.
         await CodePreviewInterop.DestroyAsync(_previewElementId);
+
+        // Read once per open, not once per component instance - see FilePreviewDialog.ShowAsync's
+        // own remarks on why.
+        _wordWrap = await CodePreviewInterop.GetWordWrapPreferenceAsync();
 
         _path = path;
         _diff = null;
@@ -73,7 +84,13 @@
         }
 
         _pendingRender = false;
-        await CodePreviewInterop.RenderAsync(_previewElementId, DiffMimeType);
+        await CodePreviewInterop.RenderAsync(_previewElementId, DiffMimeType, _wordWrap);
+    }
+
+    private async Task OnWordWrapChangedAsync(ChangeEventArgs e)
+    {
+        _wordWrap = e.Value is true;
+        await CodePreviewInterop.SetWordWrapAsync(_previewElementId, _wordWrap);
     }
 
     private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);

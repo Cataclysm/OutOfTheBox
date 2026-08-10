@@ -8,8 +8,16 @@ namespace OutOfTheBox.Presentation.Dashboard.CodePreview;
 public sealed class CodePreviewInterop(IJSRuntime jsRuntime) : ICodePreviewInterop
 {
     /// <inheritdoc />
-    public ValueTask RenderAsync(string elementId, string? mimeType) =>
-        jsRuntime.InvokeVoidAsync("outOfTheBoxCodePreview.render", elementId, mimeType);
+    public ValueTask<bool> GetWordWrapPreferenceAsync() =>
+        jsRuntime.InvokeAsync<bool>("outOfTheBoxCodePreview.getWordWrapPreference");
+
+    /// <inheritdoc />
+    public ValueTask RenderAsync(string elementId, string? mimeType, bool wordWrap) =>
+        jsRuntime.InvokeVoidAsync("outOfTheBoxCodePreview.render", elementId, mimeType, wordWrap);
+
+    /// <inheritdoc />
+    public ValueTask SetWordWrapAsync(string elementId, bool wordWrap) =>
+        jsRuntime.InvokeVoidAsync("outOfTheBoxCodePreview.setWordWrap", elementId, wordWrap);
 
     /// <inheritdoc />
     public async ValueTask DestroyAsync(string elementId)

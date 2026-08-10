@@ -11,13 +11,27 @@ namespace OutOfTheBox.Presentation.Dashboard.CodePreview;
 public interface ICodePreviewInterop
 {
     /// <summary>
+    /// Reads the operator's last-saved word-wrap choice from a client-side (browser cookie) store,
+    /// defaulting to enabled when no choice has been saved yet - call before <see cref="RenderAsync"/>
+    /// so a dialog's own word-wrap checkbox and the editor it renders start in agreement.
+    /// </summary>
+    ValueTask<bool> GetWordWrapPreferenceAsync();
+
+    /// <summary>
     /// Replaces the read-only <c>&lt;textarea id="elementId"&gt;</c> already rendered with its
     /// content with a CodeMirror editor reading that same content. <paramref name="mimeType"/> is a
     /// CodeMirror MIME/mode identifier (see <see cref="CodePreviewLanguage"/>), or
     /// <see langword="null"/> for unrecognized content - still rendered with line numbers and generic
-    /// folding, just without color highlighting.
+    /// folding, just without color highlighting. <paramref name="wordWrap"/> sets the editor's
+    /// initial line-wrapping state, typically the value <see cref="GetWordWrapPreferenceAsync"/> just returned.
     /// </summary>
-    ValueTask RenderAsync(string elementId, string? mimeType);
+    ValueTask RenderAsync(string elementId, string? mimeType, bool wordWrap);
+
+    /// <summary>
+    /// Toggles line wrapping on the already-mounted editor for <paramref name="elementId"/> and saves
+    /// the choice as the default for every preview opened after this one.
+    /// </summary>
+    ValueTask SetWordWrapAsync(string elementId, bool wordWrap);
 
     /// <summary>Destroys the editor for <paramref name="elementId"/>, if one exists, reverting the element back to a plain textarea.</summary>
     ValueTask DestroyAsync(string elementId);

@@ -155,6 +155,17 @@ The system SHALL let an operator dismiss any open popup dialog (confirmation, cl
 - **WHEN** an operator dismisses an open destructive-action confirmation dialog by clicking outside it
 - **THEN** the pending action is not carried out, the same as clicking that dialog's own Cancel control
 
+### Requirement: Code/diff preview uses a Visual Studio-like theme and offers a remembered word-wrap toggle
+The system SHALL render the file preview and commit diff dialogs' syntax-highlighted content using a color scheme resembling Visual Studio/VS Code's default dark theme, and SHALL let an operator toggle word wrap on or off for that content, defaulting to on. The chosen word-wrap state SHALL be remembered client-side (independent of any server-side session state) and applied to the next code/diff preview opened, in either dialog, without the operator needing to set it again.
+
+#### Scenario: Word wrap defaults to on
+- **WHEN** an operator opens a code or diff preview for the first time, before ever changing the word-wrap setting
+- **THEN** the content wraps to fit the preview's width rather than requiring horizontal scrolling
+
+#### Scenario: Toggling word wrap is remembered for the next preview
+- **WHEN** an operator turns word wrap off in one preview, closes it, and opens another code or diff preview (in either dialog)
+- **THEN** the new preview also opens with word wrap off, without the operator needing to toggle it again
+
 ### Requirement: Repository detail's commit graph and file tree update on a live cadence, and use icons consistent with the rest of the dashboard
 The system SHALL refresh a repository detail page's commit graph whenever that repository's git status is otherwise refreshed (the same live-update signal driving its git-status/branch display), so new commits, checkouts, or branch changes made elsewhere become visible without a manual reload. The system SHALL refresh an expanded file-tree folder's contents on its own bounded interval while it remains expanded, independent of other expanded folders, rather than re-walking the entire tree on every refresh. Both the commit graph (checkout, branch/tag pills) and the file tree (folder/file, download, rename, delete) SHALL use icons consistent with the rest of the dashboard's iconography, not text labels.
 
