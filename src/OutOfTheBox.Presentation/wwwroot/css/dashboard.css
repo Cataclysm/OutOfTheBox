@@ -1023,6 +1023,20 @@ dd {
     padding: 0 !important;
 }
 
+/* An extremely long commit subject (real-world, if uncommon) otherwise forces this whole column -
+   and with it the table, and the page itself - to grow well past the viewport: `.ellipsis`'s own
+   `white-space: nowrap` makes an auto-layout table treat the subject's full unwrapped width as a
+   hard minimum for this column, which text-overflow: ellipsis can never actually reach since the
+   column is never allowed to render narrower than that minimum in the first place. max-width: 0
+   (with width: 100% to still claim this column's intended "remaining space" share) caps what this
+   cell contributes to that minimum-width computation without switching the whole `.data-table`
+   convention to table-layout: fixed, which every other column's col-shrink sizing (width:1% relying
+   on auto-layout's content-aware expansion, documented on .col-shrink itself) depends on. */
+.commit-subject-cell {
+    max-width: 0;
+    width: 100%;
+}
+
 .ref-pill {
     display: inline-flex;
     align-items: center;
