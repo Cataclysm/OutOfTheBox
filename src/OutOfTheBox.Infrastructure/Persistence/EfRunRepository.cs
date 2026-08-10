@@ -70,6 +70,12 @@ public sealed class EfRunRepository(OutOfTheBoxDbContext dbContext) : IRunReposi
         return [.. matches.OrderByDescending(r => r.StartedAt)];
     }
 
+    /// <inheritdoc />
+    public Task<int> UpdateRepositoryPathAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) =>
+        dbContext.Runs
+            .Where(r => r.RepositoryPath == oldRepositoryPath)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.RepositoryPath, newRepositoryPath), cancellationToken);
+
     private static bool Matches(Run run, string searchText) =>
         run.RepositoryPath.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
         (run.Arguments is not null && run.Arguments.Any(a => a.Contains(searchText, StringComparison.OrdinalIgnoreCase))) ||

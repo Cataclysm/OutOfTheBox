@@ -298,6 +298,12 @@ public sealed class RepositoryManager(
             runRegistry.Release(targetPath);
         }
 
+        // Run history is keyed by the repository's resolved absolute path (RunQuery.RepositoryPath),
+        // not its name - without this, every run recorded before the rename (including the clone run
+        // GetCloneSourceUrlAsync reads its source URL from) would silently stop matching under the
+        // new name, since the directory move above doesn't touch already-persisted rows.
+        await runRepository.UpdateRepositoryPathAsync(targetPath, newPath, cancellationToken);
+
         statsCache.Remove(name);
 
         // Primed immediately under the new name rather than left for the next sampler sweep -

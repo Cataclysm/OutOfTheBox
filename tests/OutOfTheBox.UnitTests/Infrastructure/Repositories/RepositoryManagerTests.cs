@@ -324,6 +324,33 @@ public sealed class RepositoryManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task RenameAsync_repoints_existing_run_history_so_the_clone_source_url_still_resolves_under_the_new_name()
+    {
+        var runRepository = new EfRunRepository(_dbContextFactory.CreateContext());
+        var oldPath = Path.Combine(_root, "old-name");
+        Directory.CreateDirectory(oldPath);
+
+        await runRepository.AddAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.RepositoryClone,
+            RepositoryPath = oldPath,
+            SourceUrl = "https://example.com/original.git",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-9),
+            Outcome = RunOutcome.Completed,
+        }, CancellationToken.None);
+
+        var manager = CreateManager(new RunRegistry(), runRepository);
+
+        var result = await manager.RenameAsync("old-name", "new-name", CancellationToken.None);
+
+        Assert.IsType<RepositoryGitActionResult.Succeeded>(result);
+        Assert.Equal("https://example.com/original.git", await manager.GetCloneSourceUrlAsync("new-name", CancellationToken.None));
+        Assert.Null(await manager.GetCloneSourceUrlAsync("old-name", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task GitActions_reject_a_name_that_escapes_the_root()
     {
         var manager = CreateManager(new RunRegistry());

@@ -20,6 +20,14 @@ public interface IRunRepository
     Task<IReadOnlyList<Run>> ListAsync(RunQuery query, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Repoints every run recorded against <paramref name="oldRepositoryPath"/> to
+    /// <paramref name="newRepositoryPath"/> instead, so a renamed repository's history (including the
+    /// clone run its own clone source URL is read from) stays attributed to it under its new name.
+    /// Returns the number of records updated.
+    /// </summary>
+    Task<int> UpdateRepositoryPathAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Reconciles every run still recorded as <see cref="RunOutcome.Running"/> (left behind by a
     /// prior process that didn't shut down cleanly) to <see cref="RunOutcome.Interrupted"/>.
     /// Returns the number of records reconciled.
