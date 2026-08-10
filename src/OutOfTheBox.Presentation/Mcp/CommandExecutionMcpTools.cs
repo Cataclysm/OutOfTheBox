@@ -6,6 +6,8 @@ using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
+using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +36,7 @@ public sealed class CommandExecutionMcpTools(
     IRunRepository runRepository,
     IRunEventBus runEventBus,
     McpRunOutputRegistry outputRegistry,
+    IGitCredentialStore gitCredentialStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ILogger<CommandExecutionMcpTools> logger)
@@ -223,6 +226,20 @@ public sealed class CommandExecutionMcpTools(
                 run.Outcome = RunOutcome.Failed;
                 run.Stderr = ex.Message;
                 logger.LogError(ex, "{Executable} failed to start for MCP-started {Kind} run {RunId} against {RepositoryRoot}.", executable, kind, run.Id, repositoryRoot);
+            }
+
+            // git_run only (not dotnet_run) - a git failure that looks auth-related gets a specific
+            // note naming authorize_git_host, per mcp-git-credentials' own requirement. The host is
+            // resolved from this run's own repositoryRoot's `origin` remote (a best-effort, narrow
+            // capture - see GitCredentialFailureNote's own remarks on why this can't call into
+            // Infrastructure); a repository with no resolvable origin just reports the failure as-is.
+            if (kind == RunKind.GitCommand && GitAuthFailureClassifier.IsLikelyAuthFailure(run.Stderr))
+            {
+                var host = await GitCredentialFailureNote.TryResolveOriginHostAsync(processRunner, repositoryRoot, CancellationToken.None);
+                if (host is not null)
+                {
+                    run.Stderr = await GitCredentialFailureNote.AppendIfAuthFailureAsync(gitCredentialStore, host, run.Stderr, CancellationToken.None);
+                }
             }
 
             // A fresh scope, not this tool instance's own DI-injected services - this MCP tool call

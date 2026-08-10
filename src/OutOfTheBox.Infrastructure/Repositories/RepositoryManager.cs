@@ -79,6 +79,7 @@ public sealed class RepositoryManager(
                     Remotes = [.. stats.Remotes.Select(r => new Domain.Repositories.RepositoryRemote(r.Name, r.Url))],
                     IsDetachedHead = stats.IsDetachedHead,
                     IsActive = isActive,
+                    NeedsCredential = stats.NeedsCredential,
                 });
         }
 

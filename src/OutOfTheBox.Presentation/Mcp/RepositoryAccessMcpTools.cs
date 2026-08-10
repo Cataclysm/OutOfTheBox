@@ -42,13 +42,14 @@ public sealed class RepositoryAccessMcpTools(
     IRunRepository runRepository,
     IRunEventBus runEventBus,
     McpRunOutputRegistry outputRegistry,
+    IGitCredentialStore gitCredentialStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ILogger<RepositoryAccessMcpTools> logger)
 {
     /// <summary>Lists every repository under the configured root, with the same stats the dashboard already shows.</summary>
     [McpServerTool]
-    [Description("Lists every repository under the configured root, with its name, total size, git status, and active/idle state.")]
+    [Description("Lists every repository under the configured root, with its name, total size, git status, active/idle state, and whether its remote host currently needs a working git credential (see authorize_git_host).")]
     public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync() =>
         repositoryManager.ListAsync(CancellationToken.None);
 
@@ -194,6 +195,27 @@ public sealed class RepositoryAccessMcpTools(
                 run.Outcome = RunOutcome.Failed;
                 run.Stderr = ex.Message;
                 logger.LogError(ex, "git clone failed to start for MCP-started run {RunId} ({Url} -> {TargetPath}).", run.Id, url, targetPath);
+            }
+
+            // Host resolved directly from the clone's own source URL - no process call needed, unlike
+            // git_run's equivalent in CommandExecutionMcpTools (which has to look up an existing
+            // repository's `origin` remote instead). Records the outcome against the host's
+            // credential health (mirroring RepositoryManager.RunCloneToCompletionAsync's identical
+            // dashboard-side logic - this tool deliberately doesn't call into RepositoryManager, per
+            // this class's own doc comment, so the recording has to happen here too) and, on a
+            // classified auth failure, appends the same actionable note git_run's failures get.
+            if (GitRemoteUrlParser.TryGetHost(url, out var cloneHost))
+            {
+                var cloneSucceeded = run.Outcome == RunOutcome.Completed && run.ExitCode == 0;
+                if (cloneSucceeded || GitAuthFailureClassifier.IsLikelyAuthFailure(run.Stderr))
+                {
+                    await gitCredentialStore.RecordOutcomeAsync(cloneHost, cloneSucceeded, CancellationToken.None);
+                }
+
+                if (!cloneSucceeded)
+                {
+                    run.Stderr = await GitCredentialFailureNote.AppendIfAuthFailureAsync(gitCredentialStore, cloneHost, run.Stderr, CancellationToken.None);
+                }
             }
 
             await using var scope = serviceScopeFactory.CreateAsyncScope();
