@@ -980,17 +980,6 @@ dialog::backdrop {
     max-width: 0;
 }
 
-/* Credentials page - a PAT is shown fully (never truncated/masked, per direct instruction), so this
-   is deliberately the opposite of .ellipsis above: word-break: break-all wraps a long token onto
-   multiple lines within its own .col-shrink cell instead of forcing the table (and the page) wider,
-   the same problem .ellipsis solves for the one flexible column, solved here without hiding any
-   character of the value itself. */
-.pat-value {
-    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
-    font-size: 0.85rem;
-    word-break: break-all;
-}
-
 /* Key/value stat blocks (repository detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */
 dl {
     display: grid;
@@ -1707,4 +1696,49 @@ dd {
     border: none;
     border-top: 1px solid var(--border);
     margin: 1.4em 0;
+}
+
+/* Blazor Server's built-in reconnection UI (#components-reconnect-modal is a well-known id
+   blazor.web.js looks for itself - see App.razor's own remarks) - without this styling, a dropped
+   circuit reconnects (or fails to) with zero visible feedback: the page keeps showing its last-
+   rendered state, looking normal, while actually being unresponsive to further interaction. Hidden
+   by default; blazor.web.js toggles one of the three state classes below onto the same element. */
+#components-reconnect-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    padding: 0.65rem 1.25rem;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: var(--gradient-brand);
+    color: #fff;
+    box-shadow: var(--shadow-card);
+}
+
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected {
+    display: block;
+}
+
+#components-reconnect-modal .reconnect-text-show,
+#components-reconnect-modal .reconnect-text-failed,
+#components-reconnect-modal .reconnect-text-rejected {
+    display: none;
+}
+
+#components-reconnect-modal.components-reconnect-show .reconnect-text-show,
+#components-reconnect-modal.components-reconnect-failed .reconnect-text-failed,
+#components-reconnect-modal.components-reconnect-rejected .reconnect-text-rejected {
+    display: inline;
+}
+
+#components-reconnect-modal a {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: underline;
 }

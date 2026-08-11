@@ -11,6 +11,7 @@ using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Bunit;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -31,6 +32,10 @@ public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisp
     {
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton(_runEventBus);
+
+        // The Clear filters button now renders <Icon>, which reads its vendored SVG via
+        // IWebHostEnvironment - see TestWebHostEnvironment's own remarks.
+        Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
 
         // The repository filter resolves an operator-typed name against the configured root before
         // querying - a real resolver backed by the same root every test's fake repository paths
@@ -118,8 +123,7 @@ public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisp
         cut.Find("input[placeholder='Repository name']").Input("alpha");
         cut.WaitForAssertion(() => Assert.DoesNotContain("beta", cut.Markup));
 
-        var clearFiltersButton = cut.FindAll("button").Single(b => b.TextContent == "Clear filters");
-        clearFiltersButton.Click();
+        cut.Find("button[title='Clear filters']").Click();
 
         cut.WaitForAssertion(() =>
         {

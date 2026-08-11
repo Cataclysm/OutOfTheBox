@@ -14,6 +14,11 @@
 </head>
 <body>
     <Routes @rendermode="InteractiveServer" />
+    <div id="components-reconnect-modal" data-nosnippet>
+        <span class="reconnect-text-show">Reconnecting to Out of the Box&hellip;</span>
+        <span class="reconnect-text-failed">Connection lost. <a href=".">Reload</a> to reconnect.</span>
+        <span class="reconnect-text-rejected">Session expired. <a href=".">Reload</a> to continue.</span>
+    </div>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/OutOfTheBox.Presentation/js/vendor/chart.umd.min.js"]"></script>
     <script src="@Assets["_content/OutOfTheBox.Presentation/js/vendor/chartjs-adapter-native.js"]"></script>

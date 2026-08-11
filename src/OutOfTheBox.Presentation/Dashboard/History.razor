@@ -45,7 +45,9 @@
         <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="Search repository, arguments, file path, source URL" />
     </label>
 
-    <button type="button" @onclick="ClearFiltersAsync">Clear filters</button>
+    <button type="button" class="icon-button" title="Clear filters" @onclick="ClearFiltersAsync">
+        <Icon Name="clear-filters" />
+    </button>
 </div>
 
 @if (_runs is null)

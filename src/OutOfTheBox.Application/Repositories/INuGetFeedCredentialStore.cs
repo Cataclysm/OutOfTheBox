@@ -38,14 +38,4 @@ public interface INuGetFeedCredentialStore
     /// caller with no Azure DevOps Artifacts feeds sees no behavior change.
     /// </summary>
     Task<IReadOnlyList<NuGetFeedEndpointCredential>> GetAzureDevOpsArtifactsEndpointCredentialsAsync(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Fetches <paramref name="feedUrl"/>'s current token, for the dashboard's credentials
-    /// management page - never called from any MCP tool. Reads it from whichever mechanism backs
-    /// the feed (decrypts the stored ciphertext for an Azure DevOps Artifacts feed; reads the
-    /// decrypted password back out of the machine's NuGet configuration for any other feed).
-    /// Returns <see langword="null"/> if not retrievable rather than throwing, so a page listing
-    /// several credentials can show one row as unavailable without failing the rest.
-    /// </summary>
-    Task<string?> GetCurrentTokenAsync(string feedUrl, CancellationToken cancellationToken);
 }

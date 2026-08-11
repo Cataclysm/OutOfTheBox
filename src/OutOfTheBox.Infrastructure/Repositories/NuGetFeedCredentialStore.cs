@@ -128,39 +128,6 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
         return [.. authorizations.Select(a => new NuGetFeedEndpointCredential(a.FeedUrl, NuGetCredentialProtector.Decrypt(a.EncryptedPassword!)))];
     }
 
-    /// <inheritdoc />
-    public async Task<string?> GetCurrentTokenAsync(string feedUrl, CancellationToken cancellationToken)
-    {
-        if (!TryNormalize(feedUrl, out var normalizedUrl, out var uri))
-        {
-            return null;
-        }
-
-        if (AzureArtifactsFeedClassifier.IsAzureDevOpsArtifactsFeed(uri))
-        {
-            await using var scope = serviceScopeFactory.CreateAsyncScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
-
-            var authorization = await dbContext.NuGetFeedAuthorizations.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.FeedUrl == normalizedUrl, cancellationToken);
-
-            return authorization?.EncryptedPassword is { } encrypted ? NuGetCredentialProtector.Decrypt(encrypted) : null;
-        }
-
-        try
-        {
-            var settings = Settings.LoadDefaultSettings(root: null);
-            var saved = new PackageSourceProvider(settings).LoadPackageSources()
-                .FirstOrDefault(s => string.Equals(s.Name, normalizedUrl, StringComparison.Ordinal));
-
-            return saved?.Credentials?.Password;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>
     /// Writes/updates a credentialed package source into this machine's default NuGet configuration
     /// for a non-Azure-DevOps feed, then reads it back to verify the write - see design.md's

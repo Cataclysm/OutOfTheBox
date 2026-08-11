@@ -175,32 +175,6 @@ public sealed class GitCredentialStore(
         return new GitCredentialRevokeResult.Revoked();
     }
 
-    /// <inheritdoc />
-    public async Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken)
-    {
-        var normalizedHost = Normalize(host);
-        var fillInput = $"protocol=https\nhost={normalizedHost}\n\n";
-        var fillOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["credential", "fill"], cancellationToken, standardInput: fillInput);
-
-        return fillOutput is null ? null : ParsePassword(fillOutput);
-    }
-
-    // git's credential protocol is line-oriented key=value pairs - the password value is everything
-    // after the first '=' on the one line starting "password=", verbatim (a PAT can itself contain
-    // '=', e.g. base64-flavored Azure DevOps tokens, so splitting only on the first occurrence matters).
-    private static string? ParsePassword(string fillOutput)
-    {
-        foreach (var line in fillOutput.Split('\n'))
-        {
-            if (line.StartsWith("password=", StringComparison.Ordinal))
-            {
-                return line["password=".Length..].TrimEnd('\r');
-            }
-        }
-
-        return null;
-    }
-
     /// <summary>
     /// Immediately recomputes and publishes the git-status half (which carries <c>NeedsCredential</c>)
     /// for every repository whose <c>origin</c> remote resolves to <paramref name="normalizedHost"/>,

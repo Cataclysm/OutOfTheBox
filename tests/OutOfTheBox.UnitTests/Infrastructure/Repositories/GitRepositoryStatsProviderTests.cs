@@ -110,8 +110,5 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
 
         public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Not exercised by these tests.");
-
-        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Not exercised by these tests.");
     }
 }

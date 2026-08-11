@@ -20,7 +20,17 @@ public static class DashboardServiceCollectionExtensions
         // the API's per-request bearer header, since a long-lived circuit can't carry an Authorization
         // header per interaction, but checked against the exact same ServiceOptions.BearerToken (per
         // design.md's "Dashboard auth" decision - one shared credential, not two).
-        services.AddRazorComponents().AddInteractiveServerComponents();
+        //
+        // DisconnectedCircuitRetentionPeriod extended well past the framework default (3 minutes) - an
+        // operator plausibly leaves this dashboard open in a background tab for longer than that
+        // between glances (laptop sleep/lock, a network blip), and the default window is too short to
+        // survive that: once it elapses, the server has already disposed the circuit, so the client's
+        // automatic reconnect attempt can never succeed no matter how quickly the browser reconnects,
+        // leaving the page looking normal but permanently unresponsive to further interaction until a
+        // manual reload. 30 minutes trades a small amount of server memory (a handful of retained
+        // circuits at most, for this low-traffic single/few-operator tool) for tolerating a real gap.
+        services.AddRazorComponents().AddInteractiveServerComponents(options =>
+            options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(30));
         services.AddCascadingAuthenticationState();
         services
             .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

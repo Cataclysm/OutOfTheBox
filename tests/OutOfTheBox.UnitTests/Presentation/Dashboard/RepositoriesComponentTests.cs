@@ -219,8 +219,5 @@ public sealed class RepositoriesComponentTests : DashboardComponentTestContext, 
 
         public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Not exercised by these tests.");
-
-        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Not exercised by these tests.");
     }
 }

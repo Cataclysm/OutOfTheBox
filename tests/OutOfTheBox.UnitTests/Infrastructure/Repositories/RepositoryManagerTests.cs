@@ -660,9 +660,6 @@ public sealed class RepositoryManagerTests : IDisposable
             Task.FromResult<RepositoryCredentialHealth?>(null);
 
         public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("A rejection-path test unexpectedly reached credential lookup.");
     }
 
     /// <summary>Records every <see cref="RenameRepositoryHealthAsync"/> call - everything else is unreachable from a rename.</summary>
@@ -696,8 +693,5 @@ public sealed class RepositoryManagerTests : IDisposable
             RenamedPaths.Add((oldRepositoryPath, newRepositoryPath));
             return Task.CompletedTask;
         }
-
-        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Not exercised by a rename.");
     }
 }
