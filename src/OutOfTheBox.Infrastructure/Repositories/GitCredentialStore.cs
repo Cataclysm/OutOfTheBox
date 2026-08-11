@@ -77,6 +77,20 @@ public sealed class GitCredentialStore(
             // would otherwise hang or fail unpredictably rather than just being surfaced.
             await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["config", "--global", $"credential.https://{normalizedHost}.provider", "generic"], cancellationToken);
 
+            // Rejects any existing entry for this host before approving the new one - `approve`
+            // alone is not guaranteed to replace an existing entry rather than duplicate it. That
+            // depends entirely on which credential.helper backend is configured: the OS-level
+            // `manager`/`wincred` backends overwrite cleanly by key, but the plain `store` file
+            // backend (used by this project's own BehaviorTests, and something a real operator could
+            // configure just as validly) APPENDS a new line on `approve` instead of replacing one -
+            // so re-authorizing without rejecting first can leave a stale old PAT sitting in the file
+            // alongside the new one. Reject-then-approve makes "no more than one PAT per host"
+            // hold regardless of backend, rather than an assumption specific to one of them. Safe to
+            // call unconditionally - rejecting a host with nothing stored is a no-op, the same
+            // idempotent behavior RevokeAsync already relies on.
+            var rejectInput = $"protocol=https\nhost={normalizedHost}\n\n";
+            await RunAndDiscardAsync(["credential", "reject"], rejectInput, cancellationToken);
+
             var approveInput = $"protocol=https\nhost={normalizedHost}\nusername={PlaceholderUsername}\npassword={token}\n\n";
             await RunAndDiscardAsync(["credential", "approve"], approveInput, cancellationToken);
 
