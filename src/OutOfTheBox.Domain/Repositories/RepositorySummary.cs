@@ -66,11 +66,12 @@ public sealed class RepositorySummary
     public required bool IsActive { get; init; }
 
     /// <summary>
-    /// Whether this repository's <c>origin</c> remote resolves to a host that currently appears to
-    /// need a working git credential - derived from whether the most recent pull/push/force-push/
-    /// fetch/clone against that host actually failed for an authentication reason, per
-    /// <see cref="GitHostCredentialHealth"/>. Never true merely because no credential has been
-    /// stored - a fully public/anonymous-read remote never needs one at all.
+    /// Whether this repository itself currently appears to need a working git credential - derived
+    /// from whether its own most recent pull/push/force-push/fetch/clone actually failed for an
+    /// authentication reason, per <see cref="RepositoryCredentialHealth"/>. Scoped to this repository
+    /// alone, not shared with any other repository even one on the same remote host. Never true
+    /// merely because no credential has been stored - a fully public/anonymous-read remote never
+    /// needs one at all.
     /// </summary>
     public bool NeedsCredential { get; init; }
 }

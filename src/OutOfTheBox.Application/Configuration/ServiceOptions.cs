@@ -99,4 +99,12 @@ public sealed class ServiceOptions
     /// persisted <c>RunResourceSamples</c> series.
     /// </summary>
     public int ResourceSamplerIntervalSeconds { get; set; } = 3;
+
+    /// <summary>
+    /// How often the background fetch sampler runs <c>git fetch</c> against every repository, in
+    /// seconds. Deliberately much slower (default 300s) than <see cref="RepositoryGitStatusIntervalSeconds"/>/
+    /// <see cref="RepositoryStatsSamplerIntervalSeconds"/> - unlike those two (purely local), this
+    /// touches the network per repository, per direct instruction.
+    /// </summary>
+    public int RepositoryFetchIntervalSeconds { get; set; } = 300;
 }

@@ -38,6 +38,7 @@ public static class RepositoryManagementServiceCollectionExtensions
 
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
+        services.AddHostedService<RepositoryFetchSampler>();
 
         // File tree browser (Section 23) - scoped, not singleton, for the same reason
         // IRepositoryManager just above is: it now depends on the scoped IRunRepository too
