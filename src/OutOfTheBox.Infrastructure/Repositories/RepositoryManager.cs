@@ -306,6 +306,12 @@ public sealed class RepositoryManager(
         // new name, since the directory move above doesn't touch already-persisted rows.
         await runRepository.UpdateRepositoryPathAsync(targetPath, newPath, cancellationToken);
 
+        // Credential health is also keyed by the repository's resolved absolute path (see
+        // RepositoryCredentialHealth) - without this, a rename would silently drop an in-progress
+        // needs-credential mark instead of carrying it over, the same class of bug the run-history
+        // repoint above already exists to prevent.
+        await gitCredentialStore.RenameRepositoryHealthAsync(targetPath, newPath, cancellationToken);
+
         statsCache.Remove(name);
 
         // Primed immediately under the new name rather than left for the next sampler sweep -
@@ -995,14 +1001,17 @@ public sealed class RepositoryManager(
     }
 
     /// <summary>
-    /// Resolves <paramref name="targetPath"/>'s <c>origin</c> host and records a network-touching
-    /// git operation's outcome against it, per <see cref="IGitCredentialStore.RecordOutcomeAsync"/>.
+    /// Records a network-touching git operation's outcome against the repository at
+    /// <paramref name="targetPath"/> (per <see cref="IGitCredentialStore.RecordRepositoryOutcomeAsync"/>
+    /// - the source of this repository's own needs-credential marker), and separately, best-effort,
+    /// against its resolved <c>origin</c> host (per <see cref="IGitCredentialStore.RecordOutcomeAsync"/>
+    /// - only feeds <c>list_authorized_git_hosts</c>'s health field, not this repository's marker).
     /// A failure is only recorded when <paramref name="stderr"/> classifies as an authentication
-    /// failure (an unrelated failure - network down, bad ref - must not misattribute the host's
-    /// credential as broken); a success is always recorded regardless of whether the host actually
-    /// needed a credential at all (harmless - it just means <c>NeedsCredential</c> stays false).
-    /// Best-effort: a host that can't be resolved (no <c>origin</c>, or an unparseable URL) is
-    /// silently skipped, not treated as a failure of the action itself.
+    /// failure (an unrelated failure - network down, bad ref - must not misattribute the credential
+    /// as broken); a success is always recorded regardless of whether a credential was actually
+    /// needed at all (harmless - it just means <c>NeedsCredential</c> stays false). The host-level
+    /// record is skipped (not the repository-level one) when the host can't be resolved (no
+    /// <c>origin</c>, or an unparseable URL) - that's never treated as a failure of the action itself.
     /// </summary>
     private async Task RecordCredentialOutcomeAsync(string targetPath, string? stderr, bool succeeded, CancellationToken cancellationToken)
     {
@@ -1010,6 +1019,8 @@ public sealed class RepositoryManager(
         {
             return;
         }
+
+        await gitCredentialStore.RecordRepositoryOutcomeAsync(targetPath, succeeded, cancellationToken);
 
         var originUrl = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["remote", "get-url", "origin"], cancellationToken);
         if (originUrl is null || !GitRemoteUrlParser.TryGetHost(originUrl.Trim(), out var host))
@@ -1109,19 +1120,26 @@ public sealed class RepositoryManager(
 
             // Recorded before RefreshStatsAsync below, for the same reason RefreshStatsAsync itself
             // runs before the Terminal event - so the stats it recomputes (including NeedsCredential)
-            // already reflect this outcome. Host resolved from the clone's own source URL (no git
-            // query needed, unlike RunGitActionAsync's pull/push/fetch, which resolve it from an
-            // already-existing repository's `origin` remote instead) - a non-Completed outcome
-            // (cancelled/timed out/git unreachable) records nothing, same reasoning as
-            // RecordCredentialOutcomeAsync's own "unrelated failure must not misattribute the host's
+            // already reflect this outcome. Repository-level record keyed directly on targetPath (no
+            // git query needed, since the clone's own outcome already tells us everything); the
+            // host-level record (list_authorized_git_hosts' health field only, not this repository's
+            // marker - see RecordCredentialOutcomeAsync's own remarks) additionally needs the host
+            // resolved from the clone's source URL, so it's skipped when that fails. A non-Completed
+            // outcome (cancelled/timed out/git unreachable) records nothing, same reasoning as
+            // RecordCredentialOutcomeAsync's own "unrelated failure must not misattribute the
             // credential" comment.
-            if (run.Outcome == RunOutcome.Completed && GitRemoteUrlParser.TryGetHost(url, out var cloneHost))
+            if (run.Outcome == RunOutcome.Completed)
             {
                 var cloneSucceeded = run.ExitCode == 0;
                 if (cloneSucceeded || GitAuthFailureClassifier.IsLikelyAuthFailure(run.Stderr))
                 {
                     var scopedCredentialStore = scope.ServiceProvider.GetRequiredService<IGitCredentialStore>();
-                    await scopedCredentialStore.RecordOutcomeAsync(cloneHost, cloneSucceeded, CancellationToken.None);
+                    await scopedCredentialStore.RecordRepositoryOutcomeAsync(targetPath, cloneSucceeded, CancellationToken.None);
+
+                    if (GitRemoteUrlParser.TryGetHost(url, out var cloneHost))
+                    {
+                        await scopedCredentialStore.RecordOutcomeAsync(cloneHost, cloneSucceeded, CancellationToken.None);
+                    }
                 }
             }
 

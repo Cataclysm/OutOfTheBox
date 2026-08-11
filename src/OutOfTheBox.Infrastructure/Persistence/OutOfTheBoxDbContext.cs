@@ -11,8 +11,8 @@ namespace OutOfTheBox.Infrastructure.Persistence;
 /// EF Core mapping for the Domain entities in <see cref="OutOfTheBox.Domain.Runs"/> and the git
 /// credential tracking types in <see cref="OutOfTheBox.Domain.Repositories"/> - the one place that
 /// knows how <see cref="Run"/>/<see cref="RunResourceSample"/>/<see cref="GitHostAuthorization"/>/
-/// <see cref="GitHostCredentialHealth"/> are actually stored; those types themselves stay plain,
-/// framework-free data holders.
+/// <see cref="GitHostCredentialHealth"/>/<see cref="RepositoryCredentialHealth"/> are actually
+/// stored; those types themselves stay plain, framework-free data holders.
 /// </summary>
 public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> options) : DbContext(options)
 {
@@ -25,8 +25,11 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
     /// <summary>Every host explicitly authorized via <c>authorize_git_host</c>/the dashboard's PAT prompt, per specs/mcp-git-credentials. Never the token itself.</summary>
     public DbSet<GitHostAuthorization> GitHostAuthorizations => Set<GitHostAuthorization>();
 
-    /// <summary>Every host's observed authentication health, per specs/repository-management's needs-credential tracking.</summary>
+    /// <summary>Every host's observed authentication health, per specs/mcp-git-credentials' <c>list_authorized_git_hosts</c> health field. Not the source for the dashboard/<c>list_repositories</c> needs-credential marker - see <see cref="RepositoryCredentialHealth"/> for that.</summary>
     public DbSet<GitHostCredentialHealth> GitHostCredentialHealth => Set<GitHostCredentialHealth>();
+
+    /// <summary>Every repository's own observed authentication health, per specs/repository-management's needs-credential tracking - scoped to the repository, not shared across every repository on the same host.</summary>
+    public DbSet<RepositoryCredentialHealth> RepositoryCredentialHealth => Set<RepositoryCredentialHealth>();
 
     /// <summary>Every feed URL explicitly authorized via <c>authorize_nuget_feed</c>, per specs/mcp-nuget-credentials. The plaintext token is never stored here - only an Azure DevOps Artifacts feed's DPAPI-encrypted password (see <see cref="NuGetFeedAuthorization"/>'s remarks).</summary>
     public DbSet<NuGetFeedAuthorization> NuGetFeedAuthorizations => Set<NuGetFeedAuthorization>();
@@ -63,6 +66,12 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
         // rather than relying on a provider-specific collation for case-insensitive matching.
         modelBuilder.Entity<GitHostAuthorization>().HasKey(a => a.Host);
         modelBuilder.Entity<GitHostCredentialHealth>().HasKey(h => h.Host);
+
+        // RepositoryPath is the same already-resolved absolute path Run.RepositoryPath uses (see
+        // EfRunRepository) - matched as a plain key, no case normalization, since every write goes
+        // through the one WorkingDirectoryResolver that always produces the same casing for the same
+        // repository.
+        modelBuilder.Entity<RepositoryCredentialHealth>().HasKey(h => h.RepositoryPath);
 
         // FeedUrl is stored as its canonical Uri.AbsoluteUri form (see NuGetFeedCredentialStore) and
         // used as the key directly.

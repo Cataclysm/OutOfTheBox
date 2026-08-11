@@ -296,6 +296,55 @@ public sealed class GitCredentialStore(
         return await dbContext.GitHostCredentialHealth.AsNoTracking().FirstOrDefaultAsync(h => h.Host == normalizedHost, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task RecordRepositoryOutcomeAsync(string repositoryPath, bool succeeded, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
+
+        var existing = await dbContext.RepositoryCredentialHealth.FirstOrDefaultAsync(h => h.RepositoryPath == repositoryPath, cancellationToken);
+        var updated = existing is null
+            ? new RepositoryCredentialHealth(repositoryPath, succeeded ? null : now, succeeded ? now : null)
+            : existing with
+            {
+                LastAuthFailureAtUtc = succeeded ? existing.LastAuthFailureAtUtc : now,
+                LastAuthSuccessAtUtc = succeeded ? now : existing.LastAuthSuccessAtUtc,
+            };
+
+        if (existing is null)
+        {
+            dbContext.RepositoryCredentialHealth.Add(updated);
+        }
+        else
+        {
+            dbContext.Entry(existing).CurrentValues.SetValues(updated);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<RepositoryCredentialHealth?> GetRepositoryHealthAsync(string repositoryPath, CancellationToken cancellationToken)
+    {
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
+
+        return await dbContext.RepositoryCredentialHealth.AsNoTracking().FirstOrDefaultAsync(h => h.RepositoryPath == repositoryPath, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken)
+    {
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
+
+        await dbContext.RepositoryCredentialHealth
+            .Where(h => h.RepositoryPath == oldRepositoryPath)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.RepositoryPath, newRepositoryPath), cancellationToken);
+    }
+
     private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedHost, CancellationToken cancellationToken)
     {
         var existing = await dbContext.GitHostAuthorizations.FirstOrDefaultAsync(a => a.Host == normalizedHost, cancellationToken);

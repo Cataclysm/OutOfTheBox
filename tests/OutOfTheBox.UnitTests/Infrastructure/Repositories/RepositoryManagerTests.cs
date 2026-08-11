@@ -352,6 +352,23 @@ public sealed class RepositoryManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task RenameAsync_repoints_the_repository_credential_health_from_the_old_path_to_the_new_path()
+    {
+        var oldPath = Path.Combine(_root, "old-name");
+        Directory.CreateDirectory(oldPath);
+
+        var credentialStore = new RecordingGitCredentialStore();
+        var manager = CreateManager(new RunRegistry(), gitCredentialStore: credentialStore);
+
+        var result = await manager.RenameAsync("old-name", "new-name", CancellationToken.None);
+
+        Assert.IsType<RepositoryGitActionResult.Succeeded>(result);
+        var (recordedOldPath, recordedNewPath) = Assert.Single(credentialStore.RenamedPaths);
+        Assert.Equal(oldPath, recordedOldPath);
+        Assert.Equal(Path.Combine(_root, "new-name"), recordedNewPath);
+    }
+
+    [Fact]
     public async Task GitActions_reject_a_name_that_escapes_the_root()
     {
         var manager = CreateManager(new RunRegistry());
@@ -549,7 +566,7 @@ public sealed class RepositoryManagerTests : IDisposable
         name => manager.CleanAsync(name, CancellationToken.None),
     ];
 
-    private RepositoryManager CreateManager(RunRegistry runRegistry, IRunRepository? runRepository = null, RepositoryStatsCache? statsCache = null) =>
+    private RepositoryManager CreateManager(RunRegistry runRegistry, IRunRepository? runRepository = null, RepositoryStatsCache? statsCache = null, IGitCredentialStore? gitCredentialStore = null) =>
         new(
             new WorkingDirectoryResolver(Options.Create(new ServiceOptions { RootDirectory = _root }), NullLogger<WorkingDirectoryResolver>.Instance),
             runRegistry,
@@ -559,7 +576,7 @@ public sealed class RepositoryManagerTests : IDisposable
             new UnreachableStatsProvider(),
             statsCache ?? new RepositoryStatsCache(),
             new NoOpRepositoryStatsEventBus(),
-            new NoOpGitCredentialStore(),
+            gitCredentialStore ?? new NoOpGitCredentialStore(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ServiceOptions
             {
@@ -637,7 +654,50 @@ public sealed class RepositoryManagerTests : IDisposable
         public Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
             Task.FromResult<GitHostCredentialHealth?>(null);
 
+        public Task RecordRepositoryOutcomeAsync(string repositoryPath, bool succeeded, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<RepositoryCredentialHealth?> GetRepositoryHealthAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            Task.FromResult<RepositoryCredentialHealth?>(null);
+
+        public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) => Task.CompletedTask;
+
         public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A rejection-path test unexpectedly reached credential lookup.");
+    }
+
+    /// <summary>Records every <see cref="RenameRepositoryHealthAsync"/> call - everything else is unreachable from a rename.</summary>
+    private sealed class RecordingGitCredentialStore : IGitCredentialStore
+    {
+        public List<(string OldPath, string NewPath)> RenamedPaths { get; } = [];
+
+        public Task<GitCredentialAuthorizeResult> AuthorizeAsync(string host, string token, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedHostsAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task<GitCredentialRevokeResult> RevokeAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task RecordOutcomeAsync(string host, bool succeeded, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task RecordRepositoryOutcomeAsync(string repositoryPath, bool succeeded, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task<RepositoryCredentialHealth?> GetRepositoryHealthAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
+
+        public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken)
+        {
+            RenamedPaths.Add((oldRepositoryPath, newRepositoryPath));
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by a rename.");
     }
 }

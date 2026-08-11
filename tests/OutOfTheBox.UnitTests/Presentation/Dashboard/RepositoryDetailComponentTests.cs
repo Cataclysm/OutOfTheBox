@@ -178,6 +178,15 @@ public sealed class RepositoryDetailComponentTests : DashboardComponentTestConte
         public Task<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
             Task.FromResult<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?>(null);
 
+        public Task RecordRepositoryOutcomeAsync(string repositoryPath, bool succeeded, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
+        public Task<OutOfTheBox.Domain.Repositories.RepositoryCredentialHealth?> GetRepositoryHealthAsync(string repositoryPath, CancellationToken cancellationToken) =>
+            Task.FromResult<OutOfTheBox.Domain.Repositories.RepositoryCredentialHealth?>(null);
+
+        public Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
+
         public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Not exercised by these tests.");
     }

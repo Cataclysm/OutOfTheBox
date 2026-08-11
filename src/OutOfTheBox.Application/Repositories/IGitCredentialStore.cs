@@ -35,14 +35,39 @@ public interface IGitCredentialStore
     /// <summary>
     /// Records whether a network-touching git operation (pull/push/force-push/fetch/clone) against
     /// <paramref name="host"/> succeeded or failed for an authentication reason - the signal
-    /// <see cref="GitHostCredentialHealth.NeedsCredential"/> is derived from. Called regardless of
-    /// whether the host was ever explicitly authorized, per specs/repository-management's "A failure
-    /// marks the host even without a prior explicit authorization" scenario.
+    /// <see cref="GitHostCredentialHealth.NeedsCredential"/> is derived from, feeding
+    /// <c>list_authorized_git_hosts</c>'s health field. Called regardless of whether the host was
+    /// ever explicitly authorized, per specs/repository-management's "A failure marks the host even
+    /// without a prior explicit authorization" scenario. Does not affect any individual repository's
+    /// own needs-credential marker - see <see cref="RecordRepositoryOutcomeAsync"/> for that.
     /// </summary>
     Task RecordOutcomeAsync(string host, bool succeeded, CancellationToken cancellationToken);
 
     /// <summary><paramref name="host"/>'s currently recorded health, or <see langword="null"/> if nothing has ever been recorded for it.</summary>
     Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records whether a network-touching git operation (pull/push/force-push/fetch/clone) against
+    /// the repository at <paramref name="repositoryPath"/> succeeded or failed for an authentication
+    /// reason - the signal <see cref="RepositoryCredentialHealth.NeedsCredential"/> is derived from,
+    /// feeding the dashboard/<c>list_repositories</c>' per-repository needs-credential marker.
+    /// Scoped to this one repository, not its remote host, so a broken (or fixed) credential on one
+    /// repository never marks or clears a sibling repository that shares the same host but was never
+    /// itself touched - see <see cref="RepositoryCredentialHealth"/>'s own remarks.
+    /// </summary>
+    Task RecordRepositoryOutcomeAsync(string repositoryPath, bool succeeded, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="repositoryPath"/>'s currently recorded credential health, or <see langword="null"/> if nothing has ever been recorded for it.</summary>
+    Task<RepositoryCredentialHealth?> GetRepositoryHealthAsync(string repositoryPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Repoints a repository's recorded credential health from <paramref name="oldRepositoryPath"/>
+    /// to <paramref name="newRepositoryPath"/> after a rename, the same way run history is repointed
+    /// (<c>IRunRepository.UpdateRepositoryPathAsync</c>) - without this, renaming a repository that
+    /// currently needs a credential would silently lose that mark instead of carrying it over. A
+    /// no-op if nothing was recorded for the old path.
+    /// </summary>
+    Task RenameRepositoryHealthAsync(string oldRepositoryPath, string newRepositoryPath, CancellationToken cancellationToken);
 
     /// <summary>
     /// Fetches <paramref name="host"/>'s current credential straight from the git credential helper

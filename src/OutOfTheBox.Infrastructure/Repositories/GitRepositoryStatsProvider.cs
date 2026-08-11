@@ -89,29 +89,28 @@ public sealed class GitRepositoryStatsProvider(IProcessRunner processRunner, IGi
         }
 
         var remotes = await ComputeRemotesAsync(repositoryPath, cancellationToken);
-        var needsCredential = await ComputeNeedsCredentialAsync(remotes, cancellationToken);
+        var needsCredential = await ComputeNeedsCredentialAsync(repositoryPath, remotes, cancellationToken);
 
         return new GitStatusSnapshot(IsGitRepository: true, branch, isDirty, ahead, behind, isRemoteGone, remotes, isDetachedHead, needsCredential);
     }
 
     /// <summary>
-    /// Resolves this repository's <c>origin</c> remote to a host and looks up its recorded
-    /// credential health - folded into this same sampling pass since <paramref name="remotes"/> is
-    /// already fetched on every pass for the detail page's remote list, so deriving the host costs
-    /// nothing extra (per design.md's "computed into the existing repository-stats pass" decision).
-    /// A repository with no <c>origin</c> remote, or one whose URL doesn't resolve to a host, never
-    /// needs a credential (nothing to check against).
+    /// Looks up this repository's own recorded credential health (scoped to the repository, not its
+    /// host - see <see cref="RepositoryCredentialHealth"/>'s own remarks for why) - folded into this
+    /// same sampling pass since it costs nothing extra beyond a lookup keyed on
+    /// <paramref name="repositoryPath"/>, which this method already has (per design.md's "computed
+    /// into the existing repository-stats pass" decision). A repository with no <c>origin</c> remote
+    /// at all never needs a credential (nothing it could ever have recorded an outcome against).
     /// </summary>
-    private async Task<bool> ComputeNeedsCredentialAsync(IReadOnlyList<Application.Repositories.RepositoryRemote> remotes, CancellationToken cancellationToken)
+    private async Task<bool> ComputeNeedsCredentialAsync(string repositoryPath, IReadOnlyList<Application.Repositories.RepositoryRemote> remotes, CancellationToken cancellationToken)
     {
-        var origin = remotes.FirstOrDefault(r => r.Name == "origin");
-        if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var host))
+        if (remotes.All(r => r.Name != "origin"))
         {
             return false;
         }
 
-        var health = await gitCredentialStore.GetHealthAsync(host, cancellationToken);
-        return GitHostCredentialHealth.NeedsCredential(health);
+        var health = await gitCredentialStore.GetRepositoryHealthAsync(repositoryPath, cancellationToken);
+        return RepositoryCredentialHealth.NeedsCredential(health);
     }
 
     private async Task<IReadOnlyList<Application.Repositories.RepositoryRemote>> ComputeRemotesAsync(string repositoryPath, CancellationToken cancellationToken)

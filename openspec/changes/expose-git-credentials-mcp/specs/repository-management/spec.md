@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Repositories are listed with identifying stats
-The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured, or a distinct "remote branch gone" indication if a tracking branch was configured but its remote-side branch no longer exists — or an indication that it isn't a git repository at all), whether it is currently active (holds the per-repository command lock per `dotnet-command-execution`/`git-command-execution`), and whether its remote host currently appears to need a working credential (per this capability's needs-credential tracking, below). Its clone source URL (if known) and its configured remotes (name and URL) SHALL additionally be shown on its detail subpage (per `service-dashboard`'s "Repository detail is its own subpage").
+The system SHALL enumerate every top-level directory under the configured root as a repository and report, for each: its name, total on-disk size, git status summary (current branch, clean/dirty, ahead/behind its upstream if one is configured, or a distinct "remote branch gone" indication if a tracking branch was configured but its remote-side branch no longer exists — or an indication that it isn't a git repository at all), whether it is currently active (holds the per-repository command lock per `dotnet-command-execution`/`git-command-execution`), and whether it currently appears to need a working credential (per this capability's needs-credential tracking, below — scoped to the repository itself, not shared with any other repository even one on the same remote host). Its clone source URL (if known) and its configured remotes (name and URL) SHALL additionally be shown on its detail subpage (per `service-dashboard`'s "Repository detail is its own subpage").
 
 #### Scenario: Listing repositories
 - **WHEN** an operator views the repository list
@@ -19,12 +19,12 @@ The system SHALL enumerate every top-level directory under the configured root a
 - **WHEN** a repository's current branch has a configured upstream but that upstream's remote-side branch no longer exists
 - **THEN** the system's git status summary states the remote branch is gone, rather than reporting it the same way as a branch with no upstream configured at all
 
-#### Scenario: A repository whose host needs a credential is marked next to its name
-- **WHEN** a repository's `origin` remote resolves to a host that currently appears to need a working credential
+#### Scenario: A repository that needs a credential is marked next to its name
+- **WHEN** a repository's own most recently recorded network-touching git operation was an authentication failure
 - **THEN** the repository is shown with a distinct symbol next to its name, in both the repository list and its detail page
 
 #### Scenario: A repository with no evidence of a credential problem is not marked
-- **WHEN** a repository's `origin` remote resolves to a host with no recorded authentication failure more recent than its last recorded success (including a host nothing has ever recorded either way)
+- **WHEN** a repository has no recorded authentication failure more recent than its own last recorded success (including a repository nothing has ever recorded either way)
 - **THEN** the repository is shown without the needs-credential symbol
 
 ### Requirement: A new repository can be cloned, optionally on a specific initial branch
@@ -102,13 +102,17 @@ The system SHALL offer a dashboard action, alongside the existing per-repository
 - **WHEN** an operator selects the change-credential action for a repository with no `origin` remote, or whose remote URL cannot be resolved to a host
 - **THEN** the system reports that no host could be determined, rather than opening a prompt with nothing to save against
 
-### Requirement: A host's needs-credential state reflects the most recent network-touching git operation against it
-The system SHALL record, per remote host, whether the most recent pull, push, force-push, fetch, or clone that targeted it succeeded or failed for an authentication reason, and SHALL derive that host's needs-credential state from whichever was more recent. `git clean` (which never touches the network) and arbitrary `git_run` commands SHALL NOT update this state - only the operations in this capability with an unambiguous single target host do.
+### Requirement: A repository's needs-credential state reflects the most recent network-touching git operation against it
+The system SHALL record, per repository, whether the most recent pull, push, force-push, fetch, or clone run against it succeeded or failed for an authentication reason, and SHALL derive that repository's needs-credential state from whichever was more recent. This state is scoped to the repository itself, not its remote host: a repository never inherits another repository's recorded outcome, even one cloned from the same host with the same (or a different) credential. `git clean` (which never touches the network) and arbitrary `git_run` commands SHALL NOT update this state - only the operations in this capability with an unambiguous single target repository do. Renaming a repository SHALL carry its recorded state over to the new name rather than losing it.
 
 #### Scenario: A successful operation clears a prior failure
-- **WHEN** a host's most recent recorded outcome was an authentication failure, and a subsequent pull, push, force-push, fetch, or clone against that same host succeeds
-- **THEN** the host no longer needs a credential, and every repository whose `origin` resolves to it stops showing the needs-credential symbol
+- **WHEN** a repository's most recent recorded outcome was an authentication failure, and a subsequent pull, push, force-push, fetch, or clone against that same repository succeeds
+- **THEN** the repository no longer needs a credential
 
-#### Scenario: A failure marks the host even without a prior explicit authorization
-- **WHEN** a pull, push, force-push, fetch, or clone fails for an authentication reason against a host that was never explicitly authorized via `authorize_git_host` or the change-credential action
-- **THEN** the host is recorded as needing a credential regardless
+#### Scenario: A failure marks only the repository it happened against
+- **WHEN** a pull, push, force-push, fetch, or clone against one repository fails for an authentication reason
+- **THEN** only that repository is recorded as needing a credential - a different repository sharing the same remote host, whether already marked as needing a credential or not, is left exactly as it was
+
+#### Scenario: A failure marks the repository even without a prior explicit authorization
+- **WHEN** a pull, push, force-push, fetch, or clone against a repository fails for an authentication reason, and its remote host was never explicitly authorized via `authorize_git_host` or the change-credential action
+- **THEN** the repository is recorded as needing a credential regardless
