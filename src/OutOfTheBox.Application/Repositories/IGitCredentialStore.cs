@@ -11,8 +11,9 @@ namespace OutOfTheBox.Application.Repositories;
 /// <c>list_authorized_git_hosts</c>/<c>revoke_git_host_authorization</c> MCP tools and the
 /// dashboard's PAT-prompt dialog/change-credential action, both calling this same port so the two
 /// surfaces can never end up with divergent credentials for the same host. The token itself is
-/// never persisted by this service or returned from any method here - it is written once into the
-/// git credential helper and never read back.
+/// never persisted by this service, and is never returned via any MCP tool result - <see cref="GetCurrentTokenAsync"/>
+/// is a dashboard-only exception (the credentials management page's "PAT fully shown" requirement),
+/// fetching it live from the git credential helper on demand rather than storing it.
 /// </summary>
 public interface IGitCredentialStore
 {
@@ -42,4 +43,13 @@ public interface IGitCredentialStore
 
     /// <summary><paramref name="host"/>'s currently recorded health, or <see langword="null"/> if nothing has ever been recorded for it.</summary>
     Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches <paramref name="host"/>'s current credential straight from the git credential helper
+    /// (<c>git credential fill</c>), for the dashboard's credentials management page - never called
+    /// from any MCP tool. Returns <see langword="null"/> if no credential is retrievable (none
+    /// stored, the helper isn't configured, or git.exe is unreachable) rather than throwing, so a
+    /// page listing several credentials can show one row as unavailable without failing the rest.
+    /// </summary>
+    Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken);
 }

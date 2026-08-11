@@ -210,5 +210,8 @@ public sealed class RepositoriesComponentTests : DashboardComponentTestContext, 
 
         public Task<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
             Task.FromResult<OutOfTheBox.Domain.Repositories.GitHostCredentialHealth?>(null);
+
+        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
     }
 }

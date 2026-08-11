@@ -101,5 +101,8 @@ public sealed class GitRepositoryStatsProviderTests : IDisposable
 
         public Task<GitHostCredentialHealth?> GetHealthAsync(string host, CancellationToken cancellationToken) =>
             Task.FromResult<GitHostCredentialHealth?>(null);
+
+        public Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Not exercised by these tests.");
     }
 }

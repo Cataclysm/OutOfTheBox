@@ -130,7 +130,93 @@ public sealed class GitCredentialStore(
         dbContext.GitHostAuthorizations.Remove(existing);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        // The credential is genuinely gone now - the next real pull/push/fetch/clone against this
+        // host will fail authentication, so mark it needing attention immediately rather than
+        // leaving a stale "fine" signal on every repository until that failure actually happens.
+        await RecordOutcomeAsync(normalizedHost, succeeded: false, cancellationToken);
+        await RefreshAffectedRepositoriesAsync(normalizedHost, cancellationToken);
+
         return new GitCredentialRevokeResult.Revoked();
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetCurrentTokenAsync(string host, CancellationToken cancellationToken)
+    {
+        var normalizedHost = Normalize(host);
+        var fillInput = $"protocol=https\nhost={normalizedHost}\n\n";
+        var fillOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["credential", "fill"], cancellationToken, standardInput: fillInput);
+
+        return fillOutput is null ? null : ParsePassword(fillOutput);
+    }
+
+    // git's credential protocol is line-oriented key=value pairs - the password value is everything
+    // after the first '=' on the one line starting "password=", verbatim (a PAT can itself contain
+    // '=', e.g. base64-flavored Azure DevOps tokens, so splitting only on the first occurrence matters).
+    private static string? ParsePassword(string fillOutput)
+    {
+        foreach (var line in fillOutput.Split('\n'))
+        {
+            if (line.StartsWith("password=", StringComparison.Ordinal))
+            {
+                return line["password=".Length..].TrimEnd('\r');
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Immediately recomputes and publishes the git-status half (which carries <c>NeedsCredential</c>)
+    /// for every repository whose <c>origin</c> remote resolves to <paramref name="normalizedHost"/>,
+    /// after a credential change for that host - so the dashboard/list_repositories reflect it
+    /// without waiting for <c>RepositoryStatsSampler</c>'s own next periodic tick. Resolves
+    /// <see cref="IRepositoryManager"/>/<see cref="IRepositoryStatsProvider"/>/<see cref="RepositoryStatsCache"/>/
+    /// <see cref="IRepositoryStatsEventBus"/> lazily from a fresh scope rather than as constructor
+    /// dependencies - <see cref="OutOfTheBox.Infrastructure.Repositories.GitRepositoryStatsProvider"/>
+    /// (the concrete <see cref="IRepositoryStatsProvider"/>) itself depends on this class, so taking
+    /// any of these as a captive constructor dependency here would be a circular singleton graph;
+    /// resolving them only when this method actually runs sidesteps that entirely, the same reasoning
+    /// this class already applies to <see cref="OutOfTheBoxDbContext"/>. Best-effort: a repository
+    /// this can't enumerate or recompute for is logged and skipped, never fails the revoke itself.
+    /// </summary>
+    private async Task RefreshAffectedRepositoriesAsync(string normalizedHost, CancellationToken cancellationToken)
+    {
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var repositoryManager = scope.ServiceProvider.GetRequiredService<IRepositoryManager>();
+        var statsProvider = scope.ServiceProvider.GetRequiredService<IRepositoryStatsProvider>();
+        var statsCache = scope.ServiceProvider.GetRequiredService<RepositoryStatsCache>();
+        var statsEventBus = scope.ServiceProvider.GetRequiredService<IRepositoryStatsEventBus>();
+
+        IReadOnlyList<RepositorySummary> summaries;
+        try
+        {
+            summaries = await repositoryManager.ListAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not enumerate repositories to refresh after revoking the credential for '{Host}'.", normalizedHost);
+            return;
+        }
+
+        foreach (var summary in summaries)
+        {
+            var origin = summary.Remotes.FirstOrDefault(r => r.Name == "origin");
+            if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var repoHost) || Normalize(repoHost) != normalizedHost)
+            {
+                continue;
+            }
+
+            try
+            {
+                var gitStatus = await statsProvider.ComputeGitStatusAsync(summary.Path, cancellationToken);
+                statsCache.SetGitStatus(summary.Name, gitStatus);
+                statsEventBus.Publish(summary.Name);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not refresh repository '{Repository}' after revoking the credential for '{Host}'.", summary.Name, normalizedHost);
+            }
+        }
     }
 
     /// <inheritdoc />
