@@ -57,14 +57,27 @@ public sealed class WorkingDirectoryResolver(IOptions<ServiceOptions> options, I
             var finalTarget = Directory.ResolveLinkTarget(path, returnFinalTarget: true);
             return finalTarget?.FullName ?? path;
         }
+        catch (DirectoryNotFoundException)
+        {
+            // Confirmed live, contradicting what was previously assumed here: a path that doesn't
+            // exist at all does NOT return null without throwing - Directory.ResolveLinkTarget throws
+            // DirectoryNotFoundException for it, the same as any other IOException would otherwise be
+            // caught and logged below. This is routine, not exceptional - a caller referencing an
+            // already-deleted or never-existing repository name is an entirely ordinary "not found"
+            // outcome (every RepositoryManager method already handles it gracefully via its own
+            // Directory.Exists(resolution.ResolvedPath) check right after resolving), not a symlink
+            // problem worth a Warning-level log line with a full stack trace on every occurrence.
+            // Silently falls back to the unresolved path, same as the non-throwing case above.
+            return path;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // A genuinely broken/circular link or an access-denied reading the reparse point (not
-            // "doesn't exist yet," which returns null above without throwing) - worth a trace since
-            // the containment check below silently falls back to a lexical-only comparison against
-            // this path instead of its true resolved target, which is a security-relevant behavior
-            // change for this specific request. Rare enough in practice (most working directories
-            // aren't links at all) not to be noise despite this running on every request.
+            // A genuinely broken/circular link or an access-denied reading the reparse point on a
+            // path that DOES exist - worth a trace since the containment check below silently falls
+            // back to a lexical-only comparison against this path instead of its true resolved
+            // target, which is a security-relevant behavior change for this specific request. Rare
+            // enough in practice (most working directories aren't links at all) not to be noise
+            // despite this running on every request.
             logger.LogWarning(ex, "Failed to resolve symlink/junction target for {Path}; falling back to the unresolved path for confinement.", path);
             return path;
         }

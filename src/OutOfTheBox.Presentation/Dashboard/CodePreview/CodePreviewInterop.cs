@@ -24,12 +24,14 @@ public sealed class CodePreviewInterop(IJSRuntime jsRuntime) : ICodePreviewInter
     {
         // Best-effort: normally called from FilePreviewDialog's DisposeAsync during page
         // navigation/circuit teardown, where the circuit may already be gone by the time cleanup
-        // runs - the same reasoning ChartInterop.DestroyAsync already documents for its own case.
+        // runs - the same reasoning ChartInterop.DestroyAsync already documents for its own case,
+        // including the InvalidOperationException ("statically rendering") failure mode confirmed
+        // live alongside JSDisconnectedException - see that method's own remarks.
         try
         {
             await jsRuntime.InvokeVoidAsync("outOfTheBoxCodePreview.destroy", elementId);
         }
-        catch (JSDisconnectedException)
+        catch (Exception ex) when (ex is JSDisconnectedException or InvalidOperationException)
         {
         }
     }

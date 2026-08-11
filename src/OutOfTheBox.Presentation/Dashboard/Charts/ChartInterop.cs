@@ -39,12 +39,18 @@ public sealed class ChartInterop(IJSRuntime jsRuntime) : IChartInterop
         // Best-effort: this is normally called from a component's DisposeAsync during page
         // navigation/circuit teardown, where the circuit may already be gone by the time cleanup
         // runs - nothing useful to do about that server-side, so the exception is swallowed here
-        // rather than every caller needing its own try/catch.
+        // rather than every caller needing its own try/catch. Two distinct failure modes here,
+        // confirmed live (a real deployment's log, not just theorized): JSDisconnectedException for
+        // a circuit that connected and later disconnected, and InvalidOperationException ("JavaScript
+        // interop calls cannot be issued at this time... component is being statically rendered")
+        // for a component disposed during the static prerender pass, before any circuit/interactivity
+        // exists at all - a genuinely different timing than disconnection, which the original
+        // JSDisconnectedException-only catch didn't cover.
         try
         {
             await jsRuntime.InvokeVoidAsync("outOfTheBoxCharts.destroyChart", canvasId);
         }
-        catch (JSDisconnectedException)
+        catch (Exception ex) when (ex is JSDisconnectedException or InvalidOperationException)
         {
         }
     }
