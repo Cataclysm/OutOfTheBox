@@ -123,6 +123,14 @@ public sealed class CliProcessRunner : IProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
+        if (request.EnvironmentVariables is not null)
+        {
+            foreach (var (key, value) in request.EnvironmentVariables)
+            {
+                startInfo.EnvironmentVariables[key] = value;
+            }
+        }
+
         return startInfo;
     }
 

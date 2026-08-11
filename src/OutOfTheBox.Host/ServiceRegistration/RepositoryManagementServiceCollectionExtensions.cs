@@ -31,6 +31,11 @@ public static class RepositoryManagementServiceCollectionExtensions
         // service directly.
         services.AddSingleton<IGitCredentialStore, GitCredentialStore>();
 
+        // Same singleton-resolves-its-own-scope reasoning as IGitCredentialStore just above -
+        // CommandExecutionMcpTools' dotnet_run spawn path also depends on it, per design.md's
+        // "dotnet_run gains environment-variable injection" decision.
+        services.AddSingleton<INuGetFeedCredentialStore, NuGetFeedCredentialStore>();
+
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
 

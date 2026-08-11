@@ -20,4 +20,18 @@ namespace OutOfTheBox.Application.Execution;
 /// command-line argument, which this host's own process-inspection tooling (and any local admin's
 /// Task Manager) could otherwise read back off a running process's command line.
 /// </param>
-public sealed record ProcessRunRequest(IReadOnlyList<string> Arguments, string WorkingDirectory, string Executable, string? StandardInput = null);
+/// <param name="EnvironmentVariables">
+/// Extra environment variables set on the child process, or <see langword="null"/> for none (every
+/// caller except the <c>dotnet_run</c> spawn path's Azure DevOps Artifacts credential injection - see
+/// <see cref="OutOfTheBox.Application.Repositories.INuGetFeedCredentialStore"/> - passes
+/// <see langword="null"/>). Exists for the same reason <see cref="StandardInput"/> does: a secret
+/// (a PAT, via <c>VSS_NUGET_EXTERNAL_FEED_ENDPOINTS</c>) needs to reach a spawned process without
+/// ever being a command-line argument - an environment block isn't exposed via WMI's
+/// <c>Win32_Process</c> the way a command line is, though it isn't as fully hidden as stdin.
+/// </param>
+public sealed record ProcessRunRequest(
+    IReadOnlyList<string> Arguments,
+    string WorkingDirectory,
+    string Executable,
+    string? StandardInput = null,
+    IReadOnlyDictionary<string, string>? EnvironmentVariables = null);

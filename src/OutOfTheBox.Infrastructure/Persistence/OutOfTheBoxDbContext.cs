@@ -28,6 +28,9 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
     /// <summary>Every host's observed authentication health, per specs/repository-management's needs-credential tracking.</summary>
     public DbSet<GitHostCredentialHealth> GitHostCredentialHealth => Set<GitHostCredentialHealth>();
 
+    /// <summary>Every feed URL explicitly authorized via <c>authorize_nuget_feed</c>, per specs/mcp-nuget-credentials. The plaintext token is never stored here - only an Azure DevOps Artifacts feed's DPAPI-encrypted password (see <see cref="NuGetFeedAuthorization"/>'s remarks).</summary>
+    public DbSet<NuGetFeedAuthorization> NuGetFeedAuthorizations => Set<NuGetFeedAuthorization>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,5 +63,9 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
         // rather than relying on a provider-specific collation for case-insensitive matching.
         modelBuilder.Entity<GitHostAuthorization>().HasKey(a => a.Host);
         modelBuilder.Entity<GitHostCredentialHealth>().HasKey(h => h.Host);
+
+        // FeedUrl is stored as its canonical Uri.AbsoluteUri form (see NuGetFeedCredentialStore) and
+        // used as the key directly.
+        modelBuilder.Entity<NuGetFeedAuthorization>().HasKey(a => a.FeedUrl);
     }
 }

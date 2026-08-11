@@ -13,6 +13,8 @@
     <!-- BackgroundService, for RepositoryStatsSampler (and, later, the host-resource sampler). -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <!-- Reads/writes the machine's NuGet.Config for authorize_nuget_feed's generic-feed mechanism. -->
+    <PackageReference Include="NuGet.Configuration" />
     <!-- Direct reference so the pinned (patched) version in Directory.Packages.props actually
          wins over the older, vulnerable one EF Core Sqlite would otherwise pull in transitively. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
