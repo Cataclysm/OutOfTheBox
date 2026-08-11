@@ -62,7 +62,15 @@
             Message="Git for Windows was not found. Install it first, or run OutOfTheBoxSetup.exe (the bootstrapper) instead of this MSI directly - it installs Git automatically." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="OutOfTheBox" />
+      <Directory Id="INSTALLFOLDER" Name="OutOfTheBox">
+        <!-- Nested so the harvested files land at exactly INSTALLFOLDER\CredentialProviders\AzureArtifacts\ -
+             NuGetCredentialProviderLocation.InstallDirectory (OutOfTheBox.Application) computes this
+             same path from AppContext.BaseDirectory (== INSTALLFOLDER for the running Host.exe) and
+             must stay in sync with these two literal Name values. -->
+        <Directory Id="CredentialProvidersDir" Name="CredentialProviders">
+          <Directory Id="AzureArtifactsCredProviderDir" Name="AzureArtifacts" />
+        </Directory>
+      </Directory>
     </StandardDirectory>
 
     <!-- Per design.md's Data/config directory decision: never referenced by any Component or
@@ -211,6 +219,7 @@
 
     <Feature Id="MainFeature" Title="Out of the Box Service" Level="1">
       <ComponentGroupRef Id="PublishOutputComponents" />
+      <ComponentGroupRef Id="CredentialProviderComponents" />
       <ComponentRef Id="ServiceAccountComponent" />
       <ComponentRef Id="DataDirectoryComponent" />
       <ComponentRef Id="ServiceComponent" />
@@ -251,6 +260,21 @@
       <Files Include="$(var.PublishOutputPath)**">
         <Exclude Files="$(var.PublishOutputPath)OutOfTheBox.Host.exe" />
       </Files>
+    </ComponentGroup>
+
+    <!-- The vendored Azure Artifacts Credential Provider (see design.md's "installer bundling"
+         decision, expose-nuget-credentials-mcp) - extracted as-is from the upstream
+         microsoft/artifacts-credprovider release archive by a separate, independently re-runnable
+         step (INSTALL.md), the same "populate a folder, then harvest everything under it"
+         convention PublishOutputComponents above already uses for the Host's own publish output -
+         and, like that one, a genuine prerequisite for this project to build at all (WiX's wildcard
+         Files harvesting errors on zero matches; there is no "harvest if present" attribute in this
+         WiX version to make it optional). authorize_nuget_feed against an Azure DevOps Artifacts
+         feed still fails with a specific, actionable diagnostic at runtime on any machine where a
+         *different* build of the MSI happened to omit this - this Files element failing closed at
+         build time is about this project's own build reproducibility, not a runtime concern. -->
+    <ComponentGroup Id="CredentialProviderComponents" Directory="AzureArtifactsCredProviderDir">
+      <Files Include="$(var.CredentialProviderPath)**" />
     </ComponentGroup>
 
     <!-- Dedicated least-privilege service account (design.md's generic-passthrough risk

@@ -14,13 +14,20 @@
          app" and "package the app" as separate, independently re-runnable steps, matching how the
          Burn bootstrapper below also just consumes this MSI's output rather than building it. -->
     <PublishOutputPath Condition="'$(PublishOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\OutOfTheBox.Host\</PublishOutputPath>
+    <!-- Same "populated by a separate, independently re-runnable step before building the MSI"
+         convention as PublishOutputPath above - see INSTALL.md's "Azure Artifacts Credential
+         Provider" step. Expected to contain the vendored microsoft/artifacts-credprovider release
+         archive extracted as-is (its own plugins/netcore/CredentialProvider.Microsoft/ layout
+         preserved, not flattened - see NuGetCredentialProviderLocation.PluginDirectory, which this
+         must stay in sync with). -->
+    <CredentialProviderPath Condition="'$(CredentialProviderPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\AzureArtifactsCredentialProvider\</CredentialProviderPath>
     <!-- OutOfTheBox.Msi.CustomActions also inherits the repo-root Directory.Build.props'
          UseArtifactsOutput, so its build output lands under artifacts/bin/, not a local bin/
          folder - $(Configuration) is lowercased there, matching the .NET SDK's artifacts-layout
          convention (e.g. "debug", not "Debug"). -->
     <ResolveSecretsCaDllPath>$(MSBuildThisFileDirectory)..\..\artifacts\bin\OutOfTheBox.Msi.CustomActions\$(Configuration.ToLowerInvariant())\OutOfTheBox.Msi.CustomActions.CA.dll</ResolveSecretsCaDllPath>
     <BrandAssetsPath>$(MSBuildThisFileDirectory)..\Assets\</BrandAssetsPath>
-    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath);ResolveSecretsCaDllPath=$(ResolveSecretsCaDllPath);BrandAssetsPath=$(BrandAssetsPath)</DefineConstants>
+    <DefineConstants>ProductVersion=$(Version);PublishOutputPath=$(PublishOutputPath);CredentialProviderPath=$(CredentialProviderPath);ResolveSecretsCaDllPath=$(ResolveSecretsCaDllPath);BrandAssetsPath=$(BrandAssetsPath)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
