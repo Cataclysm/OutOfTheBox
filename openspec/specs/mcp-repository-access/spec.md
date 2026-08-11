@@ -4,11 +4,11 @@
 Lets an MCP caller list and clone repositories — nothing more; every other `repository-management` action (delete, pull/push/force-push/fetch/clean, branch switching, commit checkout, the file tree browser) stays reachable only through the authenticated dashboard.
 ## Requirements
 ### Requirement: list_repositories mirrors the dashboard's repository inventory
-The system SHALL accept a `list_repositories` tool call and return every repository under the configured root with the same identifying stats `repository-management` already requires for the dashboard's Repositories view: name, total size, git status summary, and active/idle state.
+The system SHALL accept a `list_repositories` tool call and return every repository under the configured root with the same identifying stats `repository-management` already requires for the dashboard's Repositories view: name, total size, git status summary, active/idle state, and whether its remote host currently appears to need a working credential.
 
 #### Scenario: Listing repositories
 - **WHEN** an authenticated caller calls `list_repositories`
-- **THEN** the result lists every repository under the configured root with its name, total size, git status summary, and active/idle state
+- **THEN** the result lists every repository under the configured root with its name, total size, git status summary, active/idle state, and needs-credential state
 
 ### Requirement: clone_repository starts a clone as a pollable run
 The system SHALL accept a `clone_repository` tool call carrying a source URL, a name, and an optional initial branch, resolve the name under the configured root (rejecting a name that would escape the root or that already exists), and start `git clone` targeting that resolved directory — returning a run id immediately, in the same start-then-poll shape `mcp-command-execution` defines for `dotnet_run`/`git_run`, with progress and completion retrieved via that same capability's `read_run_output` tool.
