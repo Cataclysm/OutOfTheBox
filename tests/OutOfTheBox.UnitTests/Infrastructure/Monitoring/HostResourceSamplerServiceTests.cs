@@ -59,6 +59,30 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TickAsync_tags_a_tracked_runs_sample_with_that_ticks_host_level_network_and_disk_figures()
+    {
+        // Neither network nor disk I/O can be isolated to one process tree on Windows (see
+        // RunResourceSample's own remarks) - every tracked run still gets that tick's host-level
+        // figures tagged onto its own persisted row, the same way a transfer's CPU/RAM already is.
+        var runId = Guid.NewGuid();
+        var snapshot = new ResourceSnapshot(
+            DateTimeOffset.UtcNow,
+            new HostResourceSample(10, [10], 1000, 500, 100, NetworkBytesSentPerSecond: 111, NetworkBytesReceivedPerSecond: 222, DiskReadBytesPerSecond: 333, DiskWriteBytesPerSecond: 444),
+            [new RunResourceAggregate(runId, 25, 2000, [])]);
+
+        var service = CreateService(new FakeResourceSampler(snapshot));
+        await service.TickAsync(CancellationToken.None);
+
+        var sampleRepository = new EfRunResourceSampleRepository(_dbContextFactory.CreateContext());
+        var sample = Assert.Single(await sampleRepository.GetSeriesAsync(runId, CancellationToken.None));
+
+        Assert.Equal(111, sample.NetworkBytesSentPerSecond);
+        Assert.Equal(222, sample.NetworkBytesReceivedPerSecond);
+        Assert.Equal(333, sample.DiskReadBytesPerSecond);
+        Assert.Equal(444, sample.DiskWriteBytesPerSecond);
+    }
+
+    [Fact]
     public async Task TickAsync_writes_one_sample_per_tick_across_repeated_calls()
     {
         var runId = Guid.NewGuid();
@@ -96,7 +120,8 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
 
         // TotalRamBytes=1000, AvailableRamBytes=200 -> used RAM 800, per the "used, not total"
         // fix - a transfer has no process tree of its own, so it's tagged with this host figure.
-        var hostSample = new HostResourceSample(42, [42], 1000, 200, 50, 0, 0);
+        // Network/disk are tagged the same way, for the same reason CPU/RAM are.
+        var hostSample = new HostResourceSample(42, [42], 1000, 200, 50, NetworkBytesSentPerSecond: 55, NetworkBytesReceivedPerSecond: 66, DiskReadBytesPerSecond: 77, DiskWriteBytesPerSecond: 88);
         var service = CreateService(new FakeResourceSampler(new ResourceSnapshot(DateTimeOffset.UtcNow, hostSample, [])));
 
         await service.TickAsync(CancellationToken.None);
@@ -107,6 +132,10 @@ public sealed class HostResourceSamplerServiceTests : IDisposable
         var sample = Assert.Single(series);
         Assert.Equal(42, sample.CpuPercent);
         Assert.Equal(800, sample.RamBytes);
+        Assert.Equal(55, sample.NetworkBytesSentPerSecond);
+        Assert.Equal(66, sample.NetworkBytesReceivedPerSecond);
+        Assert.Equal(77, sample.DiskReadBytesPerSecond);
+        Assert.Equal(88, sample.DiskWriteBytesPerSecond);
     }
 
     [Fact]

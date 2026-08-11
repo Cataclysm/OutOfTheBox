@@ -1,32 +1,55 @@
+@using OutOfTheBox.Application.Monitoring
 @using OutOfTheBox.Application.Persistence
 @inject IRunResourceSampleRepository SampleRepository
+@inject ResourceHistoryBuffer HistoryBuffer
+@inject IResourceEventBus ResourceEventBus
 @inject IChartInterop ChartInterop
 @implements IAsyncDisposable
 
-<div class="resource-graphs">
-    @if (Note is not null)
-    {
-        <p class="run-graph-note">@Note</p>
-    }
-    @if (_series.Count > 0)
-    {
+@if (Note is not null)
+{
+    <p class="run-graph-note">@Note</p>
+}
+@if (_hasData)
+{
+    <!-- Two explicit rows (CPU + RAM, then Network + Disk I/O), per direct request - not left to
+         flex-wrap's own natural reflow, the same precedent LiveResourceGraph's own host rows already
+         established. -->
+    <div class="resource-graphs">
         <div class="resource-graph">
             <span class="resource-graph-label">CPU %</span>
-            <canvas id="@_cpuCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_cpuCanvasId"></canvas></div>
         </div>
         <div class="resource-graph">
             <span class="resource-graph-label">RAM</span>
-            <canvas id="@_ramCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_ramCanvasId"></canvas></div>
         </div>
-    }
-    else
-    {
-        <p class="empty-state">No resource activity was recorded for this run.</p>
-    }
-</div>
+    </div>
+    <div class="resource-graphs">
+        <div class="resource-graph">
+            <span class="resource-graph-label">Network</span>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_networkCanvasId"></canvas></div>
+        </div>
+        <div class="resource-graph">
+            <span class="resource-graph-label">Disk I/O</span>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_diskCanvasId"></canvas></div>
+        </div>
+    </div>
+}
+else
+{
+    <p class="empty-state">No resource activity was recorded for this run.</p>
+}
 
 @code {
-    /// <summary>The run whose full persisted resource-usage series (per specs/run-history) this graph renders.</summary>
+    /// <summary>
+    /// The run whose full persisted resource-usage series (per specs/run-history) this graph
+    /// renders. If the run is still in flight, the graph continues extending live as new samples
+    /// arrive (via <see cref="ResourceHistoryBuffer"/>/<see cref="IResourceEventBus"/>, the same
+    /// mechanism the Status page's own live graphs use) rather than staying frozen at whatever was
+    /// persisted when the page loaded - with no fixed rolling window, unlike those: the point of this
+    /// graph is the run's own whole (and, while in flight, still-growing) duration.
+    /// </summary>
     [Parameter, EditorRequired]
     public Guid RunId { get; set; }
 
@@ -34,32 +57,125 @@
     [Parameter]
     public string? Note { get; set; }
 
+    private static readonly IReadOnlyList<string> NetworkLabels = ["Sent", "Received"];
+    private static readonly IReadOnlyList<string> DiskLabels = ["Read", "Write"];
+
     private readonly string _cpuCanvasId = $"history-cpu-{Guid.NewGuid():N}";
     private readonly string _ramCanvasId = $"history-ram-{Guid.NewGuid():N}";
+    private readonly string _networkCanvasId = $"history-network-{Guid.NewGuid():N}";
+    private readonly string _diskCanvasId = $"history-disk-{Guid.NewGuid():N}";
     private IReadOnlyList<RunResourceSample> _series = [];
+    private bool _hasData;
+    private bool _chartsCreated;
+    private IDisposable? _subscription;
+    private DateTimeOffset? _lastPushedTimestamp;
 
     /// <inheritdoc />
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
         _series = await SampleRepository.GetSeriesAsync(RunId, CancellationToken.None);
+        _hasData = _series.Count > 0;
+    }
 
     /// <inheritdoc />
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _series.Count == 0)
+        if (firstRender)
+        {
+            // Subscribed unconditionally, even when there's nothing to show yet - a run with zero
+            // samples recorded at the moment this page loaded (viewed within the first tick or two
+            // of starting) still needs to transition out of the empty state the instant its first
+            // sample arrives, not stay stuck on it until a manual reload. Once the run reaches a
+            // terminal state, HostResourceSamplerService removes its buffer entry, so OnTick's own
+            // lookup naturally stops finding anything new and this subscription becomes an inert
+            // no-op for the rest of the page's lifetime - nothing extra needed to "stop" it.
+            _subscription = ResourceEventBus.Subscribe(OnTick);
+        }
+
+        if (!_hasData || _chartsCreated)
         {
             return;
         }
 
-        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"]);
-        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes);
+        _chartsCreated = true;
+
+        // CPU/RAM hide their legend - a single-entry legend is redundant with the chart's own
+        // ".resource-graph-label" heading, per direct instruction. Network/Disk I/O keep theirs -
+        // each has two lines (Sent/Received, Read/Write) that can't be told apart without one. None
+        // of the four pass a liveWindow - per direct instruction, a run's own graph keeps growing for
+        // as long as the run stays open rather than sliding a fixed window like the Status page's
+        // live graphs do.
+        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"], showLegend: false);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes, showLegend: false);
+        await ChartInterop.CreateLineChartAsync(_networkCanvasId, NetworkLabels, ChartValueFormat.BytesPerSecond);
+        await ChartInterop.CreateLineChartAsync(_diskCanvasId, DiskLabels, ChartValueFormat.BytesPerSecond);
+
         await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, _series.Select(p => (p.Timestamp, p.CpuPercent)));
         await ChartInterop.SetSeriesAsync(_ramCanvasId, 0, _series.Select(p => (p.Timestamp, (double)p.RamBytes)));
+        await ChartInterop.SetSeriesAsync(_networkCanvasId, 0, _series.Select(p => (p.Timestamp, p.NetworkBytesSentPerSecond ?? 0)));
+        await ChartInterop.SetSeriesAsync(_networkCanvasId, 1, _series.Select(p => (p.Timestamp, p.NetworkBytesReceivedPerSecond ?? 0)));
+        await ChartInterop.SetSeriesAsync(_diskCanvasId, 0, _series.Select(p => (p.Timestamp, p.DiskReadBytesPerSecond ?? 0)));
+        await ChartInterop.SetSeriesAsync(_diskCanvasId, 1, _series.Select(p => (p.Timestamp, p.DiskWriteBytesPerSecond ?? 0)));
+
+        _lastPushedTimestamp = _series[^1].Timestamp;
     }
+
+    private void OnTick(ResourceSnapshot snapshot) => _ = InvokeAsync(async () =>
+    {
+        if (!_hasData)
+        {
+            // Re-check the persisted series rather than the live buffer - by the time
+            // HostResourceSamplerService publishes this tick's event, it has already both buffered
+            // and persisted the sample, so re-querying here reuses the exact same seeding path
+            // OnAfterRenderAsync already uses for the "had data from the start" case, instead of a
+            // second, parallel seeding code path fed from the buffer.
+            _series = await SampleRepository.GetSeriesAsync(RunId, CancellationToken.None);
+            if (_series.Count == 0)
+            {
+                return;
+            }
+
+            _hasData = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (!_chartsCreated)
+        {
+            // A render triggered by the StateHasChanged() above is still pending - this tick's point
+            // isn't lost, HistoryBuffer/the DB still has it and the next OnAfterRenderAsync's own
+            // seed (or the next OnTick, once _chartsCreated is true) will pick it up.
+            return;
+        }
+
+        var points = HistoryBuffer.Get(RunId.ToString());
+        if (points.Count == 0)
+        {
+            return;
+        }
+
+        var latest = points[^1];
+        if (_lastPushedTimestamp is { } last && latest.Timestamp <= last)
+        {
+            return;
+        }
+
+        _lastPushedTimestamp = latest.Timestamp;
+        await ChartInterop.PushPointAsync(_cpuCanvasId, 0, latest.Timestamp, latest.CpuPercent);
+        await ChartInterop.PushPointAsync(_ramCanvasId, 0, latest.Timestamp, latest.RamBytes);
+        await ChartInterop.PushPointAsync(_networkCanvasId, 0, latest.Timestamp, latest.NetworkBytesSentPerSecond ?? 0);
+        await ChartInterop.PushPointAsync(_networkCanvasId, 1, latest.Timestamp, latest.NetworkBytesReceivedPerSecond ?? 0);
+        await ChartInterop.PushPointAsync(_diskCanvasId, 0, latest.Timestamp, latest.DiskReadBytesPerSecond ?? 0);
+        await ChartInterop.PushPointAsync(_diskCanvasId, 1, latest.Timestamp, latest.DiskWriteBytesPerSecond ?? 0);
+    });
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        _subscription?.Dispose();
         await ChartInterop.DestroyAsync(_cpuCanvasId);
         await ChartInterop.DestroyAsync(_ramCanvasId);
+        await ChartInterop.DestroyAsync(_networkCanvasId);
+        await ChartInterop.DestroyAsync(_diskCanvasId);
     }
 }

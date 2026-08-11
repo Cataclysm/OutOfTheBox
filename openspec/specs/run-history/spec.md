@@ -82,7 +82,7 @@ The system SHALL let a caller search runs by a free-text query matched against a
 - **THEN** the system returns only `git` runs whose arguments contain `reset`
 
 ### Requirement: A run's resource usage over its lifetime is persisted
-The system SHALL persist a time series of each run's aggregate CPU and RAM usage (per `host-resource-monitoring`) from the moment it starts until it reaches a terminal state, at the same sampling cadence used for live monitoring, and SHALL retain the complete series for a completed run regardless of how long the run lasted.
+The system SHALL persist a time series of each run's aggregate CPU and RAM usage (per `host-resource-monitoring`) from the moment it starts until it reaches a terminal state, at the same sampling cadence used for live monitoring, and SHALL retain the complete series for a completed run regardless of how long the run lasted. Each sample SHALL additionally carry that tick's host-level network and disk I/O figures (per `host-resource-monitoring`'s own requirement that these are tagged onto every run, not isolated per-run measurements) - absent (not zero) for any sample persisted before this pair of figures existed.
 
 #### Scenario: Full-duration series is retrievable after completion
 - **WHEN** an operator requests the resource usage series for a run that has finished
@@ -91,6 +91,10 @@ The system SHALL persist a time series of each run's aggregate CPU and RAM usage
 #### Scenario: Series exists for an in-flight run
 - **WHEN** an operator requests the resource usage series for a run that is still in flight
 - **THEN** the system returns the samples collected so far for that run
+
+#### Scenario: A sample predating network/disk tracking has no value for those figures
+- **WHEN** an operator requests the resource usage series for a run with samples recorded before network/disk figures were tracked
+- **THEN** those samples report no network/disk figures rather than a misleading zero reading
 
 ### Requirement: Persisted output respects the same size limit as streamed output
 The system SHALL persist the same (possibly truncated) stdout/stderr that was streamed to the original caller, and SHALL carry forward the truncation flag, rather than maintaining a separate, larger captured copy purely for history.

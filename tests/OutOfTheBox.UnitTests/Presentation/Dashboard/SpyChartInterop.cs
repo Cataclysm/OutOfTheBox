@@ -14,7 +14,7 @@ internal sealed class SpyChartInterop : IChartInterop
 {
     public List<string> CreatedCanvasIds { get; } = [];
 
-    public List<(string CanvasId, IReadOnlyList<string> DatasetLabels, ChartValueFormat YAxisFormat, bool ShowLegend)> CreatedCharts { get; } = [];
+    public List<(string CanvasId, IReadOnlyList<string> DatasetLabels, ChartValueFormat YAxisFormat, bool ShowLegend, TimeSpan? LiveWindow)> CreatedCharts { get; } = [];
 
     public List<(string CanvasId, int DatasetIndex, DateTimeOffset Timestamp, double Value)> PushedPoints { get; } = [];
 
@@ -22,10 +22,10 @@ internal sealed class SpyChartInterop : IChartInterop
 
     public List<string> DestroyedCanvasIds { get; } = [];
 
-    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true)
+    public ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true, TimeSpan? liveWindow = null)
     {
         CreatedCanvasIds.Add(canvasId);
-        CreatedCharts.Add((canvasId, datasetLabels, yAxisFormat, showLegend));
+        CreatedCharts.Add((canvasId, datasetLabels, yAxisFormat, showLegend, liveWindow));
         return ValueTask.CompletedTask;
     }
 

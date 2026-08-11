@@ -23,10 +23,23 @@ public enum ChartValueFormat
 /// </summary>
 public interface IChartInterop
 {
-    /// <summary>Creates a line chart in the canvas identified by <paramref name="canvasId"/>, with one dataset per label. <paramref name="showLegend"/> is false for a many-line chart (per-core CPU) where a dataset-per-line legend is just noise, not information.</summary>
-    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true);
+    /// <summary>
+    /// Creates a line chart in the canvas identified by <paramref name="canvasId"/>, with one
+    /// dataset per label. <paramref name="showLegend"/> is false for a many-line chart (per-core
+    /// CPU) where a dataset-per-line legend is just noise, not information. <paramref name="liveWindow"/>
+    /// bounds how far back <see cref="PushPointAsync"/> keeps data for this specific chart
+    /// client-side, once it's fed incrementally - omitted (<see langword="null"/>) means never trim,
+    /// letting the chart's dataset keep growing for as long as points keep arriving (a run's own
+    /// full-duration history graph, which still receives live pushes while that run stays in
+    /// flight - there is no fixed window to slide, the run's whole recorded duration is the point).
+    /// A chart that only wants a fixed rolling window (every Status page graph) passes one
+    /// explicitly. Meaningless for a chart never fed via <see cref="PushPointAsync"/> at all (seeded
+    /// once via <see cref="SetSeriesAsync"/> and never updated again, e.g. an already-finished run's
+    /// history graph).
+    /// </summary>
+    ValueTask CreateLineChartAsync(string canvasId, IReadOnlyList<string> datasetLabels, ChartValueFormat yAxisFormat = ChartValueFormat.None, bool showLegend = true, TimeSpan? liveWindow = null);
 
-    /// <summary>Appends one point to the given dataset and redraws without animation.</summary>
+    /// <summary>Appends one point to the given dataset and redraws without animation - trims data older than the chart's own <c>liveWindow</c> (see <see cref="CreateLineChartAsync"/>).</summary>
     ValueTask PushPointAsync(string canvasId, int datasetIndex, DateTimeOffset timestamp, double value);
 
     /// <summary>Replaces a dataset's entire point series in one call - used for a full-duration history graph, which isn't fed incrementally.</summary>

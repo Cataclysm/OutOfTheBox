@@ -1,9 +1,11 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using OutOfTheBox.Application.Events;
+using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Events;
+using OutOfTheBox.Infrastructure.Monitoring;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.Presentation.Dashboard.Charts;
@@ -25,6 +27,8 @@ public sealed class RunDetailComponentTests : DashboardComponentTestContext, IDi
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly SpyChartInterop _chartInterop = new();
     private readonly IRunEventBus _runEventBus = new InMemoryRunEventBus(NullLogger<InMemoryRunEventBus>.Instance);
+    private readonly IResourceEventBus _resourceEventBus = new InMemoryResourceEventBus(NullLogger<InMemoryResourceEventBus>.Instance);
+    private readonly ResourceHistoryBuffer _historyBuffer = new(new SystemClock());
 
     public RunDetailComponentTests()
     {
@@ -32,6 +36,8 @@ public sealed class RunDetailComponentTests : DashboardComponentTestContext, IDi
         Services.AddSingleton<IRunResourceSampleRepository>(_ => new EfRunResourceSampleRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton<IChartInterop>(_chartInterop);
         Services.AddSingleton(_runEventBus);
+        Services.AddSingleton(_resourceEventBus);
+        Services.AddSingleton(_historyBuffer);
     }
 
     [Fact]
@@ -245,11 +251,44 @@ public sealed class RunDetailComponentTests : DashboardComponentTestContext, IDi
 
         var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
 
-        cut.WaitForAssertion(() => Assert.Equal(2, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
-        Assert.Equal(2, _chartInterop.SeriesSet.Count); // one SetSeriesAsync call per canvas (CPU, RAM)
+        cut.WaitForAssertion(() => Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+        // One SetSeriesAsync call per canvas (CPU, RAM) plus two per two-dataset canvas (Network
+        // Sent/Received, Disk I/O Read/Write) = 6 total.
+        Assert.Equal(6, _chartInterop.SeriesSet.Count);
         Assert.All(_chartInterop.SeriesSet, s => Assert.Equal(15, s.Points.Count));
         Assert.Equal(0, _chartInterop.SeriesSet[0].Points[0].Value);
         Assert.Equal(14, _chartInterop.SeriesSet[0].Points[^1].Value);
+    }
+
+    [Fact]
+    public async Task Single_line_graphs_hide_their_legend_but_the_two_line_ones_keep_it()
+    {
+        // Mirrors StatusComponentTests' own equivalent test - CPU/RAM are redundant with their own
+        // ".resource-graph-label" heading (single line), Network/Disk I/O each need theirs to tell
+        // their two lines apart (Sent/Received, Read/Write).
+        var run = await AddRunAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = @"C:\repositories\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            CompletedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Completed,
+            ExitCode = 0,
+        });
+
+        var sampleRepository = Services.GetRequiredService<IRunResourceSampleRepository>();
+        await sampleRepository.AddAsync(new RunResourceSample { RunId = run.Id, Timestamp = run.StartedAt, CpuPercent = 1, RamBytes = 100 }, CancellationToken.None);
+
+        var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
+
+        cut.WaitForAssertion(() => Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("history-cpu-", StringComparison.Ordinal) && !c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("history-ram-", StringComparison.Ordinal) && !c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("history-network-", StringComparison.Ordinal) && c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("history-disk-", StringComparison.Ordinal) && c.ShowLegend);
     }
 
     [Fact]
@@ -362,6 +401,84 @@ public sealed class RunDetailComponentTests : DashboardComponentTestContext, IDi
         {
             Assert.Contains("Completed", cut.Markup);
             Assert.Contains("all tests passed", cut.Markup);
+        }, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task Live_updates_extend_an_in_flight_runs_graph_as_new_samples_arrive()
+    {
+        // A run's own history graph isn't frozen at whatever was persisted when the page loaded -
+        // per direct instruction, it keeps extending live while the run stays in flight, the same
+        // ResourceHistoryBuffer/IResourceEventBus mechanism the Status page's live graphs already use.
+        var run = await AddRunAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = @"C:\repositories\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow.AddSeconds(-3),
+            Outcome = RunOutcome.Running,
+        });
+
+        var sampleRepository = Services.GetRequiredService<IRunResourceSampleRepository>();
+        await sampleRepository.AddAsync(
+            new RunResourceSample { RunId = run.Id, Timestamp = run.StartedAt, CpuPercent = 5, RamBytes = 500 },
+            CancellationToken.None);
+
+        var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
+        cut.WaitForAssertion(() => Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+
+        var timestamp = DateTimeOffset.UtcNow;
+        // Mirrors HostResourceSamplerService.TickCoreAsync's own ordering: the buffer is updated
+        // before the snapshot is published, which is what this component's own tick handler relies on.
+        _historyBuffer.Add(
+            run.Id.ToString(), timestamp, 42, 4096,
+            networkBytesSentPerSecond: 111, networkBytesReceivedPerSecond: 222,
+            diskReadBytesPerSecond: 333, diskWriteBytesPerSecond: 444);
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [new RunResourceAggregate(run.Id, 42, 4096, [])]));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 42);
+            Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 111);
+            Assert.Contains(_chartInterop.PushedPoints, p => p.Timestamp == timestamp && p.Value == 444);
+        }, TimeSpan.FromSeconds(2));
+
+        // No fixed rolling window on any of these four - per direct instruction, unlike every
+        // Status-page live graph, which always passes an explicit one.
+        Assert.All(_chartInterop.CreatedCharts.Where(c => c.CanvasId.StartsWith("history-", StringComparison.Ordinal)), c => Assert.Null(c.LiveWindow));
+    }
+
+    [Fact]
+    public async Task Empty_state_transitions_to_the_graphs_once_the_first_live_sample_arrives()
+    {
+        // A run viewed within its first tick or two (before HostResourceSamplerService has recorded
+        // anything for it yet) must not stay stuck showing the empty-state message forever once real
+        // samples start arriving.
+        var run = await AddRunAsync(new Run
+        {
+            Id = Guid.NewGuid(),
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = @"C:\repositories\example",
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        });
+
+        var cut = Render<RunDetail>(parameters => parameters.Add(p => p.RunId, run.Id));
+        cut.WaitForAssertion(() => Assert.Contains("No resource activity was recorded for this run.", cut.Markup));
+        Assert.Empty(_chartInterop.CreatedCanvasIds);
+
+        var sampleRepository = Services.GetRequiredService<IRunResourceSampleRepository>();
+        var timestamp = DateTimeOffset.UtcNow;
+        await sampleRepository.AddAsync(new RunResourceSample { RunId = run.Id, Timestamp = timestamp, CpuPercent = 7, RamBytes = 700 }, CancellationToken.None);
+        _historyBuffer.Add(run.Id.ToString(), timestamp, 7, 700);
+        _resourceEventBus.Publish(new ResourceSnapshot(timestamp, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [new RunResourceAggregate(run.Id, 7, 700, [])]));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain("No resource activity was recorded for this run.", cut.Markup);
+            Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count);
         }, TimeSpan.FromSeconds(2));
     }
 

@@ -20,7 +20,9 @@ namespace OutOfTheBox.Infrastructure.Monitoring;
 /// row per in-flight run. Distinct from, and runs at a faster cadence than, §13's repository-stats
 /// sampler. Per design.md's "File transfers get a resource-sample series too" decision, each
 /// tick also tags every in-flight transfer with that tick's host-level figures, since a transfer
-/// has no process tree of its own to sample.
+/// has no process tree of its own to sample - and, since neither network nor disk I/O can be
+/// isolated to one process tree on Windows at all, every tracked run (not just transfers) gets that
+/// same tick's host-level network/disk figures tagged onto its own point too, not just CPU/RAM.
 /// </summary>
 public sealed class HostResourceSamplerService(
     IOptions<ServiceOptions> options,
@@ -106,10 +108,22 @@ public sealed class HostResourceSamplerService(
             hostRamUsedBytes,
             snapshot.Host.PerCoreCpuPercent,
             snapshot.Host.NetworkBytesSentPerSecond,
-            snapshot.Host.NetworkBytesReceivedPerSecond);
+            snapshot.Host.NetworkBytesReceivedPerSecond,
+            snapshot.Host.DiskReadBytesPerSecond,
+            snapshot.Host.DiskWriteBytesPerSecond);
+
+        // Network/disk are host-only measurements (no per-process isolation possible on Windows -
+        // see RunResourceSample's own remarks) - every run still gets that same tick's host figures
+        // tagged onto its own point/row, the same "no isolated figure, use the host's" precedent
+        // already established for a transfer's CPU/RAM below.
         foreach (var run in snapshot.Runs)
         {
-            historyBuffer.Add(run.RunId.ToString(), snapshot.Timestamp, run.CpuPercent, run.RamBytes);
+            historyBuffer.Add(
+                run.RunId.ToString(), snapshot.Timestamp, run.CpuPercent, run.RamBytes,
+                networkBytesSentPerSecond: snapshot.Host.NetworkBytesSentPerSecond,
+                networkBytesReceivedPerSecond: snapshot.Host.NetworkBytesReceivedPerSecond,
+                diskReadBytesPerSecond: snapshot.Host.DiskReadBytesPerSecond,
+                diskWriteBytesPerSecond: snapshot.Host.DiskWriteBytesPerSecond);
         }
 
         await using var scope = serviceScopeFactory.CreateAsyncScope();
@@ -119,7 +133,17 @@ public sealed class HostResourceSamplerService(
         foreach (var run in snapshot.Runs)
         {
             await sampleRepository.AddAsync(
-                new RunResourceSample { RunId = run.RunId, Timestamp = snapshot.Timestamp, CpuPercent = run.CpuPercent, RamBytes = run.RamBytes },
+                new RunResourceSample
+                {
+                    RunId = run.RunId,
+                    Timestamp = snapshot.Timestamp,
+                    CpuPercent = run.CpuPercent,
+                    RamBytes = run.RamBytes,
+                    NetworkBytesSentPerSecond = snapshot.Host.NetworkBytesSentPerSecond,
+                    NetworkBytesReceivedPerSecond = snapshot.Host.NetworkBytesReceivedPerSecond,
+                    DiskReadBytesPerSecond = snapshot.Host.DiskReadBytesPerSecond,
+                    DiskWriteBytesPerSecond = snapshot.Host.DiskWriteBytesPerSecond,
+                },
                 cancellationToken);
         }
 
@@ -129,9 +153,24 @@ public sealed class HostResourceSamplerService(
 
         foreach (var transfer in inFlightTransfers)
         {
-            historyBuffer.Add(transfer.Id.ToString(), snapshot.Timestamp, snapshot.Host.TotalCpuPercent, hostRamUsedBytes);
+            historyBuffer.Add(
+                transfer.Id.ToString(), snapshot.Timestamp, snapshot.Host.TotalCpuPercent, hostRamUsedBytes,
+                networkBytesSentPerSecond: snapshot.Host.NetworkBytesSentPerSecond,
+                networkBytesReceivedPerSecond: snapshot.Host.NetworkBytesReceivedPerSecond,
+                diskReadBytesPerSecond: snapshot.Host.DiskReadBytesPerSecond,
+                diskWriteBytesPerSecond: snapshot.Host.DiskWriteBytesPerSecond);
             await sampleRepository.AddAsync(
-                new RunResourceSample { RunId = transfer.Id, Timestamp = snapshot.Timestamp, CpuPercent = snapshot.Host.TotalCpuPercent, RamBytes = hostRamUsedBytes },
+                new RunResourceSample
+                {
+                    RunId = transfer.Id,
+                    Timestamp = snapshot.Timestamp,
+                    CpuPercent = snapshot.Host.TotalCpuPercent,
+                    RamBytes = hostRamUsedBytes,
+                    NetworkBytesSentPerSecond = snapshot.Host.NetworkBytesSentPerSecond,
+                    NetworkBytesReceivedPerSecond = snapshot.Host.NetworkBytesReceivedPerSecond,
+                    DiskReadBytesPerSecond = snapshot.Host.DiskReadBytesPerSecond,
+                    DiskWriteBytesPerSecond = snapshot.Host.DiskWriteBytesPerSecond,
+                },
                 cancellationToken);
         }
 

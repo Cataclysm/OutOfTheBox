@@ -11,27 +11,37 @@
 
 @if (IsHost)
 {
-    <!-- Two explicit rows (CPU + per-core, then RAM + Network), per direct request - not left to
-         flex-wrap's own natural reflow, which wouldn't guarantee this specific pairing across
-         viewport widths. -->
+    <!-- Three explicit rows, per direct request - not left to flex-wrap's own natural reflow, which
+         wouldn't guarantee this specific arrangement across viewport widths:
+         1. CPU alone, scaled to the full row width (a lone flex item with flex-grow:1 already
+            stretches to fill - see .resource-graph in dashboard.css) and showing the buffer's full
+            20-minute retention, not just the usual 10.
+         2. CPU per core + RAM, each showing the usual 10 minutes.
+         3. Network + Disk I/O, each also 10 minutes. -->
     <div class="resource-graphs">
         <div class="resource-graph">
             <span class="resource-graph-label">CPU %</span>
-            <canvas id="@_cpuCanvasId"></canvas>
-        </div>
-        <div class="resource-graph">
-            <span class="resource-graph-label">CPU per core</span>
-            <canvas id="@_perCoreCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_cpuCanvasId"></canvas></div>
         </div>
     </div>
     <div class="resource-graphs">
         <div class="resource-graph">
-            <span class="resource-graph-label">RAM</span>
-            <canvas id="@_ramCanvasId"></canvas>
+            <span class="resource-graph-label">CPU per core</span>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_perCoreCanvasId"></canvas></div>
         </div>
         <div class="resource-graph">
+            <span class="resource-graph-label">RAM</span>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_ramCanvasId"></canvas></div>
+        </div>
+    </div>
+    <div class="resource-graphs">
+        <div class="resource-graph">
             <span class="resource-graph-label">Network</span>
-            <canvas id="@_networkCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_networkCanvasId"></canvas></div>
+        </div>
+        <div class="resource-graph">
+            <span class="resource-graph-label">Disk I/O</span>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_diskCanvasId"></canvas></div>
         </div>
     </div>
 }
@@ -40,11 +50,11 @@ else
     <div class="resource-graphs">
         <div class="resource-graph">
             <span class="resource-graph-label">CPU %</span>
-            <canvas id="@_cpuCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_cpuCanvasId"></canvas></div>
         </div>
         <div class="resource-graph">
             <span class="resource-graph-label">RAM</span>
-            <canvas id="@_ramCanvasId"></canvas>
+            <div class="resource-graph-canvas-wrap"><canvas id="@_ramCanvasId"></canvas></div>
         </div>
     </div>
 }
@@ -58,18 +68,27 @@ else
     [Parameter]
     public string? Note { get; set; }
 
-    // Per-core CPU and network figures only ever exist for the host tick (see
-    // ResourceHistoryPoint's own doc comment) - a run/transfer has no interface or per-core
-    // breakdown of its own, so those two extra charts only make sense for the host series.
+    // Per-core CPU has no meaning for a run/transfer (it has no cores of its own) - that one extra
+    // chart only makes sense for the host series. Network/disk figures, by contrast, are tagged onto
+    // every series now (see ResourceHistoryPoint's own remarks), but per-run/transfer graphs still
+    // only show CPU/RAM - a dedicated Network/Disk I/O row per expanded run card was out of scope
+    // for this change, which asked for the host section's own layout specifically.
     private bool IsHost => SeriesKey == ResourceHistoryBuffer.HostSeriesKey;
 
     private static readonly IReadOnlyList<string> CoreLabels = [.. Enumerable.Range(0, Environment.ProcessorCount).Select(core => $"Core {core}")];
     private static readonly IReadOnlyList<string> NetworkLabels = ["Sent", "Received"];
+    private static readonly IReadOnlyList<string> DiskLabels = ["Read", "Write"];
+
+    // Every live graph shows the usual 10 minutes, except the host's row-1 CPU-total graph, which
+    // shows the buffer's full 20-minute retention - per direct instruction.
+    private static readonly TimeSpan LiveWindow = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan HostCpuLiveWindow = TimeSpan.FromMinutes(20);
 
     private readonly string _cpuCanvasId = $"live-cpu-{Guid.NewGuid():N}";
     private readonly string _ramCanvasId = $"live-ram-{Guid.NewGuid():N}";
     private readonly string _perCoreCanvasId = $"live-per-core-{Guid.NewGuid():N}";
     private readonly string _networkCanvasId = $"live-network-{Guid.NewGuid():N}";
+    private readonly string _diskCanvasId = $"live-disk-{Guid.NewGuid():N}";
     private IDisposable? _subscription;
     private DateTimeOffset? _lastPushedTimestamp;
 
@@ -81,17 +100,23 @@ else
             return;
         }
 
-        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"], showLegend: false);
-        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes, showLegend: false);
+        var cpuWindow = IsHost ? HostCpuLiveWindow : LiveWindow;
+        await ChartInterop.CreateLineChartAsync(_cpuCanvasId, ["CPU %"], showLegend: false, liveWindow: cpuWindow);
+        await ChartInterop.CreateLineChartAsync(_ramCanvasId, ["RAM (bytes)"], ChartValueFormat.Bytes, showLegend: false, liveWindow: LiveWindow);
 
-        var initial = HistoryBuffer.Get(SeriesKey);
-        await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, initial.Select(p => (p.Timestamp, p.CpuPercent)));
+        // Explicitly windowed rather than relying on ResourceHistoryBuffer.Get's own default -
+        // the buffer itself now retains 20 minutes (so the host CPU chart above can show that much),
+        // but every other graph here should still only ever seed/display the usual 10.
+        var cpuInitial = HistoryBuffer.Get(SeriesKey, cpuWindow);
+        var initial = HistoryBuffer.Get(SeriesKey, LiveWindow);
+        await ChartInterop.SetSeriesAsync(_cpuCanvasId, 0, cpuInitial.Select(p => (p.Timestamp, p.CpuPercent)));
         await ChartInterop.SetSeriesAsync(_ramCanvasId, 0, initial.Select(p => (p.Timestamp, (double)p.RamBytes)));
 
         if (IsHost)
         {
-            await ChartInterop.CreateLineChartAsync(_perCoreCanvasId, CoreLabels, showLegend: false);
-            await ChartInterop.CreateLineChartAsync(_networkCanvasId, NetworkLabels, ChartValueFormat.BytesPerSecond);
+            await ChartInterop.CreateLineChartAsync(_perCoreCanvasId, CoreLabels, showLegend: false, liveWindow: LiveWindow);
+            await ChartInterop.CreateLineChartAsync(_networkCanvasId, NetworkLabels, ChartValueFormat.BytesPerSecond, liveWindow: LiveWindow);
+            await ChartInterop.CreateLineChartAsync(_diskCanvasId, DiskLabels, ChartValueFormat.BytesPerSecond, liveWindow: LiveWindow);
 
             for (var core = 0; core < CoreLabels.Count; core++)
             {
@@ -101,9 +126,14 @@ else
 
             await ChartInterop.SetSeriesAsync(_networkCanvasId, 0, initial.Select(p => (p.Timestamp, p.NetworkBytesSentPerSecond ?? 0)));
             await ChartInterop.SetSeriesAsync(_networkCanvasId, 1, initial.Select(p => (p.Timestamp, p.NetworkBytesReceivedPerSecond ?? 0)));
+            await ChartInterop.SetSeriesAsync(_diskCanvasId, 0, initial.Select(p => (p.Timestamp, p.DiskReadBytesPerSecond ?? 0)));
+            await ChartInterop.SetSeriesAsync(_diskCanvasId, 1, initial.Select(p => (p.Timestamp, p.DiskWriteBytesPerSecond ?? 0)));
         }
 
-        _lastPushedTimestamp = initial.Count > 0 ? initial[^1].Timestamp : null;
+        // cpuInitial's own window is always >= every other chart's here, so its latest point (if
+        // any) is always at least as recent - safe to derive the "have we already pushed this tick"
+        // baseline from it alone rather than a third, unwindowed Get() call.
+        _lastPushedTimestamp = cpuInitial.Count > 0 ? cpuInitial[^1].Timestamp : null;
 
         _subscription = ResourceEventBus.Subscribe(OnTick);
     }
@@ -143,6 +173,8 @@ else
 
             await ChartInterop.PushPointAsync(_networkCanvasId, 0, latest.Timestamp, latest.NetworkBytesSentPerSecond ?? 0);
             await ChartInterop.PushPointAsync(_networkCanvasId, 1, latest.Timestamp, latest.NetworkBytesReceivedPerSecond ?? 0);
+            await ChartInterop.PushPointAsync(_diskCanvasId, 0, latest.Timestamp, latest.DiskReadBytesPerSecond ?? 0);
+            await ChartInterop.PushPointAsync(_diskCanvasId, 1, latest.Timestamp, latest.DiskWriteBytesPerSecond ?? 0);
         }
     });
 
@@ -157,6 +189,7 @@ else
         {
             await ChartInterop.DestroyAsync(_perCoreCanvasId);
             await ChartInterop.DestroyAsync(_networkCanvasId);
+            await ChartInterop.DestroyAsync(_diskCanvasId);
         }
     }
 }

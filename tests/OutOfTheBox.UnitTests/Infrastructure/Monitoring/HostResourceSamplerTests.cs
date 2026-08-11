@@ -32,6 +32,8 @@ public sealed class HostResourceSamplerTests : IDisposable
         Assert.True(snapshot.Host.ServiceRamBytes > 0);
         Assert.True(snapshot.Host.NetworkBytesSentPerSecond >= 0);
         Assert.True(snapshot.Host.NetworkBytesReceivedPerSecond >= 0);
+        Assert.True(snapshot.Host.DiskReadBytesPerSecond >= 0);
+        Assert.True(snapshot.Host.DiskWriteBytesPerSecond >= 0);
     }
 
     [Fact]

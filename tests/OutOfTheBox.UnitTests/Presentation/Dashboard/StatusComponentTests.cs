@@ -171,21 +171,38 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
     }
 
     [Fact]
-    public void Single_line_host_charts_hide_their_legend_but_the_two_line_network_chart_keeps_it()
+    public void Single_line_host_charts_hide_their_legend_but_the_two_line_charts_keep_it()
     {
         // CPU/RAM/per-core all hide their legend - CPU and RAM because a single-entry legend is
         // redundant with the chart's own ".resource-graph-label" heading, per-core because an
         // 8+-entry legend is noise, not information (see the dedicated per-core test this replaced).
-        // Network is the one chart where the legend still earns its place: Sent vs. Received can't
-        // be told apart without it.
+        // Network and Disk I/O are the two charts where the legend still earns its place: Sent vs.
+        // Received (or Read vs. Write) can't be told apart without it.
         var cut = Render<Status>();
 
-        cut.WaitForAssertion(() => Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-network-", StringComparison.Ordinal)));
+        cut.WaitForAssertion(() => Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-disk-", StringComparison.Ordinal)));
 
         Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-cpu-", StringComparison.Ordinal) && !c.ShowLegend);
         Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-ram-", StringComparison.Ordinal) && !c.ShowLegend);
         Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-per-core-", StringComparison.Ordinal) && !c.ShowLegend);
         Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-network-", StringComparison.Ordinal) && c.ShowLegend);
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-disk-", StringComparison.Ordinal) && c.ShowLegend);
+    }
+
+    [Fact]
+    public void Host_cpu_chart_uses_a_20_minute_live_window_but_every_other_host_chart_uses_10()
+    {
+        // Per direct instruction: the Status page's row-1 host CPU graph alone shows 20 minutes of
+        // live data; every other live graph (here and on the run-detail page) still shows 10.
+        var cut = Render<Status>();
+
+        cut.WaitForAssertion(() => Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-disk-", StringComparison.Ordinal)));
+
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-cpu-", StringComparison.Ordinal) && c.LiveWindow == TimeSpan.FromMinutes(20));
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-ram-", StringComparison.Ordinal) && c.LiveWindow == TimeSpan.FromMinutes(10));
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-per-core-", StringComparison.Ordinal) && c.LiveWindow == TimeSpan.FromMinutes(10));
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-network-", StringComparison.Ordinal) && c.LiveWindow == TimeSpan.FromMinutes(10));
+        Assert.Contains(_chartInterop.CreatedCharts, c => c.CanvasId.StartsWith("live-disk-", StringComparison.Ordinal) && c.LiveWindow == TimeSpan.FromMinutes(10));
     }
 
     [Fact]
@@ -268,9 +285,9 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         // the right data, via SpyChartInterop standing in for the JS engine.
         var cut = Render<Status>();
 
-        // Host graphs are always live (never lazily mounted) - four canvases (CPU, RAM, per-core
-        // CPU, network) exist immediately, with no run cards involved.
-        cut.WaitForAssertion(() => Assert.Equal(4, _chartInterop.CreatedCanvasIds.Count));
+        // Host graphs are always live (never lazily mounted) - five canvases (CPU, RAM, per-core
+        // CPU, network, disk I/O) exist immediately, with no run cards involved.
+        cut.WaitForAssertion(() => Assert.Equal(5, _chartInterop.CreatedCanvasIds.Count));
 
         var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
         var timestamp = DateTimeOffset.UtcNow;
@@ -308,7 +325,7 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
 
         var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
-        Assert.Equal(4, createdBeforeExpand); // host graph only - nothing for the collapsed run card
+        Assert.Equal(5, createdBeforeExpand); // host graph only - nothing for the collapsed run card
 
         cut.Find("button.run-graph-toggle").Click();
 

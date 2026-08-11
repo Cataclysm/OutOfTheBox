@@ -11,7 +11,14 @@ public sealed record ProcessResourceSample(int ProcessId, string ProcessName, Da
 /// </summary>
 public sealed record RunResourceAggregate(Guid RunId, double CpuPercent, long RamBytes, IReadOnlyList<ProcessResourceSample> Processes);
 
-/// <summary>Host-wide CPU/RAM/network figures at a single tick. Network figures are already-per-second rates (summed across every network interface), not cumulative counters.</summary>
+/// <summary>
+/// Host-wide CPU/RAM/network/disk figures at a single tick. Network and disk figures are
+/// already-per-second rates (network summed across every network interface; disk read straight from
+/// the "PhysicalDisk"/"_Total" counter, which is itself already an all-drives sum on Windows), not
+/// cumulative counters. <see cref="DiskReadBytesPerSecond"/>/<see cref="DiskWriteBytesPerSecond"/>
+/// default to 0 so every pre-existing positional-argument call site (tests, mainly) keeps compiling
+/// unchanged.
+/// </summary>
 public sealed record HostResourceSample(
     double TotalCpuPercent,
     IReadOnlyList<double> PerCoreCpuPercent,
@@ -19,7 +26,9 @@ public sealed record HostResourceSample(
     long AvailableRamBytes,
     long ServiceRamBytes,
     double NetworkBytesSentPerSecond,
-    double NetworkBytesReceivedPerSecond);
+    double NetworkBytesReceivedPerSecond,
+    double DiskReadBytesPerSecond = 0,
+    double DiskWriteBytesPerSecond = 0);
 
 /// <summary>Everything sampled in one tick: host figures plus every currently-tracked run's aggregate.</summary>
 public sealed record ResourceSnapshot(DateTimeOffset Timestamp, HostResourceSample Host, IReadOnlyList<RunResourceAggregate> Runs);

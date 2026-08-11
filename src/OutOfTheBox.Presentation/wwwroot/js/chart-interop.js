@@ -6,11 +6,13 @@
 
 window.outOfTheBoxCharts = (() => {
     const charts = new Map();
+    const windowMs = new Map();
 
-    // Matches ResourceHistoryBuffer.WindowDuration server-side - the initial seed (setSeries) is
-    // already windowed there, but a chart left open past that window keeps receiving pushPoint
-    // ticks indefinitely with nothing else to trim it, so the window is re-enforced here too.
-    const WINDOW_MS = 10 * 60 * 1000;
+    // No entry (or an explicit null/undefined) in windowMs for a canvas means "never trim" - a run's
+    // own full-duration history graph is meant to keep growing for as long as the run stays open,
+    // not slide a fixed window. A live chart that *does* want a rolling window (every Status page
+    // graph) passes one explicitly via createLineChart's own liveWindowMs argument instead of relying
+    // on any implicit default here.
 
     // Chart.js's own defaults assume a light page - left alone, tick/legend text renders in a dark
     // gray that's nearly invisible against the dashboard's dark background. Set once, globally,
@@ -66,10 +68,14 @@ window.outOfTheBoxCharts = (() => {
         return formatBytes(bytesPerSecond) + "/s";
     }
 
-    function createLineChart(canvasId, datasetLabels, yAxisFormat, showLegend) {
+    function createLineChart(canvasId, datasetLabels, yAxisFormat, showLegend, liveWindowMs) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             return;
+        }
+
+        if (liveWindowMs != null) {
+            windowMs.set(canvasId, liveWindowMs);
         }
 
         const yTicks = yAxisFormat === "bytes"
@@ -99,6 +105,14 @@ window.outOfTheBoxCharts = (() => {
                 animation: false,
                 parsing: false,
                 normalized: true,
+                responsive: true,
+                // Chart.js defaults to true here, which forces width = aspectRatio (default 2) *
+                // height - since .resource-graph canvas caps height via CSS (max-height: 160px) but
+                // leaves width to the flex layout (which can be far wider than 320px, e.g. the
+                // Status page's own full-width CPU row), the chart ends up rendered at a fraction of
+                // its actual container width instead of filling it. false decouples the two, so
+                // width and height are each driven purely by the canvas's own CSS-computed box.
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: showLegend !== false },
                 },
@@ -121,9 +135,12 @@ window.outOfTheBoxCharts = (() => {
         const data = chart.data.datasets[datasetIndex].data;
         data.push({ x: timestampMs, y: value });
 
-        const cutoff = timestampMs - WINDOW_MS;
-        while (data.length > 0 && data[0].x < cutoff) {
-            data.shift();
+        const window = windowMs.get(canvasId);
+        if (window != null) {
+            const cutoff = timestampMs - window;
+            while (data.length > 0 && data[0].x < cutoff) {
+                data.shift();
+            }
         }
 
         chart.update("none");
@@ -147,6 +164,7 @@ window.outOfTheBoxCharts = (() => {
 
         chart.destroy();
         charts.delete(canvasId);
+        windowMs.delete(canvasId);
     }
 
     return { createLineChart, pushPoint, setSeries, destroyChart };

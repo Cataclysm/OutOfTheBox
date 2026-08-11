@@ -675,8 +675,15 @@ dialog::backdrop {
     margin-bottom: 0.25rem;
 }
 
-.resource-graph canvas {
-    max-height: 160px;
+/* Chart.js (responsive: true, maintainAspectRatio: false - see chart-interop.js) sizes the canvas
+   to fill this wrapper's own box in both dimensions, per Chart.js's own documented requirement that
+   the canvas's *parent* (not the canvas itself) have a defined height - a max-height set on the
+   canvas element directly doesn't give Chart.js anything to measure, and previously left
+   maintainAspectRatio's default (true) computing a width from the height instead of filling the
+   actual (often far wider) flex-laid-out container. */
+.resource-graph-canvas-wrap {
+    position: relative;
+    height: 160px;
 }
 
 .run-graph-note {

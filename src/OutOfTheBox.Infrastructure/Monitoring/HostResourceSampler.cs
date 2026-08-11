@@ -25,6 +25,8 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
     private readonly PerformanceCounter[] _perCoreCpuCounters;
     private readonly PerformanceCounter[] _networkSentCounters;
     private readonly PerformanceCounter[] _networkReceivedCounters;
+    private readonly PerformanceCounter _diskReadCounter;
+    private readonly PerformanceCounter _diskWriteCounter;
     private readonly ConcurrentDictionary<int, (TimeSpan ProcessorTime, DateTimeOffset Timestamp)> _lastProcessSample = new();
 
     /// <summary>Constructs the counters and primes them (see the discarded-first-reading remark above).</summary>
@@ -43,10 +45,16 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         _networkSentCounters = [.. networkInstanceNames.Select(name => new PerformanceCounter("Network Interface", "Bytes Sent/sec", name))];
         _networkReceivedCounters = [.. networkInstanceNames.Select(name => new PerformanceCounter("Network Interface", "Bytes Received/sec", name))];
 
+        // Unlike Network Interface, "PhysicalDisk" does have a "_Total" instance that Windows itself
+        // already sums across every physical drive - no per-instance enumeration/summing needed here,
+        // matching the "crunch all drives together" requirement directly.
+        _diskReadCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
+        _diskWriteCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
+
         // A freshly-constructed PerformanceCounter's first NextValue() call always returns 0 (no
         // prior sample to diff against) - discard it here so every call from SampleAsync onward
-        // returns a real reading. "Bytes Sent/Received per sec" counters have the same
-        // needs-a-baseline-reading behavior as "% Processor Time" does.
+        // returns a real reading. "Bytes Sent/Received per sec" and "Disk Read/Write Bytes/sec"
+        // counters have the same needs-a-baseline-reading behavior as "% Processor Time" does.
         _totalCpuCounter.NextValue();
         foreach (var counter in _perCoreCpuCounters)
         {
@@ -62,6 +70,9 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         {
             counter.NextValue();
         }
+
+        _diskReadCounter.NextValue();
+        _diskWriteCounter.NextValue();
     }
 
     /// <inheritdoc />
@@ -75,10 +86,12 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         var serviceRamBytes = Process.GetCurrentProcess().WorkingSet64;
         var networkBytesSentPerSecond = _networkSentCounters.Sum(counter => (double)counter.NextValue());
         var networkBytesReceivedPerSecond = _networkReceivedCounters.Sum(counter => (double)counter.NextValue());
+        var diskReadBytesPerSecond = (double)_diskReadCounter.NextValue();
+        var diskWriteBytesPerSecond = (double)_diskWriteCounter.NextValue();
 
         var host = new HostResourceSample(
             totalCpuPercent, perCoreCpuPercent, totalRamBytes, availableRamBytes, serviceRamBytes,
-            networkBytesSentPerSecond, networkBytesReceivedPerSecond);
+            networkBytesSentPerSecond, networkBytesReceivedPerSecond, diskReadBytesPerSecond, diskWriteBytesPerSecond);
         var runs = await SampleTrackedRunsAsync(timestamp, cancellationToken);
 
         return new ResourceSnapshot(timestamp, host, runs);
@@ -163,5 +176,8 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         {
             counter.Dispose();
         }
+
+        _diskReadCounter.Dispose();
+        _diskWriteCounter.Dispose();
     }
 }
