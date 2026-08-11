@@ -232,6 +232,21 @@ input[type="checkbox"] {
     color: var(--text);
 }
 
+/* Same muted-gray look as .icon-button, but sized to fit an icon-plus-text-label toolbar action
+   (e.g. Credentials page's "Add credential") instead of .icon-button's fixed 2.1rem square - a
+   derived class, not a change to .icon-button itself, so every existing icon-only button stays
+   exactly as it is. Width/height are intentionally left unset (inherits the plain button rule's own
+   padding, which sizes correctly to icon+text content). */
+.icon-button-labeled {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+}
+
+.icon-button-labeled:hover {
+    color: var(--text);
+}
+
 /* The confirmed no-streaming UX for pull/push/force-push/fetch/clean: the icon itself recolors
    green/red for a few seconds to report the outcome, instead of opening any console/output view -
    see Repositories.razor's FlashAsync. */
@@ -963,6 +978,17 @@ dialog::backdrop {
    space on its own, the same mechanism .col-shrink's sibling columns already rely on. */
 .data-table td.ellipsis:not(.col-shrink) {
     max-width: 0;
+}
+
+/* Credentials page - a PAT is shown fully (never truncated/masked, per direct instruction), so this
+   is deliberately the opposite of .ellipsis above: word-break: break-all wraps a long token onto
+   multiple lines within its own .col-shrink cell instead of forcing the table (and the page) wider,
+   the same problem .ellipsis solves for the one flexible column, solved here without hiding any
+   character of the value itself. */
+.pat-value {
+    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
 }
 
 /* Key/value stat blocks (repository detail, run detail) - previously unstyled default <dl>/<dt>/<dd>. */

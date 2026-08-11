@@ -34,6 +34,7 @@ Vendored subset (dashboard action icons only, not the full icon set):
 | `triangle-alert.svg` | Git status indicator: upstream remote branch gone |
 | `circle-user.svg` | Commit detail: author/committer avatar fallback (no Gravatar image for that email) |
 | `key.svg` | Change git credential action; needs-credential marker next to a repository's name |
+| `plus.svg` | Credentials page: add a new credential |
 
 To add another icon, download the matching `<name>.svg` from
 `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`
