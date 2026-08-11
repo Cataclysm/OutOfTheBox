@@ -123,6 +123,30 @@ public sealed class CliProcessRunner : IProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
+        if (request.Executable == "git")
+        {
+            // Every git invocation this service ever makes must never block waiting for a human to
+            // answer an interactive prompt - this host has no interactive session for one to appear
+            // in (a genuine Windows Service) or, even where one nominally exists, nothing here would
+            // ever dismiss it. Confirmed live as a real regression, not just theorized: cloning a
+            // private repository with no credential configured used to fail fast ("terminal prompts
+            // disabled"); after credential.https://<host>.provider was forced to "generic" (see
+            // GitCredentialStore.AuthorizeAsync's own remarks - a real, separate fix for GCM's
+            // account-picker UI), the same clone instead hung until the caller's own timeout, because
+            // GCM's "generic" provider does not carry the same non-interactive-session detection its
+            // default host-aware provider does for github.com/dev.azure.com specifically.
+            // GIT_TERMINAL_PROMPT=0 is git's own core signal that forces every one of its internal
+            // prompt fallbacks (askpass, "Username for..." on stdin) to fail immediately instead of
+            // trying to read from a terminal that doesn't exist here. GCM_INTERACTIVE=never is the
+            // credential-manager-specific equivalent, since an external credential.helper's own
+            // interactive UI (a GUI dialog, for a "generic"-provider Basic-Auth prompt) is entirely
+            // its own concern, not something GIT_TERMINAL_PROMPT reaches - both are needed together
+            // to actually guarantee no git operation can ever hang waiting for a human, regardless of
+            // which credential.helper/provider ends up handling a given request.
+            startInfo.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            startInfo.EnvironmentVariables["GCM_INTERACTIVE"] = "never";
+        }
+
         if (request.EnvironmentVariables is not null)
         {
             foreach (var (key, value) in request.EnvironmentVariables)
