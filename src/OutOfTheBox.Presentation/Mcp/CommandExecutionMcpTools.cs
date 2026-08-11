@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
@@ -37,6 +39,7 @@ public sealed class CommandExecutionMcpTools(
     IRunEventBus runEventBus,
     McpRunOutputRegistry outputRegistry,
     IGitCredentialStore gitCredentialStore,
+    INuGetFeedCredentialStore nuGetFeedCredentialStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ILogger<CommandExecutionMcpTools> logger)
@@ -195,8 +198,18 @@ public sealed class CommandExecutionMcpTools(
 
             try
             {
+                // dotnet_run only (not git_run) - injects VSS_NUGET_EXTERNAL_FEED_ENDPOINTS/
+                // NUGET_CREDENTIALPROVIDERS_PATH so the Azure Artifacts Credential Provider can
+                // authenticate a restore against any feed authorized via authorize_nuget_feed,
+                // per design.md's "dotnet_run gains environment-variable injection" decision. Null
+                // (no environment variables added) when no such feed is authorized, so a caller with
+                // none sees zero behavior change.
+                var environmentVariables = executable == "dotnet"
+                    ? await BuildNuGetEnvironmentVariablesAsync(CancellationToken.None)
+                    : null;
+
                 var result = await processRunner.RunAsync(
-                    new ProcessRunRequest(arguments, repositoryRoot, executable),
+                    new ProcessRunRequest(arguments, repositoryRoot, executable, EnvironmentVariables: environmentVariables),
                     sink,
                     linkedCts.Token,
                     onStarted: pid => runRegistry.SetProcessId(run.Id, pid));
@@ -258,4 +271,38 @@ public sealed class CommandExecutionMcpTools(
             cancelRequestCts.Dispose();
         }
     }
+
+    /// <summary>
+    /// Builds the <c>VSS_NUGET_EXTERNAL_FEED_ENDPOINTS</c>/<c>NUGET_CREDENTIALPROVIDERS_PATH</c>
+    /// environment variables a <c>dotnet</c> spawn needs for the Azure Artifacts Credential Provider
+    /// to authenticate non-interactively, per its own documented headless mechanism. Returns
+    /// <see langword="null"/> (not an empty dictionary) when no Azure DevOps Artifacts feed is
+    /// currently authorized, so <see cref="ProcessRunRequest.EnvironmentVariables"/> stays
+    /// <see langword="null"/> and nothing about the spawned process changes. The decrypted tokens
+    /// this builds never appear in any log line - they exist only in this JSON string and the child
+    /// process's own environment block.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>?> BuildNuGetEnvironmentVariablesAsync(CancellationToken cancellationToken)
+    {
+        var credentials = await nuGetFeedCredentialStore.GetAzureDevOpsArtifactsEndpointCredentialsAsync(cancellationToken);
+        if (credentials.Count == 0)
+        {
+            return null;
+        }
+
+        var endpoints = new VssExternalFeedEndpoints(
+            [.. credentials.Select(c => new VssExternalFeedEndpoint(c.FeedUrl, c.Token))]);
+
+        return new Dictionary<string, string>
+        {
+            ["VSS_NUGET_EXTERNAL_FEED_ENDPOINTS"] = JsonSerializer.Serialize(endpoints),
+            ["NUGET_CREDENTIALPROVIDERS_PATH"] = NuGetCredentialProviderLocation.PluginDirectory,
+        };
+    }
+
+    private sealed record VssExternalFeedEndpoints([property: JsonPropertyName("endpointCredentials")] IReadOnlyList<VssExternalFeedEndpoint> EndpointCredentials);
+
+    private sealed record VssExternalFeedEndpoint(
+        [property: JsonPropertyName("endpoint")] string Endpoint,
+        [property: JsonPropertyName("password")] string Password);
 }
