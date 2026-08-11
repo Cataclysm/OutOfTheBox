@@ -64,6 +64,19 @@ public sealed class GitCredentialStore(
 
         try
         {
+            // Forces Git Credential Manager's plain Basic-Auth ("generic") provider for this host,
+            // instead of its own host-aware provider selection - for github.com/dev.azure.com
+            // specifically, GCM's default provider prefers an interactive OAuth/browser sign-in flow
+            // and maintains its own separate cached-account state, entirely independent of the plain
+            // credential store `approve`/`fill`/`reject` manage. Confirmed live: without this, an
+            // `approve`d PAT did not stop GCM from independently popping its account-picker UI on
+            // every subsequent git operation against the host - exactly the risk this project's own
+            // design.md flagged as unverified. Setting it ensures exactly one PAT-based credential
+            // governs this host with no competing cached identity, and matters even more on the real
+            // service host, where an interactive OAuth prompt has no session to display in at all and
+            // would otherwise hang or fail unpredictably rather than just being surfaced.
+            await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["config", "--global", $"credential.https://{normalizedHost}.provider", "generic"], cancellationToken);
+
             var approveInput = $"protocol=https\nhost={normalizedHost}\nusername={PlaceholderUsername}\npassword={token}\n\n";
             await RunAndDiscardAsync(["credential", "approve"], approveInput, cancellationToken);
 
