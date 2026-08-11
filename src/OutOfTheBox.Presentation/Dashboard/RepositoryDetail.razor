@@ -16,7 +16,15 @@
 
 <a class="back-link" href="repository-management">← Back to Repositories</a>
 
-<h1>@Name</h1>
+<h1>
+    @Name
+    @if (_summary is { NeedsCredential: true })
+    {
+        <span title="This repository's remote host needs a working git credential.">
+            <Icon Name="credential" CssClass="icon-inline needs-credential-marker" />
+        </span>
+    }
+</h1>
 
 @if (_summary is null)
 {
@@ -37,7 +45,7 @@ else
         {
             <dt>Actions</dt>
             <dd class="repository-detail-actions">
-                <RepositoryQuickActions RepositoryName="@Name" OnActionCompleted="RefreshSummaryAsync" />
+                <RepositoryQuickActions RepositoryName="@Name" Remotes="@_summary.Remotes" OnActionCompleted="RefreshSummaryAsync" />
             </dd>
             <dt>Branch</dt>
             <dd>

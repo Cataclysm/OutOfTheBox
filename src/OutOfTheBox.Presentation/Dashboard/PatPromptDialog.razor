@@ -1,0 +1,115 @@
+@using OutOfTheBox.Application.Repositories
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IGitCredentialStore GitCredentialStore
+
+<dialog @ref="_dialogElement">
+    <div class="dialog-body">
+        <h2>Git credential needed</h2>
+        <p>'@_host' needs a personal access token (PAT) to authenticate.</p>
+        <label>
+            Personal access token
+            <input type="password" @bind="_token" @bind:event="oninput" placeholder="ghp_... / azure devops PAT" />
+        </label>
+        @if (_error is not null)
+        {
+            <span class="login-error">@_error</span>
+        }
+        <div class="dialog-actions">
+            <button type="button" @onclick="CancelAsync">
+                <Icon Name="close" CssClass="icon-inline" /> Cancel
+            </button>
+            <button type="button" class="btn-primary" @onclick="SaveAsync" disabled="@_submitting">
+                <Icon Name="key" CssClass="icon-inline" /> Save
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    /// <summary>
+    /// Owns "get a working PAT for a host" entirely - saves via the same <see cref="IGitCredentialStore"/>
+    /// call <c>authorize_git_host</c> makes, loops in-place on a token that doesn't verify (per
+    /// design.md's "PatPromptDialog" decision), and reports Saved/Cancelled via callback, matching
+    /// this project's existing <c>ConfirmDialog</c>/<c>RenameDialog</c> convention rather than an
+    /// awaitable-result pattern this codebase doesn't otherwise use.
+    /// </summary>
+    private ElementReference _dialogElement;
+    private string _host = string.Empty;
+    private string _token = string.Empty;
+    private string? _error;
+    private bool _submitting;
+    private Func<Task>? _onSaved;
+    private Action? _onCancelled;
+
+    /// <summary>Opens the dialog for <paramref name="host"/>, with an empty token field.</summary>
+    public async Task ShowAsync(string host, Func<Task> onSaved, Action onCancelled)
+    {
+        _host = host;
+        _token = string.Empty;
+        _error = null;
+        _onSaved = onSaved;
+        _onCancelled = onCancelled;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_token))
+        {
+            _error = "Enter a token.";
+            return;
+        }
+
+        _error = null;
+        _submitting = true;
+
+        try
+        {
+            var result = await GitCredentialStore.AuthorizeAsync(_host, _token, CancellationToken.None);
+
+            if (result is not GitCredentialAuthorizeResult.Succeeded)
+            {
+                // Loops in place rather than re-calling ShowAsync - the same dialog session, an
+                // explicit "that didn't work" message, and an emptied field for another attempt, per
+                // specs/repository-management's "A PAT that does not work is rejected with feedback,
+                // and the operator is re-prompted" scenario.
+                _error = result switch
+                {
+                    GitCredentialAuthorizeResult.NoCredentialHelperConfigured =>
+                        "No git credential helper is configured on this host - reinstall Git for Windows, or run `git config --global credential.helper manager`.",
+                    GitCredentialAuthorizeResult.VerificationFailed =>
+                        "That token didn't work - it may be invalid, or missing the required scope.",
+                    GitCredentialAuthorizeResult.GitUnreachable gitUnreachable => $"git could not be started: {gitUnreachable.ErrorMessage}",
+                    _ => "That token didn't work.",
+                };
+                _token = string.Empty;
+                return;
+            }
+
+            await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+            var callback = _onSaved;
+            _onSaved = null;
+            _onCancelled = null;
+
+            if (callback is not null)
+            {
+                await callback();
+            }
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+        var callback = _onCancelled;
+        _onSaved = null;
+        _onCancelled = null;
+        callback?.Invoke();
+    }
+}

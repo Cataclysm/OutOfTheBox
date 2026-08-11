@@ -40,9 +40,16 @@
 </dialog>
 
 @code {
-    /// <summary>Raised once a clone has been accepted, so the caller can refresh its list.</summary>
+    /// <summary>
+    /// Raised once a clone has been accepted, so the caller can refresh its list - and, per
+    /// design.md's clone-retry decision, watch this specific run id for a classified authentication
+    /// failure to prompt for a PAT. Deliberately does NOT keep this dialog open/blocking for the
+    /// clone's full duration (a real regression for an otherwise-successful clone of any size) -
+    /// the caller (already tracking in-flight clones for its own "cancel clone" row state) is the
+    /// natural, non-blocking place to watch for and react to that specific outcome instead.
+    /// </summary>
     [Parameter]
-    public EventCallback OnCloned { get; set; }
+    public EventCallback<ClonedInfo> OnCloned { get; set; }
 
     private ElementReference _dialogElement;
     private string _url = string.Empty;
@@ -150,7 +157,8 @@
 
         try
         {
-            var result = await RepositoryManager.CloneAsync(_url, _name, string.IsNullOrWhiteSpace(_branch) ? null : _branch, CancellationToken.None);
+            var branch = string.IsNullOrWhiteSpace(_branch) ? null : _branch;
+            var result = await RepositoryManager.CloneAsync(_url, _name, branch, CancellationToken.None);
 
             if (result is RepositoryActionResult.Rejected rejected)
             {
@@ -165,7 +173,11 @@
             }
 
             await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
-            await OnCloned.InvokeAsync();
+
+            if (result is RepositoryActionResult.Accepted accepted)
+            {
+                await OnCloned.InvokeAsync(new ClonedInfo(accepted.RunId, _url, _name, branch));
+            }
         }
         finally
         {

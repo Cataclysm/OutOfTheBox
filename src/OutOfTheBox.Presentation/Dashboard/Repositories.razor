@@ -75,7 +75,15 @@ else
                 {
                     <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
                         <td class="col-shrink"><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
-                        <td class="ellipsis" title="@repository.Name">@repository.Name</td>
+                        <td class="ellipsis" title="@repository.Name">
+                            @repository.Name
+                            @if (repository.NeedsCredential)
+                            {
+                                <span title="This repository's remote host needs a working git credential.">
+                                    <Icon Name="credential" CssClass="icon-inline needs-credential-marker" />
+                                </span>
+                            }
+                        </td>
                         <td class="col-shrink">@(repository.StatsComputed ? RepositoryDisplay.FormatSize(repository.TotalSizeBytes) : "Computing…")</td>
                         <td class="col-shrink"><GitStatusIndicator Repository="repository" /></td>
                         <td class="col-shrink actions" @onclick:stopPropagation="true">
@@ -87,7 +95,7 @@ else
                             }
                             else
                             {
-                                <RepositoryQuickActions RepositoryName="@repository.Name" OnActionCompleted="RefreshAsync" />
+                                <RepositoryQuickActions RepositoryName="@repository.Name" Remotes="@repository.Remotes" OnActionCompleted="RefreshAsync" />
                                 <button type="button" class="icon-button" title="Rename" @onclick="@(() => _renameDialog!.ShowAsync(repository.Name))">
                                     <Icon Name="pencil" />
                                 </button>
@@ -104,8 +112,9 @@ else
 }
 
 <ConfirmDialog @ref="_confirmDialog" />
-<CloneDialog @ref="_cloneDialog" OnCloned="RefreshAsync" />
+<CloneDialog @ref="_cloneDialog" OnCloned="HandleClonedAsync" />
 <RenameDialog @ref="_renameDialog" OnRenamed="RefreshAsync" />
+<PatPromptDialog @ref="_patPromptDialog" />
 
 @code {
     private IReadOnlyList<RepositorySummary>? _summaries;
@@ -120,6 +129,18 @@ else
     private ConfirmDialog? _confirmDialog;
     private CloneDialog? _cloneDialog;
     private RenameDialog? _renameDialog;
+    private PatPromptDialog? _patPromptDialog;
+
+    /// <summary>
+    /// Clones this page itself started, keyed by run id, kept only until that run reaches a
+    /// terminal state - watched in <see cref="OnRunEvent"/> so a classified authentication failure
+    /// can prompt for a PAT and retry with the exact same parameters, per design.md's clone-retry
+    /// decision. Deliberately not scoped to <see cref="CloneDialog"/> itself (see that component's
+    /// own remarks) - keeping a modal dialog open for a clone's full, possibly-long duration would
+    /// block the operator from using the rest of the dashboard for no reason a successful clone
+    /// would ever need.
+    /// </summary>
+    private readonly Dictionary<Guid, ClonedInfo> _pendingClones = [];
 
     private enum SortColumn
     {
@@ -152,9 +173,62 @@ else
 
         _ = InvokeAsync(async () =>
         {
+            if (runEvent.Type == RunEventType.Terminal && _pendingClones.ContainsKey(runEvent.RunId))
+            {
+                await HandleCloneTerminalAsync(runEvent.RunId);
+            }
+
             await RefreshAsync();
             StateHasChanged();
         });
+    }
+
+    private async Task HandleClonedAsync(ClonedInfo info)
+    {
+        _pendingClones[info.RunId] = info;
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Reacts to one of this page's own pending clones reaching a terminal state - success or a
+    /// non-authentication failure just clears it (the list/status already reflects the outcome via
+    /// the normal refresh); a classified authentication failure prompts for a PAT and, once one
+    /// verifies, retries the identical clone (looping through this same method again on its own
+    /// eventual terminal event) - cancelling the prompt clears it with no further retry, per
+    /// specs/repository-management's "Cancelling the PAT prompt means no clone happens" scenario.
+    /// </summary>
+    private async Task HandleCloneTerminalAsync(Guid runId)
+    {
+        if (!_pendingClones.Remove(runId, out var info))
+        {
+            return;
+        }
+
+        var run = await RunRepository.FindByIdAsync(runId, CancellationToken.None);
+        var succeeded = run is { Outcome: RunOutcome.Completed, ExitCode: 0 };
+        if (succeeded)
+        {
+            return;
+        }
+
+        if (!GitAuthFailureClassifier.IsLikelyAuthFailure(run?.Stderr) || !GitRemoteUrlParser.TryGetHost(info.Url, out var host))
+        {
+            return;
+        }
+
+        await _patPromptDialog!.ShowAsync(
+            host,
+            onSaved: () => RetryCloneAsync(info),
+            onCancelled: () => { });
+    }
+
+    private async Task RetryCloneAsync(ClonedInfo info)
+    {
+        var result = await RepositoryManager.CloneAsync(info.Url, info.Name, info.Branch, CancellationToken.None);
+        if (result is RepositoryActionResult.Accepted accepted)
+        {
+            await HandleClonedAsync(info with { RunId = accepted.RunId });
+        }
     }
 
     private void OnRepositoryStatsChanged(string repositoryName)

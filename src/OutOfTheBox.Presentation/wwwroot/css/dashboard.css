@@ -1319,6 +1319,12 @@ dd {
     color: var(--danger);
 }
 
+.needs-credential-marker {
+    color: var(--danger);
+    margin-left: 0.4em;
+    vertical-align: middle;
+}
+
 .diff-stat-removed {
     color: var(--danger);
     margin-left: 0.5em;

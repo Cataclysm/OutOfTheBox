@@ -1,47 +1,68 @@
 @using OutOfTheBox.Application.Repositories
+@using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
 
-<button type="button" class="icon-button @FlashClass("pull")" title="Pull" @onclick="@(() => RunGitActionAsync("pull", RepositoryManager.PullAsync))">
+<button type="button" class="icon-button @FlashClass("pull")" title="@Title("pull", "Pull")" @onclick="@(() => RunGitActionAsync("pull", RepositoryManager.PullAsync))">
     <Icon Name="pull" />
 </button>
-<button type="button" class="icon-button @FlashClass("push")" title="Push" @onclick="@(() => RunGitActionAsync("push", RepositoryManager.PushAsync))">
+<button type="button" class="icon-button @FlashClass("push")" title="@Title("push", "Push")" @onclick="@(() => RunGitActionAsync("push", RepositoryManager.PushAsync))">
     <Icon Name="push" />
 </button>
-<button type="button" class="icon-button @FlashClass("force-push")" title="Force push" @onclick="@(() => ConfirmAndRunAsync("force-push", "Force push", $"Force-push '{RepositoryName}'? This can overwrite the remote's history.", RepositoryManager.ForcePushAsync))">
+<button type="button" class="icon-button @FlashClass("force-push")" title="@Title("force-push", "Force push")" @onclick="@(() => ConfirmAndRunAsync("force-push", "Force push", $"Force-push '{RepositoryName}'? This can overwrite the remote's history.", RepositoryManager.ForcePushAsync))">
     <Icon Name="force-push" />
 </button>
-<button type="button" class="icon-button @FlashClass("fetch")" title="Fetch" @onclick="@(() => RunGitActionAsync("fetch", RepositoryManager.FetchAsync))">
+<button type="button" class="icon-button @FlashClass("fetch")" title="@Title("fetch", "Fetch")" @onclick="@(() => RunGitActionAsync("fetch", RepositoryManager.FetchAsync))">
     <Icon Name="fetch" />
 </button>
-<button type="button" class="icon-button @FlashClass("clean")" title="Clean (git clean -xdf)" @onclick="@(() => ConfirmAndRunAsync("clean", "Clean", $"Run 'git clean -xdf' on '{RepositoryName}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
+<button type="button" class="icon-button @FlashClass("clean")" title="@Title("clean", "Clean (git clean -xdf)")" @onclick="@(() => ConfirmAndRunAsync("clean", "Clean", $"Run 'git clean -xdf' on '{RepositoryName}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
     <Icon Name="clean" />
+</button>
+<button type="button" class="icon-button @FlashClass("credential")" title="@Title("credential", "Change git credential")" @onclick="ChangeCredentialAsync">
+    <Icon Name="credential" />
 </button>
 
 <ConfirmDialog @ref="_confirmDialog" />
+<PatPromptDialog @ref="_patPromptDialog" />
 
 @code {
     /// <summary>
-    /// The pull/push/force-push/fetch/clean action row - shared by <c>Repositories.razor</c>'s list
-    /// (one instance per row) and <c>RepositoryDetail.razor</c> (one instance for the currently
-    /// viewed repository), per specs/repository-management's "Dashboard-only pull/push/force-push/
-    /// fetch/clean actions" requirement, so both surfaces reach the exact same behavior (including
-    /// the flash-on-completion outcome reporting) through one implementation rather than two that
-    /// could drift apart. Deliberately excludes rename/delete - unlike these five, both have
-    /// navigation implications specific to where they're invoked from (a list row disappearing vs.
-    /// a detail page needing to redirect away from a name that no longer resolves), so those stay
-    /// wherever they're already implemented rather than folded in here too.
+    /// The pull/push/force-push/fetch/clean/change-credential action row - shared by
+    /// <c>Repositories.razor</c>'s list (one instance per row) and <c>RepositoryDetail.razor</c> (one
+    /// instance for the currently viewed repository), per specs/repository-management's "Dashboard-only
+    /// pull/push/force-push/fetch/clean actions" requirement, so both surfaces reach the exact same
+    /// behavior (including the flash-on-completion outcome reporting) through one implementation
+    /// rather than two that could drift apart. Deliberately excludes rename/delete - unlike these
+    /// six, both have navigation implications specific to where they're invoked from (a list row
+    /// disappearing vs. a detail page needing to redirect away from a name that no longer resolves),
+    /// so those stay wherever they're already implemented rather than folded in here too.
     /// </summary>
     [Parameter, EditorRequired]
     public string RepositoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The repository's configured remotes, used only to resolve its <c>origin</c> host for the
+    /// change-credential action - the caller already has this (per <see cref="RepositorySummary.Remotes"/>),
+    /// so this component doesn't re-fetch it itself.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<Domain.Repositories.RepositoryRemote> Remotes { get; set; } = [];
 
     /// <summary>Raised after any action completes (success or failure) - the caller's own summary/list is what actually changed, not this component's.</summary>
     [Parameter]
     public EventCallback OnActionCompleted { get; set; }
 
     private ConfirmDialog? _confirmDialog;
+    private PatPromptDialog? _patPromptDialog;
 
     /// <summary>Per action name, the CSS class briefly applied to report its outcome - no streamed output, per specs/repository-management's "Outcome is shown without a console view" requirement.</summary>
     private readonly Dictionary<string, string> _flashClasses = [];
+
+    /// <summary>
+    /// Per action name, the real failure detail (previously discarded entirely) shown as a tooltip -
+    /// a passive, hover-only surface, never a popup, per specs/repository-management's "A failed
+    /// action's detail is available without an interrupting prompt" scenario.
+    /// </summary>
+    private readonly Dictionary<string, string> _flashTitles = [];
 
     private Task ConfirmAndRunAsync(string action, string title, string message, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation) =>
         _confirmDialog!.ShowAsync(title, message, () => RunGitActionAsync(action, operation));
@@ -49,10 +70,39 @@
     private async Task RunGitActionAsync(string action, Func<string, CancellationToken, Task<RepositoryGitActionResult>> operation)
     {
         var result = await operation(RepositoryName, CancellationToken.None);
-        _flashClasses[action] = result is RepositoryGitActionResult.Succeeded ? "flash-success" : "flash-fail";
-        StateHasChanged();
+        Flash(action, succeeded: result is RepositoryGitActionResult.Succeeded, errorMessage: (result as RepositoryGitActionResult.Failed)?.ErrorMessage);
 
         await OnActionCompleted.InvokeAsync();
+    }
+
+    private async Task ChangeCredentialAsync()
+    {
+        var origin = Remotes.FirstOrDefault(r => r.Name == "origin");
+        if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var host))
+        {
+            Flash("credential", succeeded: false, errorMessage: "No remote host could be determined for this repository - it has no 'origin' remote, or its URL couldn't be parsed.");
+            return;
+        }
+
+        await _patPromptDialog!.ShowAsync(
+            host,
+            onSaved: () =>
+            {
+                Flash("credential", succeeded: true, errorMessage: null);
+                return Task.CompletedTask;
+            },
+            onCancelled: () => { });
+    }
+
+    private void Flash(string action, bool succeeded, string? errorMessage)
+    {
+        _flashClasses[action] = succeeded ? "flash-success" : "flash-fail";
+        _flashTitles[action] = succeeded || string.IsNullOrEmpty(errorMessage)
+            ? DefaultTitle(action)
+            : GitAuthFailureClassifier.IsLikelyAuthFailure(errorMessage)
+                ? "Authentication failed - use the change-credential action to update it."
+                : errorMessage;
+        StateHasChanged();
 
         _ = ClearFlashAfterDelayAsync(action);
     }
@@ -61,8 +111,22 @@
     {
         await Task.Delay(TimeSpan.FromSeconds(2.5));
         _flashClasses.Remove(action);
+        _flashTitles.Remove(action);
         await InvokeAsync(StateHasChanged);
     }
 
     private string FlashClass(string action) => _flashClasses.GetValueOrDefault(action, string.Empty);
+
+    private string Title(string action, string defaultTitle) => _flashTitles.GetValueOrDefault(action, defaultTitle);
+
+    private static string DefaultTitle(string action) => action switch
+    {
+        "pull" => "Pull",
+        "push" => "Push",
+        "force-push" => "Force push",
+        "fetch" => "Fetch",
+        "clean" => "Clean (git clean -xdf)",
+        "credential" => "Change git credential",
+        _ => action,
+    };
 }
