@@ -17,42 +17,31 @@
 <button type="button" class="icon-button @FlashClass("clean")" title="@Title("clean", "Clean (git clean -xdf)")" @onclick="@(() => ConfirmAndRunAsync("clean", "Clean", $"Run 'git clean -xdf' on '{RepositoryName}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
     <Icon Name="clean" />
 </button>
-<button type="button" class="icon-button @FlashClass("credential")" title="@Title("credential", "Change git credential")" @onclick="ChangeCredentialAsync">
-    <Icon Name="credential" />
-</button>
 
 <ConfirmDialog @ref="_confirmDialog" />
-<PatPromptDialog @ref="_patPromptDialog" />
 
 @code {
     /// <summary>
-    /// The pull/push/force-push/fetch/clean/change-credential action row - shared by
-    /// <c>Repositories.razor</c>'s list (one instance per row) and <c>RepositoryDetail.razor</c> (one
-    /// instance for the currently viewed repository), per specs/repository-management's "Dashboard-only
-    /// pull/push/force-push/fetch/clean actions" requirement, so both surfaces reach the exact same
-    /// behavior (including the flash-on-completion outcome reporting) through one implementation
-    /// rather than two that could drift apart. Deliberately excludes rename/delete - unlike these
-    /// six, both have navigation implications specific to where they're invoked from (a list row
-    /// disappearing vs. a detail page needing to redirect away from a name that no longer resolves),
-    /// so those stay wherever they're already implemented rather than folded in here too.
+    /// The pull/push/force-push/fetch/clean action row - shared by <c>Repositories.razor</c>'s list
+    /// (one instance per row) and <c>RepositoryDetail.razor</c> (one instance for the currently
+    /// viewed repository), per specs/repository-management's "Dashboard-only pull/push/force-push/
+    /// fetch/clean actions" requirement, so both surfaces reach the exact same behavior (including
+    /// the flash-on-completion outcome reporting) through one implementation rather than two that
+    /// could drift apart. Deliberately excludes rename/delete - unlike these five, both have
+    /// navigation implications specific to where they're invoked from (a list row disappearing vs. a
+    /// detail page needing to redirect away from a name that no longer resolves), so those stay
+    /// wherever they're already implemented rather than folded in here too. Also excludes changing a
+    /// git credential (previously a per-repository action here) - per direct instruction, that's now
+    /// done from the Credentials page instead, by clicking the host's own row.
     /// </summary>
     [Parameter, EditorRequired]
     public string RepositoryName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The repository's configured remotes, used only to resolve its <c>origin</c> host for the
-    /// change-credential action - the caller already has this (per <see cref="RepositorySummary.Remotes"/>),
-    /// so this component doesn't re-fetch it itself.
-    /// </summary>
-    [Parameter]
-    public IReadOnlyList<Domain.Repositories.RepositoryRemote> Remotes { get; set; } = [];
 
     /// <summary>Raised after any action completes (success or failure) - the caller's own summary/list is what actually changed, not this component's.</summary>
     [Parameter]
     public EventCallback OnActionCompleted { get; set; }
 
     private ConfirmDialog? _confirmDialog;
-    private PatPromptDialog? _patPromptDialog;
 
     /// <summary>Per action name, the CSS class briefly applied to report its outcome - no streamed output, per specs/repository-management's "Outcome is shown without a console view" requirement.</summary>
     private readonly Dictionary<string, string> _flashClasses = [];
@@ -75,32 +64,13 @@
         await OnActionCompleted.InvokeAsync();
     }
 
-    private async Task ChangeCredentialAsync()
-    {
-        var origin = Remotes.FirstOrDefault(r => r.Name == "origin");
-        if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var host))
-        {
-            Flash("credential", succeeded: false, errorMessage: "No remote host could be determined for this repository - it has no 'origin' remote, or its URL couldn't be parsed.");
-            return;
-        }
-
-        await _patPromptDialog!.ShowAsync(
-            host,
-            onSaved: () =>
-            {
-                Flash("credential", succeeded: true, errorMessage: null);
-                return Task.CompletedTask;
-            },
-            onCancelled: () => { });
-    }
-
     private void Flash(string action, bool succeeded, string? errorMessage)
     {
         _flashClasses[action] = succeeded ? "flash-success" : "flash-fail";
         _flashTitles[action] = succeeded || string.IsNullOrEmpty(errorMessage)
             ? DefaultTitle(action)
             : GitAuthFailureClassifier.IsLikelyAuthFailure(errorMessage)
-                ? "Authentication failed - use the change-credential action to update it."
+                ? "Authentication failed - update the credential from the Credentials page."
                 : errorMessage;
         StateHasChanged();
 
@@ -126,7 +96,6 @@
         "force-push" => "Force push",
         "fetch" => "Fetch",
         "clean" => "Clean (git clean -xdf)",
-        "credential" => "Change git credential",
         _ => action,
     };
 }

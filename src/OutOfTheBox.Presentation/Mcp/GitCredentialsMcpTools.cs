@@ -13,9 +13,9 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// tools, per <c>mcp-git-credentials</c>' spec: lets a caller store, list, and revoke PAT-based git
 /// credentials for a remote host, so <c>git_run</c>/<c>clone_repository</c> can authenticate against
 /// it transparently with no change to either tool's own contract. All three reuse
-/// <see cref="IGitCredentialStore"/> directly - the same port the dashboard's PAT-prompt dialog and
-/// change-credential action call, so the two surfaces can never end up with divergent credentials
-/// for the same host.
+/// <see cref="IGitCredentialStore"/> directly - the same port the dashboard's Credentials page (add/
+/// edit) and clone-retry PAT prompt call, so the surfaces can never end up with divergent
+/// credentials for the same host.
 /// </summary>
 [McpServerToolType]
 public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStore)

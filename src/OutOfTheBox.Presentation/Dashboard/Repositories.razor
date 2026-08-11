@@ -95,7 +95,7 @@ else
                             }
                             else
                             {
-                                <RepositoryQuickActions RepositoryName="@repository.Name" Remotes="@repository.Remotes" OnActionCompleted="RefreshAsync" />
+                                <RepositoryQuickActions RepositoryName="@repository.Name" OnActionCompleted="RefreshAsync" />
                                 <button type="button" class="icon-button" title="Rename" @onclick="@(() => _renameDialog!.ShowAsync(repository.Name))">
                                     <Icon Name="pencil" />
                                 </button>
