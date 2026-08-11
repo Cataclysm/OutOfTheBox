@@ -199,7 +199,7 @@ public sealed class CommandExecutionMcpTools(
             try
             {
                 // dotnet_run only (not git_run) - injects VSS_NUGET_EXTERNAL_FEED_ENDPOINTS/
-                // NUGET_CREDENTIALPROVIDERS_PATH so the Azure Artifacts Credential Provider can
+                // NUGET_NETCORE_PLUGIN_PATHS so the Azure Artifacts Credential Provider can
                 // authenticate a restore against any feed authorized via authorize_nuget_feed,
                 // per design.md's "dotnet_run gains environment-variable injection" decision. Null
                 // (no environment variables added) when no such feed is authorized, so a caller with
@@ -273,14 +273,20 @@ public sealed class CommandExecutionMcpTools(
     }
 
     /// <summary>
-    /// Builds the <c>VSS_NUGET_EXTERNAL_FEED_ENDPOINTS</c>/<c>NUGET_CREDENTIALPROVIDERS_PATH</c>
+    /// Builds the <c>VSS_NUGET_EXTERNAL_FEED_ENDPOINTS</c>/<c>NUGET_NETCORE_PLUGIN_PATHS</c>
     /// environment variables a <c>dotnet</c> spawn needs for the Azure Artifacts Credential Provider
-    /// to authenticate non-interactively, per its own documented headless mechanism. Returns
-    /// <see langword="null"/> (not an empty dictionary) when no Azure DevOps Artifacts feed is
-    /// currently authorized, so <see cref="ProcessRunRequest.EnvironmentVariables"/> stays
-    /// <see langword="null"/> and nothing about the spawned process changes. The decrypted tokens
-    /// this builds never appear in any log line - they exist only in this JSON string and the child
-    /// process's own environment block.
+    /// to authenticate non-interactively, per its own documented headless mechanism.
+    /// <c>NUGET_NETCORE_PLUGIN_PATHS</c> (not the previously-assumed, nonexistent
+    /// <c>NUGET_CREDENTIALPROVIDERS_PATH</c> - confirmed against the real NuGet.Client source,
+    /// <c>NuGet.Protocol.Plugins.EnvironmentVariableConstants</c>/<c>PluginDiscoverer</c>, after this
+    /// mechanism was reported not working) is the environment variable NuGet's own plugin discovery
+    /// actually reads for a <c>dotnet</c> (non-desktop) process, and expects a semicolon-separated
+    /// list of full plugin *file* paths - not a directory to scan, unlike what the original,
+    /// unverified assumption behind this code used. Returns <see langword="null"/> (not an empty
+    /// dictionary) when no Azure DevOps Artifacts feed is currently authorized, so
+    /// <see cref="ProcessRunRequest.EnvironmentVariables"/> stays <see langword="null"/> and nothing
+    /// about the spawned process changes. The decrypted tokens this builds never appear in any log
+    /// line - they exist only in this JSON string and the child process's own environment block.
     /// </summary>
     private async Task<IReadOnlyDictionary<string, string>?> BuildNuGetEnvironmentVariablesAsync(CancellationToken cancellationToken)
     {
@@ -296,7 +302,7 @@ public sealed class CommandExecutionMcpTools(
         return new Dictionary<string, string>
         {
             ["VSS_NUGET_EXTERNAL_FEED_ENDPOINTS"] = JsonSerializer.Serialize(endpoints),
-            ["NUGET_CREDENTIALPROVIDERS_PATH"] = NuGetCredentialProviderLocation.PluginDirectory,
+            ["NUGET_NETCORE_PLUGIN_PATHS"] = NuGetCredentialProviderLocation.PluginFilePath,
         };
     }
 

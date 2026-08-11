@@ -202,9 +202,11 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
         return null;
     }
 
-    private static bool IsCredentialProviderInstalled() =>
-        Directory.Exists(NuGetCredentialProviderLocation.PluginDirectory)
-        && Directory.EnumerateFiles(NuGetCredentialProviderLocation.PluginDirectory, "CredentialProvider*.exe").Any();
+    // Checks for the exact file NUGET_NETCORE_PLUGIN_PATHS will be pointed at (see
+    // NuGetCredentialProviderLocation.PluginFilePath's own remarks) - not just "some exe exists in
+    // this directory," so a partially-extracted or wrong-shaped bundle fails this check the same way
+    // a missing one does, rather than reporting installed and failing confusingly later at restore time.
+    private static bool IsCredentialProviderInstalled() => File.Exists(NuGetCredentialProviderLocation.PluginFilePath);
 
     private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedUrl, byte[]? encryptedPassword, CancellationToken cancellationToken)
     {
