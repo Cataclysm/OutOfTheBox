@@ -24,6 +24,12 @@ public sealed class CliProcessRunner : IProcessRunner
 
         using var process = new Process { StartInfo = BuildStartInfo(request), EnableRaisingEvents = true };
 
+        // Kill-on-close job object, not just process.Kill(entireProcessTree: true) below - see
+        // ProcessJobObject's own remarks for why the latter alone isn't reliable for a deeply or
+        // quickly nested process tree. Disposed unconditionally at method exit (covers the normal
+        // completion path too), so nothing this run ever spawned can outlive it.
+        using var jobObject = ProcessJobObject.Create();
+
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is not null)
@@ -40,6 +46,7 @@ public sealed class CliProcessRunner : IProcessRunner
         };
 
         process.Start();
+        jobObject.Assign(process);
         onStarted?.Invoke(process.Id);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -63,6 +70,11 @@ public sealed class CliProcessRunner : IProcessRunner
             {
                 // Process exited between the HasExited check and Kill - benign race, nothing to do.
             }
+
+            // Immediate, reliable backstop for the Kill above - see ProcessJobObject's remarks.
+            // Safe to call even if the try block already ran fine; the job may still hold a
+            // descendant Kill's own snapshot missed.
+            jobObject.Dispose();
         });
 
         // Pumping is intentionally decoupled from cancellationToken: even when the run is being
