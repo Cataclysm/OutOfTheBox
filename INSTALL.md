@@ -272,6 +272,21 @@ Certificate binding for Kestrel HTTPS (and the public-only file the dashboard of
 are generated and wired up automatically — see [Network & transport](#network--transport) above for
 how, and how to supply your own instead.
 
+### Git credential prerequisite (`authorize_git_host`)
+
+The `authorize_git_host`/`list_authorized_git_hosts`/`revoke_git_host_authorization` MCP tools (and
+the dashboard's own PAT prompt/change-credential action) store a personal access token via `git
+credential approve`, which needs a `credential.helper` configured — Git for Windows installs Git
+Credential Manager and configures this automatically on a fresh install, so no extra setup is
+normally needed. `authorize_git_host` checks for a configured helper up front and reports a specific
+error if none is found, rather than a confusing downstream git failure. Two assumptions behind this
+feature are not yet confirmed against a real installation and are worth knowing about before relying
+on it in production: whether Git Credential Manager's own provider-specific OAuth behavior for
+`github.com`/`dev.azure.com` interferes with a plain PAT stored this way (if it does, the fix is
+`git config credential.https://<host>.provider generic`), and whether Windows Credential Manager
+storage behaves correctly under the dedicated `svc-outofthebox` service account (which has no
+interactively-loaded user profile, unlike a normal login session).
+
 ### 4. Upgrade / uninstall
 
 Run a newer build's `OutOfTheBoxSetup.exe` — `MajorUpgrade` handles it natively (WiX sequences the
