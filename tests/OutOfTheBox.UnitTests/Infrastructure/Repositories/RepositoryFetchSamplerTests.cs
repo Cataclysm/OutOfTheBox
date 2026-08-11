@@ -5,6 +5,7 @@ using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Infrastructure.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -46,6 +47,7 @@ public sealed class RepositoryFetchSamplerTests : IDisposable
         var sampler = new RepositoryFetchSampler(
             Options.Create(new ServiceOptions()),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance),
             NullLogger<RepositoryFetchSampler>.Instance);
 
         // Would previously never return at all for "repo-a" the way an unhandled exception in a real
@@ -65,11 +67,52 @@ public sealed class RepositoryFetchSamplerTests : IDisposable
         var sampler = new RepositoryFetchSampler(
             Options.Create(new ServiceOptions()),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance),
             NullLogger<RepositoryFetchSampler>.Instance);
 
         await sampler.FetchAllOnceAsync(CancellationToken.None);
 
         Assert.Equal(["repo-a"], _fakeManager.FetchedNames);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_waits_for_the_application_to_finish_starting_before_its_first_sweep()
+    {
+        _fakeManager.Summaries = [new RepositorySummary { Name = "repo-a", Path = "a", StatsComputed = true, IsGitRepository = true, IsActive = false }];
+
+        var lifetime = new ApplicationLifetime(NullLogger<ApplicationLifetime>.Instance);
+
+        // An interval long enough that, within this test's timeout, only the immediate "run once as
+        // soon as the app has started" sweep could plausibly have fired - a real PeriodicTimer tick
+        // never gets the chance to.
+        var sampler = new RepositoryFetchSampler(
+            Options.Create(new ServiceOptions { RepositoryFetchIntervalSeconds = 3600 }),
+            _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            lifetime,
+            NullLogger<RepositoryFetchSampler>.Instance);
+
+        await sampler.StartAsync(CancellationToken.None);
+        try
+        {
+            // ExecuteAsync is blocked waiting for ApplicationStarted at this point - nothing should
+            // have been fetched yet, however briefly we give it to reach that wait.
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.Empty(_fakeManager.FetchedNames);
+
+            lifetime.NotifyStarted();
+
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (_fakeManager.FetchedNames.Count == 0 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
+
+            Assert.Equal(["repo-a"], _fakeManager.FetchedNames);
+        }
+        finally
+        {
+            await sampler.StopAsync(CancellationToken.None);
+        }
     }
 
     private sealed class FakeRepositoryManager : IRepositoryManager

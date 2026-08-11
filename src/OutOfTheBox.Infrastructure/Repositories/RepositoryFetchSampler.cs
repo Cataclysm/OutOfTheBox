@@ -27,6 +27,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 public sealed class RepositoryFetchSampler(
     IOptions<ServiceOptions> options,
     IServiceScopeFactory serviceScopeFactory,
+    IHostApplicationLifetime applicationLifetime,
     ILogger<RepositoryFetchSampler> logger) : BackgroundService
 {
     /// <inheritdoc />
@@ -37,6 +38,17 @@ public sealed class RepositoryFetchSampler(
 
         try
         {
+            // Deliberately waits for the host to be fully up (Kestrel accepting connections, every
+            // other hosted service's own StartAsync already returned) before ever running - unlike
+            // RepositoryStatsSampler's "compute once immediately" first call, a fetch is a real
+            // network operation per repository, and startup (EF Core migration, certificate loading,
+            // every other hosted service's own StartAsync potentially still in flight) is exactly
+            // when the process is least ready to absorb that. Once past this point, the first sweep
+            // still runs immediately rather than waiting a full RepositoryFetchIntervalSeconds (5
+            // minutes by default) for its first one just because the service happened to just start.
+            await WaitForApplicationStartedAsync(stoppingToken);
+            await FetchAllOnceAsync(stoppingToken);
+
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 await FetchAllOnceAsync(stoppingToken);
@@ -46,6 +58,13 @@ public sealed class RepositoryFetchSampler(
         {
             // Expected on shutdown (stoppingToken cancelled) - not an error.
         }
+    }
+
+    private async Task WaitForApplicationStartedAsync(CancellationToken stoppingToken)
+    {
+        var startedTcs = new TaskCompletionSource();
+        await using var registration = applicationLifetime.ApplicationStarted.Register(() => startedTcs.TrySetResult());
+        await startedTcs.Task.WaitAsync(stoppingToken);
     }
 
     /// <summary>

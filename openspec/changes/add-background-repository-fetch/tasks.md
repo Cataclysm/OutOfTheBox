@@ -9,6 +9,7 @@
 - [x] 2.2 `FetchAllOnceAsync`: resolve a fresh `IServiceScopeFactory`-created scope's `IRepositoryManager` (mirroring `GitCredentialStore`'s own captive-scoped-dependency pattern), call `ListAsync`, and run `FetchAsync` sequentially for every summary with `IsGitRepository == true`.
 - [x] 2.3 Guard both the enumeration and each individual `FetchAsync` call against an unexpected exception (log and continue) - the same crash-resilience requirement `RepositoryStatsSampler.GuardAsync` documents. A `Rejected` result (busy/not found) is not logged (routine); a `Failed` result is logged at Warning.
 - [x] 2.4 Register `RepositoryFetchSampler` as a hosted service in `RepositoryManagementServiceCollectionExtensions`, alongside `RepositoryStatsSampler`.
+- [x] 2.5 **Added per direct instruction**: `ExecuteAsync` now waits on `IHostApplicationLifetime.ApplicationStarted` before its first sweep, so no fetch ever runs while the host is still mid-startup; once past that wait, the first sweep runs immediately rather than also waiting for `PeriodicTimer`'s first tick. See design.md's own decision entry.
 
 ## 3. Drive-by fix found while touching this area
 
@@ -17,6 +18,7 @@
 ## 4. Tests
 
 - [x] 4.1 Unit tests for `RepositoryFetchSampler.FetchAllOnceAsync` against a fake `IRepositoryManager`: a non-git summary is never fetched; one repository's `FetchAsync` throwing does not stop the sweep for the rest; a `Failed` result does not throw. Mirrors `RepositoryStatsSamplerTests`' own pattern.
+- [x] 4.1b Unit test for the startup gate: drives the real `ExecuteAsync`/`StartAsync` (not just `FetchAllOnceAsync`) against a real `Microsoft.Extensions.Hosting.Internal.ApplicationLifetime`, asserting nothing is fetched before `NotifyStarted()` is called and the first sweep runs promptly afterward (a 3600s configured interval rules out a real timer tick having fired instead).
 - [x] 4.2 Full `dotnet test` (UnitTests, ArchitectureTests, BehaviorTests) run clean with the new hosted service registered - confirms it composes correctly at startup (`WebApplicationFactory`-hosted `BehaviorTests` already exercise full DI composition) without needing a live-fetch-specific scenario (no real authenticated remote available in this environment, the same limitation already accepted for the credential-health change's own equivalent gaps).
 
 ## 5. Docs
