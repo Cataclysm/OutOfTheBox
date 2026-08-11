@@ -28,9 +28,11 @@ not Phase 8; this plan hasn't been re-run against that change yet.
 - **Phases 1–7**: fully automatable by an sbx agent using only the MCP tools (`dotnet_run`,
   `git_run`, `read_run_output`, `cancel_run`, `transfer_file`, `list_repositories`,
   `clone_repository`, `delete_repository`, `find_files`, `get_file_info`, `delete_path`,
-  `authorize_git_host`, `list_authorized_git_hosts`, `revoke_git_host_authorization`) over the
+  `authorize_git_host`, `list_authorized_git_hosts`, `revoke_git_host_authorization`,
+  `authorize_nuget_feed`, `list_authorized_nuget_feeds`, `revoke_nuget_feed_authorization`) over the
   bearer-authenticated `/mcp` endpoint — no browser needed. This plan predates
-  `openspec/changes/expose-git-credentials-mcp/` too and hasn't been re-run against it.
+  `openspec/changes/expose-git-credentials-mcp/` and `openspec/changes/expose-nuget-credentials-mcp/`
+  too and hasn't been re-run against either.
 - **Phase 8**: requires a human operator with a browser (or a browser-automation tool the agent has
   been explicitly given). Listed separately so an sbx-only run can still produce a complete report for
   Phases 1–7 and flag Phase 8 as "not executed in this environment" rather than silently skipping it.
@@ -67,10 +69,11 @@ not Phase 8; this plan hasn't been re-run against that change yet.
      header (or a wrong bearer token) → expect the connection/request to be rejected (`401`).
 1.2. Same, with the correct `Authorization: Bearer <token>` header → expect the session to establish
      and tool discovery (the client library's own initialize/list-tools handshake) to succeed, listing
-     all seventeen tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`,
+     all twenty tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`, `transfer_file`,
      `list_repositories`, `clone_repository`, `delete_repository`, `find_files`, `get_file_info`,
      `delete_path`, `authorize_git_host`, `list_authorized_git_hosts`,
-     `revoke_git_host_authorization`, `get_run_resources`, `get_environment_info`,
+     `revoke_git_host_authorization`, `authorize_nuget_feed`, `list_authorized_nuget_feeds`,
+     `revoke_nuget_feed_authorization`, `get_run_resources`, `get_environment_info`,
      `get_file_lock_info`).
 1.3. Call `list_repositories` with no arguments → expect a well-formed (possibly empty) result array.
 

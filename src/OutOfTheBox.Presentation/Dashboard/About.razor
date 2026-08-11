@@ -38,32 +38,36 @@
     Point an MCP-aware client (Claude Code configured with a remote MCP server) at this host's
     <code>/mcp</code> endpoint with an <code>Authorization: Bearer &lt;token&gt;</code> header carrying
     the service's bearer token; tool discovery, calling, and result parsing are handled by the client
-    library itself. The server exposes seventeen tools:
+    library itself. The server exposes twenty tools:
 </p>
-<pre class="run-output">dotnet_run                     - start a `dotnet` command against a repository
-git_run                        - start a `git` command against a repository
-read_run_output                - poll a run started by dotnet_run/git_run/clone_repository for
-                                 incremental output and its eventual exit code
-cancel_run                     - cancel a run that is still in flight
-list_repositories              - list the repositories available on this host
-clone_repository               - clone a new repository onto this host
-delete_repository              - permanently delete a repository and everything inside it
-find_files                     - search a repository for files/directories by glob pattern (*, **,
-                                 ?), preferred over `git_run` for locating files
-get_file_info                  - get a filesystem entry's type, size, attributes, owner, dates, and
-                                 lock status, preferred over `git_run` for file metadata questions
-delete_path                    - permanently delete one file or directory inside a repository
-authorize_git_host             - store a personal access token (PAT) for a remote git host, so
-                                 git_run/clone_repository can authenticate against it
-list_authorized_git_hosts      - list every host with a stored credential, its authorization date,
-                                 and whether it currently appears to be working
-revoke_git_host_authorization  - remove a host's stored credential
-transfer_file                  - read a file's contents (base64-encoded) from within a named repository
-get_run_resources              - poll a run's recent CPU/RAM trend, to judge whether it's hung or still working
-get_environment_info           - inspect this host's installed dotnet/git toolchain, SDKs, workloads, NuGet
-                                sources, and disk space
-get_file_lock_info             - find which process(es) have a file open, to diagnose a Windows "file in use"
-                                build/test failure</pre>
+<pre class="run-output">dotnet_run                        - start a `dotnet` command against a repository
+git_run                           - start a `git` command against a repository
+read_run_output                   - poll a run started by dotnet_run/git_run/clone_repository for
+                                     incremental output and its eventual exit code
+cancel_run                        - cancel a run that is still in flight
+list_repositories                 - list the repositories available on this host
+clone_repository                  - clone a new repository onto this host
+delete_repository                 - permanently delete a repository and everything inside it
+find_files                        - search a repository for files/directories by glob pattern (*, **,
+                                     ?), preferred over `git_run` for locating files
+get_file_info                     - get a filesystem entry's type, size, attributes, owner, dates, and
+                                     lock status, preferred over `git_run` for file metadata questions
+delete_path                       - permanently delete one file or directory inside a repository
+authorize_git_host                - store a personal access token (PAT) for a remote git host, so
+                                     git_run/clone_repository can authenticate against it
+list_authorized_git_hosts         - list every host with a stored credential, its authorization date,
+                                     and whether it currently appears to be working
+revoke_git_host_authorization     - remove a host's stored credential
+authorize_nuget_feed              - store a personal access token (PAT) for a NuGet feed, so dotnet_run
+                                     can authenticate against it during restore
+list_authorized_nuget_feeds       - list every NuGet feed with a stored credential and its authorization date
+revoke_nuget_feed_authorization   - remove a NuGet feed's stored credential
+transfer_file                     - read a file's contents (base64-encoded) from within a named repository
+get_run_resources                 - poll a run's recent CPU/RAM trend, to judge whether it's hung or still working
+get_environment_info              - inspect this host's installed dotnet/git toolchain, SDKs, workloads, NuGet
+                                     sources, and disk space
+get_file_lock_info                - find which process(es) have a file open, to diagnose a Windows "file in use"
+                                     build/test failure</pre>
 <p>
     <code>dotnet_run</code>/<code>git_run</code>/<code>clone_repository</code> return a run id
     immediately rather than blocking until the command finishes - poll <code>read_run_output</code>
@@ -80,7 +84,11 @@ get_file_lock_info             - find which process(es) have a file open, to dia
     tool result, and never appears in a process command line. A <code>git_run</code>/
     <code>clone_repository</code> failure that looks authentication-related is called out
     specifically, naming <code>authorize_git_host</code> as the fix, rather than only relaying git's
-    raw error text.
+    raw error text. A personal access token passed to <code>authorize_nuget_feed</code> is stored
+    depending on the feed: an Azure DevOps Artifacts feed's token is encrypted and held by this
+    service for the Azure Artifacts Credential Provider to use; any other feed's token is written
+    once into this machine's own NuGet configuration, encrypted by NuGet's own mechanism. Neither is
+    ever logged, included in any tool result, or passed as a process command-line argument.
 </p>
 
 <h2>Trusting the certificate</h2>
