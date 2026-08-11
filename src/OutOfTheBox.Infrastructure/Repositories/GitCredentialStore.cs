@@ -130,10 +130,19 @@ public sealed class GitCredentialStore(
         dbContext.GitHostAuthorizations.Remove(existing);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // The credential is genuinely gone now - the next real pull/push/fetch/clone against this
-        // host will fail authentication, so mark it needing attention immediately rather than
-        // leaving a stale "fine" signal on every repository until that failure actually happens.
-        await RecordOutcomeAsync(normalizedHost, succeeded: false, cancellationToken);
+        // Deliberately does NOT proactively mark this host as needing credential (an earlier version
+        // of this method did, via RecordOutcomeAsync(normalizedHost, false, ...), and it was wrong -
+        // GitHostCredentialHealth is host-scoped, not per-repository, so a host can easily have both
+        // private and public repositories cloned from it (a real, reported scenario: one private
+        // GitHub repo plus several public ones). Marking the whole host as failing here flags every
+        // public repository too, even though nothing about them actually changed - they never needed
+        // a credential before this revoke and still don't. NeedsCredential instead stays purely
+        // reactive (only ever set by a real pull/push/fetch/clone failure), the same way it already
+        // handles every other way a credential can stop working (expiry, revocation on the remote
+        // host itself) - a deliberate, already-accepted staleness trade-off (see design.md), not
+        // something a same-host revoke should special-case differently. Still refreshes affected
+        // repositories' cached stats immediately - this never changes what NeedsCredential evaluates
+        // to, only how quickly the dashboard reflects health state that was already true beforehand.
         await RefreshAffectedRepositoriesAsync(normalizedHost, cancellationToken);
 
         return new GitCredentialRevokeResult.Revoked();
