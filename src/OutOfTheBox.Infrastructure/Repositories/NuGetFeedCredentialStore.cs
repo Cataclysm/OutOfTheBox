@@ -13,20 +13,18 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// <remarks>
 /// Routes each feed URL to one of two mechanisms via <see cref="AzureArtifactsFeedClassifier"/> - see
 /// design.md's "storage is a dual mechanism" decision. A non-Azure-DevOps feed's credential is
-/// written into this machine's default NuGet configuration via <c>NuGet.Configuration</c>, never
-/// touching this service's own database; an Azure DevOps Artifacts feed's credential is DPAPI-
-/// encrypted (<see cref="NuGetCredentialProtector"/>) and persisted here instead, since the Azure
-/// Artifacts Credential Provider's own mechanism (an environment variable) has no durability of its
-/// own. Registered singleton - resolves its own scoped <see cref="OutOfTheBoxDbContext"/> per call via
+/// written into this machine's default NuGet configuration via <see cref="NuGetFeedConfigWriter"/>;
+/// an Azure DevOps Artifacts feed's credential has no external durable store of its own (the Azure
+/// Artifacts Credential Provider's own mechanism is just an environment variable), so the DB is its
+/// sole store. Every feed's credential is additionally persisted here too
+/// (<see cref="NuGetFeedAuthorization.EncryptedPassword"/>, machine-scoped-DPAPI-encrypted via
+/// <see cref="ICredentialProtector"/>) - for a generic feed this is a second, independently-durable
+/// copy alongside the NuGet-config one, kept in sync by <c>CredentialSyncService</c>. Registered
+/// singleton - resolves its own scoped <see cref="OutOfTheBoxDbContext"/> per call via
 /// <see cref="IServiceScopeFactory"/>, the same pattern <c>GitCredentialStore</c> uses.
 /// </remarks>
-public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFactory, ICredentialEventBus credentialEventBus) : INuGetFeedCredentialStore
+public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFactory, ICredentialEventBus credentialEventBus, ICredentialProtector credentialProtector) : INuGetFeedCredentialStore
 {
-    // Any non-empty username works for both GitHub Packages and Azure Artifacts when the password is
-    // a valid PAT (see design.md's "no username parameter" decision - unverified, folded into live
-    // verification). Fixed and never caller-supplied, so the feed URL alone is always the match key.
-    private const string PlaceholderUsername = "nuget";
-
     /// <inheritdoc />
     public async Task<NuGetCredentialAuthorizeResult> AuthorizeAsync(string feedUrl, string token, CancellationToken cancellationToken)
     {
@@ -35,24 +33,16 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
             return new NuGetCredentialAuthorizeResult.InvalidFeedUrl();
         }
 
-        byte[]? encryptedPassword = null;
-
         if (AzureArtifactsFeedClassifier.IsAzureDevOpsArtifactsFeed(uri))
         {
             if (!IsCredentialProviderInstalled())
             {
                 return new NuGetCredentialAuthorizeResult.CredentialProviderNotInstalled();
             }
-
-            encryptedPassword = NuGetCredentialProtector.Encrypt(token);
-            if (NuGetCredentialProtector.Decrypt(encryptedPassword) != token)
-            {
-                return new NuGetCredentialAuthorizeResult.VerificationFailed();
-            }
         }
         else
         {
-            var genericFailure = AuthorizeGenericFeed(normalizedUrl, token);
+            var genericFailure = NuGetFeedConfigWriter.WriteAndVerify(normalizedUrl, token);
             if (genericFailure is not null)
             {
                 return genericFailure;
@@ -61,7 +51,7 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
 
         await using var scope = serviceScopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
-        await UpsertAuthorizationAsync(dbContext, normalizedUrl, encryptedPassword, cancellationToken);
+        await UpsertAuthorizationAsync(dbContext, normalizedUrl, credentialProtector.Encrypt(token), cancellationToken);
 
         credentialEventBus.Publish();
         return new NuGetCredentialAuthorizeResult.Succeeded();
@@ -127,48 +117,20 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
             .Where(a => a.EncryptedPassword != null)
             .ToListAsync(cancellationToken);
 
-        return [.. authorizations.Select(a => new NuGetFeedEndpointCredential(a.FeedUrl, NuGetCredentialProtector.Decrypt(a.EncryptedPassword!)))];
-    }
-
-    /// <summary>
-    /// Writes/updates a credentialed package source into this machine's default NuGet configuration
-    /// for a non-Azure-DevOps feed, then reads it back to verify the write - see design.md's
-    /// "verification is local-only" Non-Goal. Returns <see langword="null"/> on success, or the
-    /// specific failure otherwise.
-    /// </summary>
-    private static NuGetCredentialAuthorizeResult? AuthorizeGenericFeed(string normalizedUrl, string token)
-    {
-        try
+        var credentials = new List<NuGetFeedEndpointCredential>();
+        foreach (var authorization in authorizations)
         {
-            var settings = Settings.LoadDefaultSettings(root: null);
-            var sourceProvider = new PackageSourceProvider(settings);
-            var credentials = PackageSourceCredential.FromUserInput(normalizedUrl, PlaceholderUsername, token, storePasswordInClearText: false, validAuthenticationTypesText: null);
-
-            var existing = sourceProvider.LoadPackageSources().FirstOrDefault(s => string.Equals(s.Name, normalizedUrl, StringComparison.Ordinal));
-            if (existing is not null)
+            if (credentialProtector.TryDecrypt(authorization.EncryptedPassword!, out var password))
             {
-                existing.Credentials = credentials;
-                sourceProvider.UpdatePackageSource(existing, updateCredentials: true, updateEnabled: false);
-            }
-            else
-            {
-                sourceProvider.AddPackageSource(new PackageSource(normalizedUrl, normalizedUrl) { Credentials = credentials });
+                credentials.Add(new NuGetFeedEndpointCredential(authorization.FeedUrl, password));
             }
 
-            var freshProvider = new PackageSourceProvider(Settings.LoadDefaultSettings(root: null));
-            var saved = freshProvider.LoadPackageSources().FirstOrDefault(s => string.Equals(s.Name, normalizedUrl, StringComparison.Ordinal));
-
-            if (saved?.Credentials?.Password != token)
-            {
-                return new NuGetCredentialAuthorizeResult.VerificationFailed();
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new NuGetCredentialAuthorizeResult.ConfigurationUnwritable(ex.Message);
+            // A decrypt failure here means the credential was encrypted under a since-migrated-away
+            // key/scope and needs re-authorization (see ICredentialProtector's own remarks) - skipped,
+            // not thrown, so one undecryptable feed never breaks every other feed's restore/dotnet_run.
         }
 
-        return null;
+        return credentials;
     }
 
     // Checks for the exact file NUGET_NETCORE_PLUGIN_PATHS will be pointed at (see

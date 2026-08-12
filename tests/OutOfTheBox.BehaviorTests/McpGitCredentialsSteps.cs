@@ -1,7 +1,11 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using System.Diagnostics;
 using System.Text.Json;
 using OutOfTheBox.BehaviorTests.Support;
+using OutOfTheBox.Infrastructure.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Reqnroll;
 
 namespace OutOfTheBox.BehaviorTests;
@@ -109,6 +113,64 @@ public sealed class McpGitCredentialsSteps : IDisposable
     {
         Assert.True(_toolCallResult!.IsToolError, "Expected revoke_git_host_authorization to be rejected.");
         Assert.Contains("nothing to revoke", _toolCallResult.ContentText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [When(@"""([^""]*)""'s credential-helper entry is deleted out of band")]
+    public static Task WhenAHostsCredentialHelperEntryIsDeletedOutOfBand(string host) =>
+        // Simulates the exact real-world loss CredentialSyncService exists to repair - the DB row
+        // (authorize_git_host already wrote it) survives, but git's own credential-helper entry
+        // (the file-based test store - see TestGitCredentialConfigSetup) does not, the same shape a
+        // real uninstall-then-reinstall's recreated service account produces against the real
+        // Windows-Credential-Manager-backed helper.
+        RunGitCredentialAsync("reject", $"protocol=https\nhost={host}\n\n");
+
+    [When(@"the background credential sync service runs a sync sweep")]
+    public async Task WhenTheBackgroundCredentialSyncServiceRunsASyncSweep()
+    {
+        var syncService = Factory.Services.GetServices<IHostedService>().OfType<CredentialSyncService>().Single();
+        await syncService.SyncAllOnceAsync(CancellationToken.None);
+    }
+
+    [Then(@"git credential fill for ""([^""]*)"" returns the originally authorized token")]
+    public static async Task ThenGitCredentialFillForReturnsTheOriginallyAuthorizedToken(string host)
+    {
+        var fillOutput = await RunGitCredentialAsync("fill", $"protocol=https\nhost={host}\n\n");
+
+        Assert.Contains("password=test-token-1", fillOutput, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Runs `git credential &lt;subcommand&gt;` with <paramref name="standardInput"/> piped in, against
+    /// the same throwaway file-based credential helper <see cref="TestGitCredentialConfigSetup"/>
+    /// points every git invocation in this test process at - <see cref="GitFixture.RunGitAsync"/>
+    /// doesn't support stdin redirection, which `credential reject`/`fill` need.
+    /// </summary>
+    private static async Task<string> RunGitCredentialAsync(string subcommand, string standardInput)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = Path.GetTempPath(),
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            },
+        };
+        process.StartInfo.ArgumentList.Add("credential");
+        process.StartInfo.ArgumentList.Add(subcommand);
+
+        process.Start();
+        await process.StandardInput.WriteAsync(standardInput);
+        process.StandardInput.Close();
+
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return stdout;
     }
 
     /// <inheritdoc />

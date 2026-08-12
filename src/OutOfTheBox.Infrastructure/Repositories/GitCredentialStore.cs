@@ -31,18 +31,9 @@ public sealed class GitCredentialStore(
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ICredentialEventBus credentialEventBus,
+    ICredentialProtector credentialProtector,
     ILogger<GitCredentialStore> logger) : IGitCredentialStore
 {
-    // Any non-empty username works for both GitHub and Azure DevOps when the password is a valid
-    // PAT (see design.md's "no username parameter" decision, and its own live-verification caveat -
-    // this literal value is asserted, not yet confirmed against a real request). Fixed and never
-    // caller-supplied, so the (protocol, host) pair alone is always the credential-store match key.
-    private const string PlaceholderUsername = "x-access-token";
-
-    // Matches GitCaptureRunner's own timeout for short-lived, ad-hoc git invocations - approve/reject
-    // are pure local storage operations with no network round trip, so this is generous, not tight.
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
     /// <inheritdoc />
     public async Task<GitCredentialAuthorizeResult> AuthorizeAsync(string host, string token, CancellationToken cancellationToken)
     {
@@ -63,55 +54,25 @@ public sealed class GitCredentialStore(
             return new GitCredentialAuthorizeResult.NoCredentialHelperConfigured();
         }
 
+        bool verified;
         try
         {
-            // Forces Git Credential Manager's plain Basic-Auth ("generic") provider for this host,
-            // instead of its own host-aware provider selection - for github.com/dev.azure.com
-            // specifically, GCM's default provider prefers an interactive OAuth/browser sign-in flow
-            // and maintains its own separate cached-account state, entirely independent of the plain
-            // credential store `approve`/`fill`/`reject` manage. Confirmed live: without this, an
-            // `approve`d PAT did not stop GCM from independently popping its account-picker UI on
-            // every subsequent git operation against the host - exactly the risk this project's own
-            // design.md flagged as unverified. Setting it ensures exactly one PAT-based credential
-            // governs this host with no competing cached identity, and matters even more on the real
-            // service host, where an interactive OAuth prompt has no session to display in at all and
-            // would otherwise hang or fail unpredictably rather than just being surfaced.
-            await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["config", "--global", $"credential.https://{normalizedHost}.provider", "generic"], cancellationToken);
-
-            // Rejects any existing entry for this host before approving the new one - `approve`
-            // alone is not guaranteed to replace an existing entry rather than duplicate it. That
-            // depends entirely on which credential.helper backend is configured: the OS-level
-            // `manager`/`wincred` backends overwrite cleanly by key, but the plain `store` file
-            // backend (used by this project's own BehaviorTests, and something a real operator could
-            // configure just as validly) APPENDS a new line on `approve` instead of replacing one -
-            // so re-authorizing without rejecting first can leave a stale old PAT sitting in the file
-            // alongside the new one. Reject-then-approve makes "no more than one PAT per host"
-            // hold regardless of backend, rather than an assumption specific to one of them. Safe to
-            // call unconditionally - rejecting a host with nothing stored is a no-op, the same
-            // idempotent behavior RevokeAsync already relies on.
-            var rejectInput = $"protocol=https\nhost={normalizedHost}\n\n";
-            await RunAndDiscardAsync(["credential", "reject"], rejectInput, cancellationToken);
-
-            var approveInput = $"protocol=https\nhost={normalizedHost}\nusername={PlaceholderUsername}\npassword={token}\n\n";
-            await RunAndDiscardAsync(["credential", "approve"], approveInput, cancellationToken);
-
-            var fillInput = $"protocol=https\nhost={normalizedHost}\n\n";
-            var fillOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, options.Value.RootDirectory, ["credential", "fill"], cancellationToken, standardInput: fillInput);
-
-            if (fillOutput is null || !fillOutput.Contains("password=", StringComparison.Ordinal))
-            {
-                return new GitCredentialAuthorizeResult.VerificationFailed();
-            }
+            verified = await GitCredentialWriter.ApproveAndVerifyAsync(processRunner, logger, options.Value.RootDirectory, normalizedHost, token, cancellationToken);
         }
         catch (Win32Exception ex)
         {
             return new GitCredentialAuthorizeResult.GitUnreachable(ex.Message);
         }
 
+        if (!verified)
+        {
+            return new GitCredentialAuthorizeResult.VerificationFailed();
+        }
+
         await using (var scope = serviceScopeFactory.CreateAsyncScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
-            await UpsertAuthorizationAsync(dbContext, normalizedHost, cancellationToken);
+            await UpsertAuthorizationAsync(dbContext, normalizedHost, credentialProtector.Encrypt(token), cancellationToken);
         }
 
         credentialEventBus.Publish();
@@ -148,8 +109,7 @@ public sealed class GitCredentialStore(
 
         try
         {
-            var rejectInput = $"protocol=https\nhost={normalizedHost}\n\n";
-            await RunAndDiscardAsync(["credential", "reject"], rejectInput, cancellationToken);
+            await GitCredentialWriter.RejectAsync(processRunner, logger, options.Value.RootDirectory, normalizedHost, cancellationToken);
         }
         catch (Win32Exception ex)
         {
@@ -322,10 +282,10 @@ public sealed class GitCredentialStore(
             .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.RepositoryPath, newRepositoryPath), cancellationToken);
     }
 
-    private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedHost, CancellationToken cancellationToken)
+    private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedHost, byte[] encryptedToken, CancellationToken cancellationToken)
     {
         var existing = await dbContext.GitHostAuthorizations.FirstOrDefaultAsync(a => a.Host == normalizedHost, cancellationToken);
-        var updated = new GitHostAuthorization(normalizedHost, DateTimeOffset.UtcNow);
+        var updated = new GitHostAuthorization(normalizedHost, DateTimeOffset.UtcNow, encryptedToken);
 
         if (existing is null)
         {
@@ -342,35 +302,4 @@ public sealed class GitCredentialStore(
     // Hosts are compared/stored lower-invariant rather than relying on a provider-specific
     // collation for case-insensitive matching (see OutOfTheBoxDbContext's own remark).
     private static string Normalize(string host) => host.Trim().ToLowerInvariant();
-
-    /// <summary>
-    /// Runs <c>git</c> with <paramref name="standardInput"/> piped in and discards its output -
-    /// for <c>approve</c>/<c>reject</c>, whose own exit code/stdout carry no meaningful signal this
-    /// class relies on (verification happens via a separate <c>fill</c> call - see
-    /// <see cref="AuthorizeAsync"/>). Time-bounded the same way <see cref="GitCaptureRunner"/> is;
-    /// <see cref="Win32Exception"/> (git.exe unreachable) is left to propagate to the caller.
-    /// </summary>
-    private async Task RunAndDiscardAsync(string[] arguments, string standardInput, CancellationToken cancellationToken)
-    {
-        using var timeoutCts = new CancellationTokenSource(Timeout);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
-
-        try
-        {
-            await processRunner.RunAsync(new ProcessRunRequest(arguments, options.Value.RootDirectory, "git", standardInput), NullOutputSink.Instance, linkedCts.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning("git {Arguments} timed out.", string.Join(' ', arguments));
-        }
-    }
-
-    private sealed class NullOutputSink : IProcessOutputSink
-    {
-        public static readonly NullOutputSink Instance = new();
-
-        public Task OnStandardOutputAsync(string line, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task OnStandardErrorAsync(string line, CancellationToken cancellationToken) => Task.CompletedTask;
-    }
 }

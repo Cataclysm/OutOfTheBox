@@ -107,4 +107,12 @@ public sealed class ServiceOptions
     /// touches the network per repository, per direct instruction.
     /// </summary>
     public int RepositoryFetchIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// How often the background credential sync service re-derives git's credential helper and this
+    /// machine's NuGet configuration from this service's own database (now the durable source of
+    /// truth for both), repairing anything the OS-level store lost. Same 300s-class default as
+    /// <see cref="RepositoryFetchIntervalSeconds"/> - not a hot path, just not instant either.
+    /// </summary>
+    public int CredentialSyncIntervalSeconds { get; set; } = 300;
 }

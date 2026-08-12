@@ -32,3 +32,9 @@ Feature: MCP Git Credentials
     Scenario: Revoking a host that was never authorized
         When an authenticated caller calls revoke_git_host_authorization for "never-authorized.example.test"
         Then the revoke_git_host_authorization call is rejected as nothing to revoke
+
+    Scenario: The background credential sync service repairs a host's credential-helper entry after it is lost
+        Given a host "github.example.test" has been authorized with a token
+        When "github.example.test"'s credential-helper entry is deleted out of band
+        And the background credential sync service runs a sync sweep
+        Then git credential fill for "github.example.test" returns the originally authorized token

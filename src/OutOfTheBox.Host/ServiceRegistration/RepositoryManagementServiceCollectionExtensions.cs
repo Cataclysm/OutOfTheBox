@@ -40,9 +40,18 @@ public static class RepositoryManagementServiceCollectionExtensions
         // either credential store, regardless of caller (MCP tool or the page's own dialogs).
         services.AddSingleton<ICredentialEventBus, InMemoryCredentialEventBus>();
 
+        // Machine-scoped (not account-scoped) so the DB-side copy of a credential both credential
+        // stores now persist survives this service's dedicated account being recreated - see
+        // ICredentialProtector's own remarks.
+        services.AddSingleton<ICredentialProtector, DpapiCredentialProtector>();
+
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
         services.AddHostedService<RepositoryFetchSampler>();
+
+        // Periodically re-derives git's credential helper and this machine's NuGet configuration from
+        // the DB (now the durable source of truth for both) - repairs whatever the OS-level store lost.
+        services.AddHostedService<CredentialSyncService>();
 
         // File tree browser (Section 23) - scoped, not singleton, for the same reason
         // IRepositoryManager just above is: it now depends on the scoped IRunRepository too

@@ -21,6 +21,7 @@ public sealed class NuGetFeedCredentialStoreTests : IDisposable
 {
     private readonly SqliteInMemoryDbContextFactory _dbContextFactory = new();
     private readonly ServiceProvider _serviceProvider;
+    private readonly DpapiCredentialProtector _credentialProtector = new(NullLogger<DpapiCredentialProtector>.Instance);
     private readonly NuGetFeedCredentialStore _store;
 
     public NuGetFeedCredentialStoreTests()
@@ -30,7 +31,8 @@ public sealed class NuGetFeedCredentialStoreTests : IDisposable
         _serviceProvider = services.BuildServiceProvider();
         _store = new NuGetFeedCredentialStore(
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            new InMemoryCredentialEventBus(NullLogger<InMemoryCredentialEventBus>.Instance));
+            new InMemoryCredentialEventBus(NullLogger<InMemoryCredentialEventBus>.Instance),
+            _credentialProtector);
     }
 
     [Theory]
@@ -134,7 +136,7 @@ public sealed class NuGetFeedCredentialStoreTests : IDisposable
     private async Task SeedAzureDevOpsArtifactsAuthorizationAsync(string feedUrl, string token)
     {
         await using var dbContext = _dbContextFactory.CreateContext();
-        dbContext.NuGetFeedAuthorizations.Add(new NuGetFeedAuthorization(feedUrl, DateTimeOffset.UtcNow, NuGetCredentialProtector.Encrypt(token)));
+        dbContext.NuGetFeedAuthorizations.Add(new NuGetFeedAuthorization(feedUrl, DateTimeOffset.UtcNow, _credentialProtector.Encrypt(token)));
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 

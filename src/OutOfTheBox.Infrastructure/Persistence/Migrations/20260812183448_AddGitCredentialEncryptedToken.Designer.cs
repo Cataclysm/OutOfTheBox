@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OutOfTheBox.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using OutOfTheBox.Infrastructure.Persistence;
 namespace OutOfTheBox.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OutOfTheBoxDbContext))]
-    partial class OutOfTheBoxDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812183448_AddGitCredentialEncryptedToken")]
+    partial class AddGitCredentialEncryptedToken
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
