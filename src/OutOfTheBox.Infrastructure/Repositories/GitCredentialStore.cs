@@ -30,6 +30,7 @@ public sealed class GitCredentialStore(
     IProcessRunner processRunner,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
+    ICredentialEventBus credentialEventBus,
     ILogger<GitCredentialStore> logger) : IGitCredentialStore
 {
     // Any non-empty username works for both GitHub and Azure DevOps when the password is a valid
@@ -113,6 +114,7 @@ public sealed class GitCredentialStore(
             await UpsertAuthorizationAsync(dbContext, normalizedHost, cancellationToken);
         }
 
+        credentialEventBus.Publish();
         return new GitCredentialAuthorizeResult.Succeeded();
     }
 
@@ -172,6 +174,7 @@ public sealed class GitCredentialStore(
         // to, only how quickly the dashboard reflects health state that was already true beforehand.
         await RefreshAffectedRepositoriesAsync(normalizedHost, cancellationToken);
 
+        credentialEventBus.Publish();
         return new GitCredentialRevokeResult.Revoked();
     }
 

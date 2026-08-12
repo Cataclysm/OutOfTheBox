@@ -5,6 +5,7 @@ using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Infrastructure.Repositories;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Repositories;
 
@@ -27,7 +28,9 @@ public sealed class NuGetFeedCredentialStoreTests : IDisposable
         var services = new ServiceCollection();
         services.AddTransient(_ => _dbContextFactory.CreateContext());
         _serviceProvider = services.BuildServiceProvider();
-        _store = new NuGetFeedCredentialStore(_serviceProvider.GetRequiredService<IServiceScopeFactory>());
+        _store = new NuGetFeedCredentialStore(
+            _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            new InMemoryCredentialEventBus(NullLogger<InMemoryCredentialEventBus>.Instance));
     }
 
     [Theory]

@@ -20,7 +20,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// own. Registered singleton - resolves its own scoped <see cref="OutOfTheBoxDbContext"/> per call via
 /// <see cref="IServiceScopeFactory"/>, the same pattern <c>GitCredentialStore</c> uses.
 /// </remarks>
-public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFactory) : INuGetFeedCredentialStore
+public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFactory, ICredentialEventBus credentialEventBus) : INuGetFeedCredentialStore
 {
     // Any non-empty username works for both GitHub Packages and Azure Artifacts when the password is
     // a valid PAT (see design.md's "no username parameter" decision - unverified, folded into live
@@ -63,6 +63,7 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
         var dbContext = scope.ServiceProvider.GetRequiredService<OutOfTheBoxDbContext>();
         await UpsertAuthorizationAsync(dbContext, normalizedUrl, encryptedPassword, cancellationToken);
 
+        credentialEventBus.Publish();
         return new NuGetCredentialAuthorizeResult.Succeeded();
     }
 
@@ -112,6 +113,7 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
         dbContext.NuGetFeedAuthorizations.Remove(existing);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        credentialEventBus.Publish();
         return new NuGetCredentialRevokeResult.Revoked();
     }
 

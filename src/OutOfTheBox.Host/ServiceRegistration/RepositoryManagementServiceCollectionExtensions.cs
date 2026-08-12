@@ -36,6 +36,10 @@ public static class RepositoryManagementServiceCollectionExtensions
         // "dotnet_run gains environment-variable injection" decision.
         services.AddSingleton<INuGetFeedCredentialStore, NuGetFeedCredentialStore>();
 
+        // So the dashboard's Credentials page can react live to an authorize/revoke made through
+        // either credential store, regardless of caller (MCP tool or the page's own dialogs).
+        services.AddSingleton<ICredentialEventBus, InMemoryCredentialEventBus>();
+
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
         services.AddHostedService<RepositoryFetchSampler>();
