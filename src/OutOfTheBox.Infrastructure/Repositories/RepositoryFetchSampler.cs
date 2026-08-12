@@ -28,6 +28,7 @@ public sealed class RepositoryFetchSampler(
     IOptions<ServiceOptions> options,
     IServiceScopeFactory serviceScopeFactory,
     IHostApplicationLifetime applicationLifetime,
+    CredentialSyncService credentialSyncService,
     ILogger<RepositoryFetchSampler> logger) : BackgroundService
 {
     /// <inheritdoc />
@@ -47,6 +48,16 @@ public sealed class RepositoryFetchSampler(
             // still runs immediately rather than waiting a full RepositoryFetchIntervalSeconds (5
             // minutes by default) for its first one just because the service happened to just start.
             await WaitForApplicationStartedAsync(stoppingToken);
+
+            // Actively starts (not merely awaits) CredentialSyncService's first sync sweep - a
+            // repository whose git host credential the OS-level store had lost would otherwise race
+            // this fetch and fail with a stale/missing credential on every restart, self-correcting
+            // only on the *next* fetch cadence instead of the very first one. EnsureInitialSyncAsync
+            // runs the sweep itself if CredentialSyncService's own loop hasn't gotten there yet,
+            // rather than waiting on a signal that loop sets on its own schedule - see that method's
+            // own remarks for why the distinction matters.
+            await credentialSyncService.EnsureInitialSyncAsync(stoppingToken);
+
             await FetchAllOnceAsync(stoppingToken);
 
             while (await timer.WaitForNextTickAsync(stoppingToken))

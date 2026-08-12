@@ -25,7 +25,9 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// Same <see cref="PeriodicTimer"/>/fresh-scope-per-tick/per-item-try-catch/public-single-sweep-method
 /// shape as <see cref="RepositoryFetchSampler"/>/<c>RepositoryStatsSampler</c> - an unhandled exception
 /// escaping <see cref="ExecuteAsync"/> would otherwise stop the whole host (the default
-/// <c>BackgroundServiceExceptionBehavior</c>).
+/// <c>BackgroundServiceExceptionBehavior</c>). <see cref="RepositoryFetchSampler"/> depends on
+/// <see cref="EnsureInitialSyncAsync"/> to guarantee its own first fetch never races a credential this
+/// sweep would have repaired - see that method's own remarks.
 /// </summary>
 public sealed class CredentialSyncService(
     IOptions<ServiceOptions> options,
@@ -36,6 +38,9 @@ public sealed class CredentialSyncService(
     IHostApplicationLifetime applicationLifetime,
     ILogger<CredentialSyncService> logger) : BackgroundService
 {
+    private readonly object _initialSyncLock = new();
+    private Task? _initialSyncTask;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -48,7 +53,7 @@ public sealed class CredentialSyncService(
             // RepositoryFetchSampler - startup is exactly when the process is least ready to spawn
             // git.exe or touch the machine's NuGet configuration.
             await WaitForApplicationStartedAsync(stoppingToken);
-            await SyncAllOnceAsync(stoppingToken);
+            await EnsureInitialSyncAsync(stoppingToken);
 
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
@@ -66,6 +71,25 @@ public sealed class CredentialSyncService(
         var startedTcs = new TaskCompletionSource();
         await using var registration = applicationLifetime.ApplicationStarted.Register(() => startedTcs.TrySetResult());
         await startedTcs.Task.WaitAsync(stoppingToken);
+    }
+
+    /// <summary>
+    /// Starts the first sync sweep if nothing has started it yet, and awaits it either way - called
+    /// both by this service's own <see cref="ExecuteAsync"/> loop and by
+    /// <see cref="RepositoryFetchSampler"/>'s (which needs it to have actually run, not merely be
+    /// scheduled to, before its own first fetch: a repository whose git host credential the OS-level
+    /// store had lost needs this sweep's repair applied before that fetch, not racing it). Whichever
+    /// caller reaches this first actually runs the sweep; the other awaits the same
+    /// <see cref="Task"/> instead of running a second, redundant one. Safe to call concurrently -
+    /// the assignment is guarded by <see cref="_initialSyncLock"/>.
+    /// </summary>
+    public Task EnsureInitialSyncAsync(CancellationToken cancellationToken)
+    {
+        lock (_initialSyncLock)
+        {
+            _initialSyncTask ??= SyncAllOnceAsync(cancellationToken);
+            return _initialSyncTask;
+        }
     }
 
     /// <summary>

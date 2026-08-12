@@ -122,6 +122,38 @@ public sealed class CredentialSyncServiceTests : IDisposable
         Assert.Equal(0, _credentialEventBus.PublishCount);
     }
 
+    [Fact]
+    public async Task EnsureInitialSyncAsync_actually_runs_the_sweep_not_just_a_future_promise()
+    {
+        await SeedGitHostAsync("github.com", "s3cr3t-pat");
+        var processRunner = new ScriptedGitCredentialProcessRunner();
+        var service = CreateService(processRunner);
+
+        // Distinguishes "started and ran" from "merely scheduled" - a caller awaiting this must see
+        // the repair actually applied, not just a signal some other, independently-timed loop will
+        // eventually set.
+        await service.EnsureInitialSyncAsync(CancellationToken.None);
+
+        Assert.True(processRunner.TryGetStored("github.com", out var stored));
+        Assert.Equal("s3cr3t-pat", stored);
+    }
+
+    [Fact]
+    public async Task EnsureInitialSyncAsync_runs_the_sweep_only_once_across_concurrent_callers()
+    {
+        await SeedGitHostAsync("github.com", "s3cr3t-pat");
+        var processRunner = new ScriptedGitCredentialProcessRunner();
+        var service = CreateService(processRunner);
+
+        // Simulates RepositoryFetchSampler and this service's own ExecuteAsync loop both reaching
+        // this call around the same moment at startup - only one sweep must actually run.
+        await Task.WhenAll(
+            service.EnsureInitialSyncAsync(CancellationToken.None),
+            service.EnsureInitialSyncAsync(CancellationToken.None));
+
+        Assert.Equal(1, processRunner.ApproveCallCount);
+    }
+
     private async Task SeedGitHostAsync(string host, string token)
     {
         await using var dbContext = _dbContextFactory.CreateContext();

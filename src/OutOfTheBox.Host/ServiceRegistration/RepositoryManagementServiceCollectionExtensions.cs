@@ -47,11 +47,20 @@ public static class RepositoryManagementServiceCollectionExtensions
 
         services.AddScoped<IRepositoryManager, RepositoryManager>();
         services.AddHostedService<RepositoryStatsSampler>();
-        services.AddHostedService<RepositoryFetchSampler>();
 
         // Periodically re-derives git's credential helper and this machine's NuGet configuration from
         // the DB (now the durable source of truth for both) - repairs whatever the OS-level store lost.
-        services.AddHostedService<CredentialSyncService>();
+        // Registered as itself too (not just IHostedService) so RepositoryFetchSampler can inject it
+        // directly to actively start (not just await) its first sync sweep - see
+        // CredentialSyncService.EnsureInitialSyncAsync's own remarks - and so BehaviorTests' direct
+        // SyncAllOnceAsync call resolves the same instance the host actually runs, not a second,
+        // never-started one.
+        services.AddSingleton<CredentialSyncService>();
+        services.AddHostedService(sp => sp.GetRequiredService<CredentialSyncService>());
+
+        // Depends on CredentialSyncService (above) to guarantee a repository's git credential is
+        // repaired before this sampler's own first fetch ever runs against it.
+        services.AddHostedService<RepositoryFetchSampler>();
 
         // File tree browser (Section 23) - scoped, not singleton, for the same reason
         // IRepositoryManager just above is: it now depends on the scoped IRunRepository too
