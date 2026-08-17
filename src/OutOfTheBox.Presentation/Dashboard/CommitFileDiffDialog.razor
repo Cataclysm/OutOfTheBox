@@ -8,7 +8,16 @@
 
 <dialog @ref="_dialogElement" class="file-preview-dialog">
     <div class="dialog-body">
-        <h2 class="ellipsis" title="@_path">@_path</h2>
+        <div class="dialog-title-row">
+            <h2 class="ellipsis" title="@_path">@_path</h2>
+            @if (_diff is not null)
+            {
+                <label class="word-wrap-toggle">
+                    <input type="checkbox" checked="@_codePreview.WordWrap" @onchange="OnWordWrapChangedAsync" />
+                    Wrap lines
+                </label>
+            }
+        </div>
         @if (_loading)
         {
             <p>Loading...</p>
@@ -19,13 +28,7 @@
         }
         else
         {
-            <div class="code-preview-controls">
-                <label>
-                    <input type="checkbox" checked="@_wordWrap" @onchange="OnWordWrapChangedAsync" />
-                    Wrap lines
-                </label>
-            </div>
-            <textarea id="@_previewElementId" class="file-preview-code" data-mime="@DiffMimeType" readonly>@_diff</textarea>
+            <textarea id="@_codePreview.ElementId" class="file-preview-code" data-mime="@DiffMimeType" readonly>@_diff</textarea>
         }
         <div class="dialog-actions">
             <button type="button" @onclick="CloseAsync">
@@ -43,58 +46,44 @@
     private const string DiffMimeType = "text/x-diff";
 
     private ElementReference _dialogElement;
-    private readonly string _previewElementId = $"commit-diff-{Guid.NewGuid():N}";
+    private CodePreviewSession _codePreview = null!;
     private string _path = string.Empty;
     private string? _diff;
     private bool _loading;
-    private bool _pendingRender;
-    private bool _wordWrap = true;
+
+    /// <inheritdoc />
+    protected override void OnInitialized() => _codePreview = new CodePreviewSession(CodePreviewInterop);
 
     /// <summary>Opens the dialog and loads the unified diff for <paramref name="path"/> as changed by <paramref name="hash"/>.</summary>
     public async Task ShowAsync(string repositoryName, string hash, string path)
     {
-        // Same destroy-before-any-state-change reasoning as FilePreviewDialog.ShowAsync - see that
-        // method's own remarks for why this has to happen before the first StateHasChanged below.
-        await CodePreviewInterop.DestroyAsync(_previewElementId);
-
-        // Read once per open, not once per component instance - see FilePreviewDialog.ShowAsync's
-        // own remarks on why.
-        _wordWrap = await CodePreviewInterop.GetWordWrapPreferenceAsync();
+        // Tears down any previous CodeMirror instance and refreshes the word-wrap preference before
+        // any state below changes - see CodePreviewSession.PrepareForOpenAsync's own remarks.
+        await _codePreview.PrepareForOpenAsync();
 
         _path = path;
         _diff = null;
-        _pendingRender = false;
         _loading = true;
         StateHasChanged();
         await JS.ShowModalAsync(_dialogElement);
 
         _diff = await RepositoryHistoryReader.GetCommitFileDiffAsync(repositoryName, hash, path, CancellationToken.None);
-        _pendingRender = _diff is not null;
+        if (_diff is not null)
+        {
+            _codePreview.MarkContentReady();
+        }
 
         _loading = false;
         StateHasChanged();
     }
 
     /// <inheritdoc />
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!_pendingRender)
-        {
-            return;
-        }
+    protected override async Task OnAfterRenderAsync(bool firstRender) => await _codePreview.RenderIfPendingAsync(DiffMimeType);
 
-        _pendingRender = false;
-        await CodePreviewInterop.RenderAsync(_previewElementId, DiffMimeType, _wordWrap);
-    }
-
-    private async Task OnWordWrapChangedAsync(ChangeEventArgs e)
-    {
-        _wordWrap = e.Value is true;
-        await CodePreviewInterop.SetWordWrapAsync(_previewElementId, _wordWrap);
-    }
+    private async Task OnWordWrapChangedAsync(ChangeEventArgs e) => await _codePreview.ToggleWordWrapAsync(e.Value is true);
 
     private async Task CloseAsync() => await JS.CloseAsync(_dialogElement);
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);
+    public async ValueTask DisposeAsync() => await _codePreview.DisposeAsync();
 }

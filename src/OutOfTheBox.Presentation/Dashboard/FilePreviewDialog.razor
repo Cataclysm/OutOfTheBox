@@ -10,7 +10,16 @@
 
 <dialog @ref="_dialogElement" class="file-preview-dialog">
     <div class="dialog-body">
-        <h2 class="ellipsis" title="@_name">@_name</h2>
+        <div class="dialog-title-row">
+            <h2 class="ellipsis" title="@_name">@_name</h2>
+            @if (_kind == PreviewKind.Text && _html is null && !_loading && _error is null)
+            {
+                <label class="word-wrap-toggle">
+                    <input type="checkbox" checked="@_codePreview.WordWrap" @onchange="OnWordWrapChangedAsync" />
+                    Wrap lines
+                </label>
+            }
+        </div>
         @if (_loading)
         {
             <p>Loading...</p>
@@ -43,13 +52,7 @@
             }
             else
             {
-                <div class="code-preview-controls">
-                    <label>
-                        <input type="checkbox" checked="@_wordWrap" @onchange="OnWordWrapChangedAsync" />
-                        Wrap lines
-                    </label>
-                </div>
-                <textarea id="@_previewElementId" class="file-preview-code" data-mime="@_codeMime" readonly>@_text</textarea>
+                <textarea id="@_codePreview.ElementId" class="file-preview-code" data-mime="@_codeMime" readonly>@_text</textarea>
             }
             @if (_truncated)
             {
@@ -117,18 +120,19 @@
     }
 
     private ElementReference _dialogElement;
-    private readonly string _previewElementId = $"file-preview-code-{Guid.NewGuid():N}";
+    private CodePreviewSession _codePreview = null!;
     private string _name = string.Empty;
     private string _mediaUrl = string.Empty;
     private string _text = string.Empty;
     private string? _html;
     private string? _codeMime;
-    private bool _pendingCodeRender;
-    private bool _wordWrap = true;
     private bool _truncated;
     private bool _loading;
     private string? _error;
     private PreviewKind _kind;
+
+    /// <inheritdoc />
+    protected override void OnInitialized() => _codePreview = new CodePreviewSession(CodePreviewInterop);
 
     /// <summary>
     /// Opens the dialog and loads a preview for the given file. What kind of preview - code, image,
@@ -141,25 +145,18 @@
     /// </summary>
     public async Task ShowAsync(string repositoryName, string relativePath, string name, string downloadUrl)
     {
-        // Tears down any CodeMirror instance left over from a previously previewed file *before*
-        // touching any state below - CodeMirror.fromTextArea inserts its own wrapper element as a
-        // sibling of the <textarea> it enhances, a DOM node Blazor's own diffing doesn't know about;
-        // destroying it first (reverting that region to the plain, Blazor-recognized <textarea>)
-        // avoids handing Blazor's next re-render a DOM shape it didn't create. Safe to call even when
-        // no editor is currently mounted (see codemirror-interop.js's own no-op guard).
-        await CodePreviewInterop.DestroyAsync(_previewElementId);
-
-        // Read once per open (not once per component instance) - matches the "set correctly when a
-        // preview is opened" ask, so a change made via a different, since-closed preview's checkbox
-        // is picked up immediately rather than only on the next page load.
-        _wordWrap = await CodePreviewInterop.GetWordWrapPreferenceAsync();
+        // Tears down any CodeMirror instance left over from a previously previewed file, and
+        // refreshes the word-wrap preference, before touching any state below - see
+        // CodePreviewSession.PrepareForOpenAsync's own remarks for why the ordering matters
+        // (CodeMirror.fromTextArea inserts its own wrapper element as a sibling of the <textarea> it
+        // enhances, a DOM node Blazor's own diffing doesn't know about).
+        await _codePreview.PrepareForOpenAsync();
 
         _name = name;
         _error = null;
         _text = string.Empty;
         _html = null;
         _codeMime = null;
-        _pendingCodeRender = false;
         _truncated = false;
         _kind = PreviewKind.Unsupported;
         _loading = true;
@@ -225,7 +222,7 @@
             else
             {
                 _codeMime = CodePreviewLanguage.GetMimeType(name);
-                _pendingCodeRender = true;
+                _codePreview.MarkContentReady();
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -238,22 +235,9 @@
     }
 
     /// <inheritdoc />
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!_pendingCodeRender)
-        {
-            return;
-        }
+    protected override async Task OnAfterRenderAsync(bool firstRender) => await _codePreview.RenderIfPendingAsync(_codeMime);
 
-        _pendingCodeRender = false;
-        await CodePreviewInterop.RenderAsync(_previewElementId, _codeMime, _wordWrap);
-    }
-
-    private async Task OnWordWrapChangedAsync(ChangeEventArgs e)
-    {
-        _wordWrap = e.Value is true;
-        await CodePreviewInterop.SetWordWrapAsync(_previewElementId, _wordWrap);
-    }
+    private async Task OnWordWrapChangedAsync(ChangeEventArgs e) => await _codePreview.ToggleWordWrapAsync(e.Value is true);
 
     private static async Task<PreviewKind> ClassifyAsync(string filePath)
     {
@@ -370,5 +354,5 @@
     private async Task CloseAsync() => await JS.CloseAsync(_dialogElement);
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);
+    public async ValueTask DisposeAsync() => await _codePreview.DisposeAsync();
 }

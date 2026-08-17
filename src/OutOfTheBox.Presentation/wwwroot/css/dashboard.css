@@ -333,6 +333,41 @@ dialog::backdrop {
     margin: 0;
 }
 
+/* Lets a dialog put a control (e.g. the word-wrap checkbox in FilePreviewDialog/CommitFileDiffDialog)
+   on the same line as its own title instead of its own row above the content, to save vertical
+   space in an already-dense dialog. min-width: 0 on the title is needed here specifically because
+   .dialog-body > * only reaches this row's own flex item, not the h2 nested inside it - without it,
+   .ellipsis's truncation can never actually kick in. */
+.dialog-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.dialog-title-row h2 {
+    min-width: 0;
+}
+
+/* .dialog-title-row (not just .word-wrap-toggle alone) to out-specificity .dialog-body label's own
+   flex-direction: column - both are otherwise one-class-plus-element-equivalent selectors, and
+   .dialog-body label would win the tie by appearing later in this file. flex-direction: row must be
+   explicit even though it's flex's own initial value - the cascade resolves property-by-property,
+   not whole-rule-by-whole-rule, so a rule that never declares flex-direction at all doesn't compete
+   for it regardless of its own specificity; .dialog-body label's explicit column wins by default
+   against nothing, not against this rule's specificity. */
+.dialog-title-row .word-wrap-toggle {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+    flex: none;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
 .dialog-body label {
     display: flex;
     flex-direction: column;
@@ -1639,24 +1674,6 @@ dd {
     max-height: 65vh;
     margin: 0 auto;
     border-radius: var(--radius-sm);
-}
-
-/* The word-wrap checkbox sitting directly above a code/diff preview (FilePreviewDialog,
-   CommitFileDiffDialog) - right-aligned and compact, unlike .history-filters' own full-width
-   card treatment, since this is one lone control inside an already-dense dialog, not a filter bar. */
-.code-preview-controls {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 0.4rem;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.code-preview-controls label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    cursor: pointer;
 }
 
 /* The plain <textarea> FilePreviewDialog server-renders is progressively enhanced into a CodeMirror

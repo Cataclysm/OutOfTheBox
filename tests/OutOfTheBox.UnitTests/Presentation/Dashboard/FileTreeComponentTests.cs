@@ -80,7 +80,7 @@ public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDis
 
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked"));
+            Assert.False(cut.Find(".word-wrap-toggle input[type=checkbox]").HasAttribute("checked"));
             var render = JSInterop.VerifyInvoke("outOfTheBoxCodePreview.render");
             Assert.False((bool)render.Arguments[2]!);
         });
@@ -96,15 +96,15 @@ public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDis
         cut.WaitForAssertion(() => Assert.Contains("readme.txt", cut.Markup));
 
         cut.Find(".file-tree-row").Click();
-        cut.WaitForAssertion(() => Assert.True(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked")));
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".word-wrap-toggle input[type=checkbox]").HasAttribute("checked")));
 
-        cut.Find(".code-preview-controls input[type=checkbox]").Change(false);
+        cut.Find(".word-wrap-toggle input[type=checkbox]").Change(false);
 
         cut.WaitForAssertion(() =>
         {
             var setWordWrap = JSInterop.VerifyInvoke("outOfTheBoxCodePreview.setWordWrap");
             Assert.False((bool)setWordWrap.Arguments[1]!);
-            Assert.False(cut.Find(".code-preview-controls input[type=checkbox]").HasAttribute("checked"));
+            Assert.False(cut.Find(".word-wrap-toggle input[type=checkbox]").HasAttribute("checked"));
         });
     }
 
