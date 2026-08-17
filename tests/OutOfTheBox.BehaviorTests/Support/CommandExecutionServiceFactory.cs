@@ -1,9 +1,13 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Globalization;
+using OutOfTheBox.Application.Mcp;
+using OutOfTheBox.Domain.Mcp;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace OutOfTheBox.BehaviorTests.Support;
 
@@ -57,6 +61,30 @@ public sealed class CommandExecutionServiceFactory(
             ["OutOfTheBox:McpMaxFileTransferBytes"] = (mcpMaxFileTransferBytesOverride ?? (25 * 1024 * 1024)).ToString(CultureInfo.InvariantCulture),
             ["OutOfTheBox:McpMaxFindFilesResults"] = (mcpMaxFindFilesResultsOverride ?? 2000).ToString(CultureInfo.InvariantCulture),
         }));
+    }
+
+    /// <summary>
+    /// Every MCP tool/subcommand starts enabled for this factory's own instance - most BehaviorTests
+    /// features exercise a specific tool's own functionality (repository management, file management,
+    /// credentials, ...), not the MCP Settings permission gate itself, and shouldn't need to know or
+    /// care that some tools now default to disabled for a real, freshly-installed operator. The two
+    /// scenarios that *do* test the permission gate (see <c>McpCommandExecutionSteps</c>/
+    /// <c>McpFileManagementSteps</c>) explicitly disable one key themselves, after this factory (and
+    /// this override) has already run - narrowing this "everything on" baseline for that one scenario
+    /// only, not fighting it.
+    /// </summary>
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+
+        using var scope = host.Services.CreateScope();
+        var permissionStore = scope.ServiceProvider.GetRequiredService<IMcpPermissionStore>();
+        foreach (var key in McpToolCatalog.AllKeys())
+        {
+            permissionStore.SetEnabledAsync(key, true, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        return host;
     }
 
     /// <inheritdoc />

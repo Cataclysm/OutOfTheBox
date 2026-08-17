@@ -808,6 +808,44 @@ dialog::backdrop {
     min-width: 160px;
 }
 
+/* MCP Settings' own toggle groups - unlike .history-filters (one horizontal bar of a few filter
+   controls), this page has eight fieldsets, two of them (dotnet/git subcommands) with dozens of
+   checkboxes - each fieldset is its own card, wrapping into a grid instead of a single row. */
+.mcp-settings-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+}
+
+.mcp-settings-groups fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-card);
+    padding: 1rem 1.25rem;
+}
+
+.mcp-settings-groups legend {
+    width: 100%;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0;
+    margin-bottom: 0.3rem;
+}
+
+.mcp-settings-groups label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
 .truncated-indicator {
     color: var(--danger);
     display: flex;

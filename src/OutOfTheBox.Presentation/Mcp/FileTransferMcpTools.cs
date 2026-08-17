@@ -4,6 +4,7 @@ using System.ComponentModel;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,7 @@ public sealed class FileTransferMcpTools(
     IWorkingDirectoryResolver workingDirectoryResolver,
     IRunRepository runRepository,
     IRunEventBus runEventBus,
+    IMcpPermissionStore permissionStore,
     IOptions<ServiceOptions> options,
     ILogger<FileTransferMcpTools> logger)
 {
@@ -40,6 +42,11 @@ public sealed class FileTransferMcpTools(
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The file's path, relative to the named repository.")] string path)
     {
+        if (!permissionStore.IsEnabled("transfer_file"))
+        {
+            throw new McpException("The 'transfer_file' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");

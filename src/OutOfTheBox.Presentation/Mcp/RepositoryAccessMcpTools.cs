@@ -5,6 +5,7 @@ using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
@@ -43,6 +44,7 @@ public sealed class RepositoryAccessMcpTools(
     IRunEventBus runEventBus,
     McpRunOutputRegistry outputRegistry,
     IGitCredentialStore gitCredentialStore,
+    IMcpPermissionStore permissionStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
     ILogger<RepositoryAccessMcpTools> logger)
@@ -50,8 +52,15 @@ public sealed class RepositoryAccessMcpTools(
     /// <summary>Lists every repository under the configured root, with the same stats the dashboard already shows.</summary>
     [McpServerTool]
     [Description("Lists every repository under the configured root, with its name, total size, git status, active/idle state, and whether its remote host currently needs a working git credential (see authorize_git_host).")]
-    public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync() =>
-        repositoryManager.ListAsync(CancellationToken.None);
+    public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync()
+    {
+        if (!permissionStore.IsEnabled("list_repositories"))
+        {
+            throw new McpException("The 'list_repositories' tool is currently disabled in MCP Settings.");
+        }
+
+        return repositoryManager.ListAsync(CancellationToken.None);
+    }
 
     /// <summary>Deletes an entire repository from the host.</summary>
     /// <param name="name">The repository name (as returned by <c>list_repositories</c>).</param>
@@ -60,6 +69,11 @@ public sealed class RepositoryAccessMcpTools(
     public async Task<McpDeleteRepositoryResult> DeleteRepositoryAsync(
         [Description("The repository name (as returned by list_repositories).")] string name)
     {
+        if (!permissionStore.IsEnabled("delete_repository"))
+        {
+            throw new McpException("The 'delete_repository' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new McpException("name must be supplied.");
@@ -106,6 +120,11 @@ public sealed class RepositoryAccessMcpTools(
         [Description("The new repository's name (must not already exist under the configured root).")] string name,
         [Description("Optional branch to check out instead of the remote's default.")] string? branch = null)
     {
+        if (!permissionStore.IsEnabled("clone_repository"))
+        {
+            throw new McpException("The 'clone_repository' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(name))
         {
             throw new McpException("url and name must both be supplied.");

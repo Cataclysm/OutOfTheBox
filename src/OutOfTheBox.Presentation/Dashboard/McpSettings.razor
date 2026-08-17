@@ -1,0 +1,99 @@
+@page "/mcp-settings"
+@attribute [Authorize]
+@using OutOfTheBox.Application.Mcp
+@using OutOfTheBox.Domain.Execution
+@using OutOfTheBox.Domain.Mcp
+@inject IMcpPermissionStore PermissionStore
+
+<PageTitle>@VersionInfo.DisplayName - MCP Settings</PageTitle>
+
+<h1>MCP Settings</h1>
+
+<p>
+    Enable or disable individual MCP tools, and individual <code>dotnet_run</code>/<code>git_run</code>
+    subcommands, for the sbx sandbox caller. Changes apply immediately to the next call - nothing here
+    needs a restart.
+</p>
+
+@if (_state is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="mcp-settings-groups">
+        <fieldset>
+            <legend>dotnet subcommands</legend>
+            @foreach (var subcommand in DotnetSubcommands)
+            {
+                var key = McpToolCatalog.SubcommandKey("dotnet", subcommand);
+                <label>
+                    <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                    @subcommand
+                </label>
+            }
+        </fieldset>
+
+        <fieldset>
+            <legend>git subcommands</legend>
+            @foreach (var subcommand in GitSubcommands)
+            {
+                var key = McpToolCatalog.SubcommandKey("git", subcommand);
+                <label>
+                    <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                    @subcommand
+                </label>
+            }
+        </fieldset>
+
+        @foreach (var group in ToolGroups)
+        {
+            <fieldset>
+                <legend>@group.Name</legend>
+                @foreach (var key in group.Keys)
+                {
+                    <label>
+                        <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                        @key
+                    </label>
+                }
+            </fieldset>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The eighteen plain tools, grouped for the page the same way <c>Credentials.razor</c>/
+    /// <c>History.razor</c> already group their own filter <c>&lt;fieldset&gt;</c>s - purely a
+    /// presentation grouping, not reflected in <see cref="McpToolCatalog"/> itself (Domain doesn't
+    /// know about UI layout).
+    /// </summary>
+    private static readonly (string Name, string[] Keys)[] ToolGroups =
+    [
+        ("Run management", ["read_run_output", "cancel_run", "get_run_resources"]),
+        ("Repository management", ["list_repositories", "delete_repository", "clone_repository"]),
+        ("File management", ["find_files", "get_file_info", "delete_path", "transfer_file", "get_file_lock_info"]),
+        ("Git credentials", ["authorize_git_host", "list_authorized_git_hosts", "revoke_git_host_authorization"]),
+        ("NuGet credentials", ["authorize_nuget_feed", "list_authorized_nuget_feeds", "revoke_nuget_feed_authorization"]),
+        ("Diagnostics", ["get_environment_info"]),
+    ];
+
+    private static readonly IReadOnlyCollection<string> DotnetSubcommands = CommandSubcommandPolicy.KnownSubcommandsFor("dotnet");
+    private static readonly IReadOnlyCollection<string> GitSubcommands = CommandSubcommandPolicy.KnownSubcommandsFor("git");
+
+    private Dictionary<string, bool>? _state;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await PermissionStore.GetAllAsync(CancellationToken.None);
+        _state = new Dictionary<string, bool>(all, StringComparer.Ordinal);
+    }
+
+    private async Task ToggleAsync(string key, bool enabled)
+    {
+        await PermissionStore.SetEnabledAsync(key, enabled, CancellationToken.None);
+        _state![key] = enabled;
+    }
+}

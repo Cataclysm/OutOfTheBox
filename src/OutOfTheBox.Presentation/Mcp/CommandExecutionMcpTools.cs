@@ -7,9 +7,11 @@ using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Execution;
+using OutOfTheBox.Domain.Mcp;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +37,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 public sealed class CommandExecutionMcpTools(
     IWorkingDirectoryResolver workingDirectoryResolver,
     IPathSanitizer pathSanitizer,
+    IMcpPermissionStore permissionStore,
     IProcessRunner processRunner,
     RunRegistry runRegistry,
     IRunRepository runRepository,
@@ -79,6 +82,11 @@ public sealed class CommandExecutionMcpTools(
         [Description("A run id returned by dotnet_run, git_run, or clone_repository.")] Guid runId,
         [Description("The offset to read from - 0 for the beginning, or a previous call's nextOffset to continue from there.")] long offset = 0)
     {
+        if (!permissionStore.IsEnabled("read_run_output"))
+        {
+            throw new McpException("The 'read_run_output' tool is currently disabled in MCP Settings.");
+        }
+
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)
             ?? throw new McpException($"Unknown run id '{runId}'.");
 
@@ -113,6 +121,11 @@ public sealed class CommandExecutionMcpTools(
     [Description("Cancels an in-flight run started by dotnet_run, git_run, or clone_repository. If the run already finished, returns its existing status rather than an error.")]
     public async Task<McpCancelRunResult> CancelRunAsync([Description("The run id to cancel.")] Guid runId)
     {
+        if (!permissionStore.IsEnabled("cancel_run"))
+        {
+            throw new McpException("The 'cancel_run' tool is currently disabled in MCP Settings.");
+        }
+
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None);
         if (run is null || run.Kind == RunKind.RepositoryDelete)
         {
@@ -143,9 +156,14 @@ public sealed class CommandExecutionMcpTools(
             throw new McpException($"workingDirectory '{workingDirectory}' is outside the configured root.");
         }
 
-        if (!CommandSubcommandPolicy.IsAllowed(executable, arguments[0]))
+        if (!CommandSubcommandPolicy.IsKnownSubcommand(executable, arguments[0]))
         {
-            throw new McpException($"'{arguments[0]}' is not an allowed {executable} subcommand. Allowed: {string.Join(", ", CommandSubcommandPolicy.AllowedSubcommandsFor(executable))}.");
+            throw new McpException($"'{arguments[0]}' is not a known {executable} subcommand. Known: {string.Join(", ", CommandSubcommandPolicy.KnownSubcommandsFor(executable))}.");
+        }
+
+        if (!permissionStore.IsEnabled(McpToolCatalog.SubcommandKey(executable, arguments[0])))
+        {
+            throw new McpException($"'{arguments[0]}' is currently disabled for {executable} in MCP Settings.");
         }
 
         var repositoryRoot = resolution.ResolvedPath!;

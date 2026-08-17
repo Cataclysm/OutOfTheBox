@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.ComponentModel;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Application.Persistence;
 using ModelContextProtocol;
@@ -18,7 +19,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// and an out-of-band call here would skew the background sampler's own next reading).
 /// </summary>
 [McpServerToolType]
-public sealed class ResourceMonitoringMcpTools(IRunRepository runRepository, ResourceHistoryBuffer historyBuffer, IClock clock)
+public sealed class ResourceMonitoringMcpTools(IRunRepository runRepository, ResourceHistoryBuffer historyBuffer, IClock clock, IMcpPermissionStore permissionStore)
 {
     /// <summary>Returns a run's recent CPU/RAM trend, plus a derived hung-vs-busy summary.</summary>
     /// <param name="runId">A run id returned by <c>dotnet_run</c>, <c>git_run</c>, or <c>clone_repository</c>.</param>
@@ -27,6 +28,11 @@ public sealed class ResourceMonitoringMcpTools(IRunRepository runRepository, Res
     public async Task<McpGetRunResourcesResult> GetRunResourcesAsync(
         [Description("A run id returned by dotnet_run, git_run, or clone_repository.")] Guid runId)
     {
+        if (!permissionStore.IsEnabled("get_run_resources"))
+        {
+            throw new McpException("The 'get_run_resources' tool is currently disabled in MCP Settings.");
+        }
+
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)
             ?? throw new McpException($"Unknown run id '{runId}'.");
 

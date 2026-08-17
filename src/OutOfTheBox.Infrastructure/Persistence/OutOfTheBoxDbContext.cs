@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Text.Json;
+using OutOfTheBox.Domain.Mcp;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,9 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
 
     /// <summary>Every feed URL explicitly authorized via <c>authorize_nuget_feed</c>, per specs/mcp-nuget-credentials. The plaintext token is never stored here - only an Azure DevOps Artifacts feed's DPAPI-encrypted password (see <see cref="NuGetFeedAuthorization"/>'s remarks).</summary>
     public DbSet<NuGetFeedAuthorization> NuGetFeedAuthorizations => Set<NuGetFeedAuthorization>();
+
+    /// <summary>Every MCP tool's/subcommand's current enabled state, per the MCP Settings dashboard page - see <see cref="McpToolPermissionEntry"/>.</summary>
+    public DbSet<McpToolPermissionEntry> McpToolPermissions => Set<McpToolPermissionEntry>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -76,5 +80,9 @@ public sealed class OutOfTheBoxDbContext(DbContextOptions<OutOfTheBoxDbContext> 
         // FeedUrl is stored as its canonical Uri.AbsoluteUri form (see NuGetFeedCredentialStore) and
         // used as the key directly.
         modelBuilder.Entity<NuGetFeedAuthorization>().HasKey(a => a.FeedUrl);
+
+        // Key is either a bare tool name or "{executable}:{subcommand}" - see McpToolPermissionEntry's
+        // own remarks - used as the primary key directly.
+        modelBuilder.Entity<McpToolPermissionEntry>().HasKey(p => p.Key);
     }
 }

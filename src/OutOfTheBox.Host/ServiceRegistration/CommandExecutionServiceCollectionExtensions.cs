@@ -4,9 +4,11 @@ using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Diagnostics;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Infrastructure.Diagnostics;
 using OutOfTheBox.Infrastructure.Events;
 using OutOfTheBox.Infrastructure.Execution;
+using OutOfTheBox.Infrastructure.Mcp;
 using OutOfTheBox.Presentation.Mcp;
 
 namespace OutOfTheBox.Host.ServiceRegistration;
@@ -43,6 +45,11 @@ public static class CommandExecutionServiceCollectionExtensions
         services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
         services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
         services.AddSingleton<IFileLockInspector, RestartManagerFileLockInspector>();
+
+        // Backs every [McpServerTool]'s own enabled-check plus the MCP Settings dashboard page -
+        // loaded once at startup via LoadMcpPermissionsAsync (Program.cs), read synchronously
+        // in-memory from then on.
+        services.AddSingleton<IMcpPermissionStore, McpPermissionStore>();
 
         // Process-wide in-memory state - must be a singleton, not scoped/transient, or the per-repository
         // lock would be meaningless (each request would get its own empty registry).

@@ -2,6 +2,8 @@
 
 using System.ComponentModel;
 using OutOfTheBox.Application.Diagnostics;
+using OutOfTheBox.Application.Mcp;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace OutOfTheBox.Presentation.Mcp;
@@ -14,13 +16,18 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// for why nothing here is cached.
 /// </summary>
 [McpServerToolType]
-public sealed class EnvironmentInfoMcpTools(IEnvironmentInfoProvider environmentInfoProvider)
+public sealed class EnvironmentInfoMcpTools(IEnvironmentInfoProvider environmentInfoProvider, IMcpPermissionStore permissionStore)
 {
     /// <summary>Returns this host's installed .NET/git toolchain, configured NuGet sources, and available disk space.</summary>
     [McpServerTool]
     [Description("Returns this host's installed dotnet/git versions, installed .NET SDKs, installed .NET workloads (best-effort - empty if this host's SDK doesn't support listing them), configured NuGet package sources, and available disk space on the configured root directory's drive. Use this to diagnose a restore/build failure caused by a missing SDK/workload, an unreachable or misconfigured NuGet feed, or insufficient disk space, rather than a code problem. Computed fresh on every call, not cached.")]
     public async Task<McpEnvironmentInfoResult> GetEnvironmentInfoAsync()
     {
+        if (!permissionStore.IsEnabled("get_environment_info"))
+        {
+            throw new McpException("The 'get_environment_info' tool is currently disabled in MCP Settings.");
+        }
+
         var info = await environmentInfoProvider.GetEnvironmentInfoAsync(CancellationToken.None);
 
         return new McpEnvironmentInfoResult(

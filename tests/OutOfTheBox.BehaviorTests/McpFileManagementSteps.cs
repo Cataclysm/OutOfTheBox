@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Text.Json;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.BehaviorTests.Support;
 using OutOfTheBox.Domain.Runs;
@@ -48,6 +49,16 @@ public sealed class McpFileManagementSteps : IDisposable
     [Given(@"the configured MCP find_files result cap is (\d+)")]
     public void GivenTheConfiguredMcpFindFilesResultCapIs(int cap) =>
         _factory = new CommandExecutionServiceFactory(rootDirectoryOverride: _scratchRoot, mcpMaxFindFilesResultsOverride: cap);
+
+    [Given(@"the find_files tool is disabled in MCP Settings")]
+    public async Task GivenTheFindFilesToolIsDisabledInMcpSettings()
+    {
+        // Program.cs already ran LoadMcpPermissionsAsync during this WebApplicationFactory's own
+        // startup (the same "everything before app.Run() genuinely executes" mechanism migrations
+        // already rely on in this test suite) - no need to call it again here.
+        var permissionStore = Factory.Services.GetRequiredService<IMcpPermissionStore>();
+        await permissionStore.SetEnabledAsync("find_files", false, CancellationToken.None);
+    }
 
     private void CreateFile(string relativePath)
     {
@@ -170,6 +181,10 @@ public sealed class McpFileManagementSteps : IDisposable
     [Then(@"the delete_path call is rejected")]
     public void ThenTheDeletePathCallIsRejected() =>
         Assert.True(_toolCallResult!.IsToolError || _toolCallResult.JsonRpcError is not null, "Expected delete_path to be rejected.");
+
+    [Then(@"the find_files call is rejected")]
+    public void ThenTheFindFilesCallIsRejected() =>
+        Assert.True(_toolCallResult!.IsToolError || _toolCallResult.JsonRpcError is not null, "Expected find_files to be rejected.");
 
     [Then(@"the delete_path call is rejected as a confinement violation")]
     public void ThenTheDeletePathCallIsRejectedAsAConfinementViolation() =>

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.ComponentModel;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Repositories;
 using OutOfTheBox.Domain.Repositories;
 using ModelContextProtocol;
@@ -18,7 +19,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// credentials for the same host.
 /// </summary>
 [McpServerToolType]
-public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStore)
+public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStore, IMcpPermissionStore permissionStore)
 {
     /// <summary>Stores a personal access token for a remote host.</summary>
     /// <param name="host">The remote host, e.g. <c>github.com</c> or <c>dev.azure.com</c>.</param>
@@ -29,6 +30,11 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
         [Description("The remote host, e.g. \"github.com\" or \"dev.azure.com\".")] string host,
         [Description("The personal access token.")] string token)
     {
+        if (!permissionStore.IsEnabled("authorize_git_host"))
+        {
+            throw new McpException("The 'authorize_git_host' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(token))
         {
             throw new McpException("host and token must both be supplied.");
@@ -52,8 +58,15 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
     /// <summary>Lists every host with a stored credential, and whether it currently appears to be working.</summary>
     [McpServerTool]
     [Description("Lists every remote host with a credential authorized via authorize_git_host, with when it was authorized and its current health (whether the most recent pull/push/force-push/fetch/clone against it succeeded or failed for an authentication reason). Never includes the token itself, which this service writes once and never reads back.")]
-    public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedGitHostsAsync() =>
-        gitCredentialStore.ListAuthorizedHostsAsync(CancellationToken.None);
+    public Task<IReadOnlyList<GitHostAuthorizationSummary>> ListAuthorizedGitHostsAsync()
+    {
+        if (!permissionStore.IsEnabled("list_authorized_git_hosts"))
+        {
+            throw new McpException("The 'list_authorized_git_hosts' tool is currently disabled in MCP Settings.");
+        }
+
+        return gitCredentialStore.ListAuthorizedHostsAsync(CancellationToken.None);
+    }
 
     /// <summary>Removes a host's stored credential.</summary>
     /// <param name="host">The remote host to revoke.</param>
@@ -62,6 +75,11 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
     public async Task<McpRevokeGitHostResult> RevokeGitHostAuthorizationAsync(
         [Description("The remote host to revoke.")] string host)
     {
+        if (!permissionStore.IsEnabled("revoke_git_host_authorization"))
+        {
+            throw new McpException("The 'revoke_git_host_authorization' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(host))
         {
             throw new McpException("host must be supplied.");

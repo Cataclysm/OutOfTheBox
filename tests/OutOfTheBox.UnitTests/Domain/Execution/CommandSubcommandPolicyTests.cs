@@ -11,18 +11,21 @@ public sealed class CommandSubcommandPolicyTests
     [InlineData("build")]
     [InlineData("test")]
     [InlineData("BUILD")]
-    public void IsAllowed_accepts_the_allowed_dotnet_subcommands(string subcommand) =>
-        Assert.True(CommandSubcommandPolicy.IsAllowed("dotnet", subcommand));
-
-    [Theory]
     [InlineData("publish")]
     [InlineData("pack")]
     [InlineData("run")]
     [InlineData("nuget")]
     [InlineData("clean")]
     [InlineData("workload")]
-    public void IsAllowed_rejects_other_dotnet_subcommands(string subcommand) =>
-        Assert.False(CommandSubcommandPolicy.IsAllowed("dotnet", subcommand));
+    public void IsKnownSubcommand_accepts_every_catalogued_dotnet_subcommand(string subcommand) =>
+        Assert.True(CommandSubcommandPolicy.IsKnownSubcommand("dotnet", subcommand));
+
+    [Theory]
+    [InlineData("uninstall")]
+    [InlineData("")]
+    [InlineData("--not-a-subcommand")]
+    public void IsKnownSubcommand_rejects_an_uncatalogued_dotnet_subcommand(string subcommand) =>
+        Assert.False(CommandSubcommandPolicy.IsKnownSubcommand("dotnet", subcommand));
 
     [Theory]
     [InlineData("fetch")]
@@ -35,29 +38,64 @@ public sealed class CommandSubcommandPolicyTests
     [InlineData("branch")]
     [InlineData("rev-parse")]
     [InlineData("PULL")]
-    public void IsAllowed_accepts_the_allowed_git_subcommands(string subcommand) =>
-        Assert.True(CommandSubcommandPolicy.IsAllowed("git", subcommand));
+    [InlineData("push")]
+    [InlineData("reset")]
+    [InlineData("clean")]
+    [InlineData("rebase")]
+    public void IsKnownSubcommand_accepts_every_catalogued_git_subcommand(string subcommand) =>
+        Assert.True(CommandSubcommandPolicy.IsKnownSubcommand("git", subcommand));
+
+    [Theory]
+    [InlineData("clone")]
+    [InlineData("-C")]
+    [InlineData("--git-dir=../elsewhere/.git")]
+    public void IsKnownSubcommand_rejects_an_uncatalogued_git_subcommand_including_global_redirect_flags(string subcommand) =>
+        Assert.False(CommandSubcommandPolicy.IsKnownSubcommand("git", subcommand));
+
+    [Fact]
+    public void IsKnownSubcommand_rejects_any_subcommand_for_an_unknown_executable() =>
+        Assert.False(CommandSubcommandPolicy.IsKnownSubcommand("powershell", "build"));
+
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("build")]
+    [InlineData("test")]
+    public void IsDefaultEnabled_is_true_for_the_originally_allowed_dotnet_subcommands(string subcommand) =>
+        Assert.True(CommandSubcommandPolicy.IsDefaultEnabled("dotnet", subcommand));
+
+    [Theory]
+    [InlineData("publish")]
+    [InlineData("pack")]
+    [InlineData("clean")]
+    [InlineData("dev-certs")]
+    public void IsDefaultEnabled_is_false_for_a_newly_catalogued_dotnet_subcommand(string subcommand) =>
+        Assert.False(CommandSubcommandPolicy.IsDefaultEnabled("dotnet", subcommand));
+
+    [Theory]
+    [InlineData("fetch")]
+    [InlineData("checkout")]
+    [InlineData("pull")]
+    [InlineData("status")]
+    public void IsDefaultEnabled_is_true_for_the_originally_allowed_git_subcommands(string subcommand) =>
+        Assert.True(CommandSubcommandPolicy.IsDefaultEnabled("git", subcommand));
 
     [Theory]
     [InlineData("push")]
     [InlineData("reset")]
-    [InlineData("clean")]
-    [InlineData("clone")]
     [InlineData("rebase")]
-    [InlineData("-C")]
-    [InlineData("--git-dir=../elsewhere/.git")]
-    public void IsAllowed_rejects_other_git_subcommands_including_global_redirect_flags(string subcommand) =>
-        Assert.False(CommandSubcommandPolicy.IsAllowed("git", subcommand));
+    [InlineData("worktree")]
+    public void IsDefaultEnabled_is_false_for_a_newly_catalogued_git_subcommand(string subcommand) =>
+        Assert.False(CommandSubcommandPolicy.IsDefaultEnabled("git", subcommand));
 
     [Fact]
-    public void IsAllowed_rejects_any_subcommand_for_an_unknown_executable() =>
-        Assert.False(CommandSubcommandPolicy.IsAllowed("powershell", "build"));
+    public void IsDefaultEnabled_is_false_for_an_uncatalogued_subcommand() =>
+        Assert.False(CommandSubcommandPolicy.IsDefaultEnabled("dotnet", "not-a-real-subcommand"));
 
     [Fact]
-    public void AllowedSubcommandsFor_reports_the_full_set_per_executable()
+    public void KnownSubcommandsFor_reports_the_full_catalog_per_executable()
     {
-        Assert.Equal(3, CommandSubcommandPolicy.AllowedSubcommandsFor("dotnet").Count);
-        Assert.Equal(9, CommandSubcommandPolicy.AllowedSubcommandsFor("git").Count);
-        Assert.Empty(CommandSubcommandPolicy.AllowedSubcommandsFor("powershell"));
+        Assert.Equal(20, CommandSubcommandPolicy.KnownSubcommandsFor("dotnet").Count);
+        Assert.Equal(29, CommandSubcommandPolicy.KnownSubcommandsFor("git").Count);
+        Assert.Empty(CommandSubcommandPolicy.KnownSubcommandsFor("powershell"));
     }
 }

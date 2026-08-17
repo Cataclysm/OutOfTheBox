@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using OutOfTheBox.Application.Diagnostics;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -16,7 +17,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// <see cref="FileTransferMcpTools.TransferFileAsync"/> already established.
 /// </summary>
 [McpServerToolType]
-public sealed class FileLockDiagnosticsMcpTools(IWorkingDirectoryResolver workingDirectoryResolver, IFileLockInspector fileLockInspector)
+public sealed class FileLockDiagnosticsMcpTools(IWorkingDirectoryResolver workingDirectoryResolver, IFileLockInspector fileLockInspector, IMcpPermissionStore permissionStore)
 {
     /// <summary>Returns which process(es) currently have a file open, from within a specific repository on the host.</summary>
     /// <param name="repository">The repository name (as returned by <c>list_repositories</c>).</param>
@@ -27,6 +28,11 @@ public sealed class FileLockDiagnosticsMcpTools(IWorkingDirectoryResolver workin
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The file's path, relative to the named repository.")] string path)
     {
+        if (!permissionStore.IsEnabled("get_file_lock_info"))
+        {
+            throw new McpException("The 'get_file_lock_info' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");

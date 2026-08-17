@@ -82,3 +82,9 @@ Feature: MCP File Management
         Given a repository with nested files at "file.txt"
         When an authenticated caller calls delete_path for "file.txt"
         Then a RepositoryFileDelete run appears in history with outcome "Completed"
+
+    Scenario: A disabled tool is rejected via MCP Settings
+        Given a repository with nested files at "file.txt"
+        And the find_files tool is disabled in MCP Settings
+        When an authenticated caller calls find_files with no pattern
+        Then the find_files call is rejected

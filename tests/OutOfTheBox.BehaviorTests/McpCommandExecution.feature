@@ -70,14 +70,19 @@ Feature: MCP Command Execution
         When an authenticated caller starts a git_run "status" against "HangingFixture"
         Then the MCP call is rejected
 
-    Scenario: A disallowed dotnet subcommand is rejected
-        When an authenticated caller starts a dotnet_run "publish" against "PassingFixture"
+    Scenario: An unknown dotnet subcommand is rejected
+        When an authenticated caller starts a dotnet_run "obliterate" against "PassingFixture"
         Then the MCP call is rejected
 
-    Scenario: A disallowed git subcommand is rejected
-        When an authenticated caller starts a git_run "push" against the git fixture
+    Scenario: An unknown git subcommand is rejected
+        When an authenticated caller starts a git_run "nuke" against the git fixture
         Then the MCP call is rejected
 
     Scenario: A dotnet_run argument that would escape the repository is rejected
         When an authenticated caller starts a dotnet_run "test" with an escaping --results-directory against "PassingFixture"
+        Then the MCP call is rejected
+
+    Scenario: A subcommand disabled via MCP Settings is rejected even though it's in the known catalog
+        Given the "status" subcommand is disabled for git in MCP Settings
+        When an authenticated caller starts a git_run "status" against the git fixture
         Then the MCP call is rejected

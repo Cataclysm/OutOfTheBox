@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
 using System.Text.Json;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.BehaviorTests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Reqnroll;
 
 namespace OutOfTheBox.BehaviorTests;
@@ -38,9 +40,12 @@ public sealed class McpCommandExecutionSteps : IDisposable
     [When(@"an authenticated caller starts a git_run ""(.*)"" against the git fixture")]
     public async Task WhenAnAuthenticatedCallerStartsAGitRunAgainstTheGitFixture(string subcommand)
     {
-        _gitFixture = await GitFixture.CreateAsync();
-        _gitFactory = new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30, rootDirectoryOverride: _gitFixture.RootDirectory);
-        _gitClient = _gitFactory.CreateClient();
+        // Reuses an already-created fixture/factory/client if a prior Given step (e.g. disabling a
+        // subcommand in MCP Settings) needed one to exist first, rather than always starting fresh -
+        // the setting change has to land on the exact same service instance this call reaches.
+        _gitFixture ??= await GitFixture.CreateAsync();
+        _gitFactory ??= new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30, rootDirectoryOverride: _gitFixture.RootDirectory);
+        _gitClient ??= _gitFactory.CreateClient();
 
         _toolCallResult = await McpTestClient.CallToolAsync(
             _gitClient,
@@ -50,6 +55,18 @@ public sealed class McpCommandExecutionSteps : IDisposable
             CancellationToken.None);
 
         _runId = ExtractRunId(_toolCallResult);
+    }
+
+    [Given(@"the ""(.*)"" subcommand is disabled for git in MCP Settings")]
+    public async Task GivenTheSubcommandIsDisabledForGitInMcpSettings(string subcommand)
+    {
+        _gitFixture ??= await GitFixture.CreateAsync();
+        _gitFactory ??= new CommandExecutionServiceFactory(defaultExecutionTimeoutSeconds: 30, rootDirectoryOverride: _gitFixture.RootDirectory);
+
+        // Program.cs already ran LoadMcpPermissionsAsync during this factory's own WebApplicationFactory
+        // startup - see McpFileManagementSteps' identical remark for why no manual load is needed here.
+        var permissionStore = _gitFactory.Services.GetRequiredService<IMcpPermissionStore>();
+        await permissionStore.SetEnabledAsync($"git:{subcommand}", false, CancellationToken.None);
     }
 
     [When(@"an authenticated caller starts a git_run ""(.*)"" against ""(.*)""")]

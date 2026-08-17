@@ -56,6 +56,7 @@ try
     var app = builder.Build();
 
     await app.MigrateDatabaseAndReconcileInterruptedRunsAsync();
+    await app.LoadMcpPermissionsAsync();
 
     app.UseOutOfTheBoxPipeline();
     app.MapOutOfTheBoxEndpoints();

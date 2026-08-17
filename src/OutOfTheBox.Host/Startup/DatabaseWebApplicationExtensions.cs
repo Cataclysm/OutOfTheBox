@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Persistence;
@@ -29,5 +30,20 @@ public static class DatabaseWebApplicationExtensions
 
         var runRepository = startupScope.ServiceProvider.GetRequiredService<IRunRepository>();
         await runRepository.ReconcileInterruptedAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Loads <see cref="IMcpPermissionStore"/>'s in-memory cache from the database, seeding any
+    /// missing row with its catalog default - see <see cref="IMcpPermissionStore.LoadAsync"/>'s own
+    /// remarks. Must run after <see cref="MigrateDatabaseAndReconcileInterruptedRunsAsync"/> (the
+    /// <c>McpToolPermissions</c> table must already exist) and before the app starts accepting
+    /// requests - an MCP tool call handled before this loads would see every key as disabled
+    /// (<see cref="IMcpPermissionStore.IsEnabled"/> reports <see langword="false"/> for an unknown key).
+    /// </summary>
+    public static async Task LoadMcpPermissionsAsync(this WebApplication app)
+    {
+        using var startupScope = app.Services.CreateScope();
+        var permissionStore = startupScope.ServiceProvider.GetRequiredService<IMcpPermissionStore>();
+        await permissionStore.LoadAsync(CancellationToken.None);
     }
 }

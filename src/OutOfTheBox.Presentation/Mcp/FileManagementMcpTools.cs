@@ -2,6 +2,7 @@
 
 using System.ComponentModel;
 using OutOfTheBox.Application.Execution;
+using OutOfTheBox.Application.Mcp;
 using OutOfTheBox.Application.Repositories;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -19,7 +20,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// tree browser already relies on.
 /// </summary>
 [McpServerToolType]
-public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDirectoryResolver, IRepositoryFileBrowser repositoryFileBrowser)
+public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDirectoryResolver, IRepositoryFileBrowser repositoryFileBrowser, IMcpPermissionStore permissionStore)
 {
     /// <summary>Searches a repository's real filesystem for files/folders matching a glob pattern.</summary>
     /// <param name="repository">The repository name (as returned by <c>list_repositories</c>).</param>
@@ -30,6 +31,11 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("Glob pattern (*, **, ?) matched against each entry's path relative to the repository root. Omit to match everything.")] string? pattern = null)
     {
+        if (!permissionStore.IsEnabled("find_files"))
+        {
+            throw new McpException("The 'find_files' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(repository))
         {
             throw new McpException("repository must be supplied.");
@@ -57,6 +63,11 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The entry's path, relative to the named repository.")] string path)
     {
+        if (!permissionStore.IsEnabled("get_file_info"))
+        {
+            throw new McpException("The 'get_file_info' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");
@@ -99,6 +110,11 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The file or directory's path, relative to the named repository.")] string path)
     {
+        if (!permissionStore.IsEnabled("delete_path"))
+        {
+            throw new McpException("The 'delete_path' tool is currently disabled in MCP Settings.");
+        }
+
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");
