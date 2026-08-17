@@ -31,21 +31,14 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("Glob pattern (*, **, ?) matched against each entry's path relative to the repository root. Omit to match everything.")] string? pattern = null)
     {
-        if (!permissionStore.IsEnabled("find_files"))
-        {
-            throw new McpException("The 'find_files' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("find_files");
 
         if (string.IsNullOrWhiteSpace(repository))
         {
             throw new McpException("repository must be supplied.");
         }
 
-        var repositoryResolution = workingDirectoryResolver.Resolve(repository);
-        if (!repositoryResolution.IsAllowed)
-        {
-            throw new McpException($"repository '{repository}' is outside the configured root.");
-        }
+        _ = workingDirectoryResolver.ResolveRepositoryRoot(repository);
 
         var result = await repositoryFileBrowser.FindEntriesAsync(repository, pattern ?? string.Empty, CancellationToken.None);
 
@@ -63,28 +56,15 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The entry's path, relative to the named repository.")] string path)
     {
-        if (!permissionStore.IsEnabled("get_file_info"))
-        {
-            throw new McpException("The 'get_file_info' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("get_file_info");
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");
         }
 
-        var repositoryResolution = workingDirectoryResolver.Resolve(repository);
-        if (!repositoryResolution.IsAllowed)
-        {
-            throw new McpException($"repository '{repository}' is outside the configured root.");
-        }
-
-        var repositoryRoot = repositoryResolution.ResolvedPath!;
-        var pathResolution = workingDirectoryResolver.ResolveWithinRoot(repositoryRoot, path);
-        if (!pathResolution.IsAllowed)
-        {
-            throw new McpException($"path '{path}' escapes repository '{repository}'.");
-        }
+        var repositoryRoot = workingDirectoryResolver.ResolveRepositoryRoot(repository);
+        _ = workingDirectoryResolver.ResolveFilePath(repositoryRoot, repository, path);
 
         var metadata = await repositoryFileBrowser.GetMetadataAsync(repository, path, CancellationToken.None)
             ?? throw new McpException($"'{path}' does not exist in repository '{repository}'.");
@@ -110,28 +90,15 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The file or directory's path, relative to the named repository.")] string path)
     {
-        if (!permissionStore.IsEnabled("delete_path"))
-        {
-            throw new McpException("The 'delete_path' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("delete_path");
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");
         }
 
-        var repositoryResolution = workingDirectoryResolver.Resolve(repository);
-        if (!repositoryResolution.IsAllowed)
-        {
-            throw new McpException($"repository '{repository}' is outside the configured root.");
-        }
-
-        var repositoryRoot = repositoryResolution.ResolvedPath!;
-        var pathResolution = workingDirectoryResolver.ResolveWithinRoot(repositoryRoot, path);
-        if (!pathResolution.IsAllowed)
-        {
-            throw new McpException($"path '{path}' escapes repository '{repository}'.");
-        }
+        var repositoryRoot = workingDirectoryResolver.ResolveRepositoryRoot(repository);
+        _ = workingDirectoryResolver.ResolveFilePath(repositoryRoot, repository, path);
 
         var result = await repositoryFileBrowser.DeleteAsync(repository, path, CancellationToken.None);
 

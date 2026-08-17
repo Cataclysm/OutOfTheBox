@@ -28,10 +28,7 @@ public sealed class ResourceMonitoringMcpTools(IRunRepository runRepository, Res
     public async Task<McpGetRunResourcesResult> GetRunResourcesAsync(
         [Description("A run id returned by dotnet_run, git_run, or clone_repository.")] Guid runId)
     {
-        if (!permissionStore.IsEnabled("get_run_resources"))
-        {
-            throw new McpException("The 'get_run_resources' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("get_run_resources");
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)
             ?? throw new McpException($"Unknown run id '{runId}'.");

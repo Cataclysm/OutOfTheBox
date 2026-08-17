@@ -42,31 +42,15 @@ public sealed class FileTransferMcpTools(
         [Description("The repository name (as returned by list_repositories).")] string repository,
         [Description("The file's path, relative to the named repository.")] string path)
     {
-        if (!permissionStore.IsEnabled("transfer_file"))
-        {
-            throw new McpException("The 'transfer_file' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("transfer_file");
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
         {
             throw new McpException("repository and path must both be supplied.");
         }
 
-        var repositoryResolution = workingDirectoryResolver.Resolve(repository);
-        if (!repositoryResolution.IsAllowed)
-        {
-            throw new McpException($"repository '{repository}' is outside the configured root.");
-        }
-
-        var repositoryRoot = repositoryResolution.ResolvedPath!;
-
-        var fileResolution = workingDirectoryResolver.ResolveWithinRoot(repositoryRoot, path);
-        if (!fileResolution.IsAllowed)
-        {
-            throw new McpException($"path '{path}' escapes repository '{repository}'.");
-        }
-
-        var filePath = fileResolution.ResolvedPath!;
+        var repositoryRoot = workingDirectoryResolver.ResolveRepositoryRoot(repository);
+        var filePath = workingDirectoryResolver.ResolveFilePath(repositoryRoot, repository, path);
         var runId = Guid.NewGuid();
 
         if (!File.Exists(filePath))

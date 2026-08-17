@@ -54,10 +54,7 @@ public sealed class RepositoryAccessMcpTools(
     [Description("Lists every repository under the configured root, with its name, total size, git status, active/idle state, and whether its remote host currently needs a working git credential (see authorize_git_host).")]
     public Task<IReadOnlyList<RepositorySummary>> ListRepositoriesAsync()
     {
-        if (!permissionStore.IsEnabled("list_repositories"))
-        {
-            throw new McpException("The 'list_repositories' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("list_repositories");
 
         return repositoryManager.ListAsync(CancellationToken.None);
     }
@@ -69,10 +66,7 @@ public sealed class RepositoryAccessMcpTools(
     public async Task<McpDeleteRepositoryResult> DeleteRepositoryAsync(
         [Description("The repository name (as returned by list_repositories).")] string name)
     {
-        if (!permissionStore.IsEnabled("delete_repository"))
-        {
-            throw new McpException("The 'delete_repository' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("delete_repository");
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -120,10 +114,7 @@ public sealed class RepositoryAccessMcpTools(
         [Description("The new repository's name (must not already exist under the configured root).")] string name,
         [Description("Optional branch to check out instead of the remote's default.")] string? branch = null)
     {
-        if (!permissionStore.IsEnabled("clone_repository"))
-        {
-            throw new McpException("The 'clone_repository' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("clone_repository");
 
         if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(name))
         {

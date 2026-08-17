@@ -82,10 +82,7 @@ public sealed class CommandExecutionMcpTools(
         [Description("A run id returned by dotnet_run, git_run, or clone_repository.")] Guid runId,
         [Description("The offset to read from - 0 for the beginning, or a previous call's nextOffset to continue from there.")] long offset = 0)
     {
-        if (!permissionStore.IsEnabled("read_run_output"))
-        {
-            throw new McpException("The 'read_run_output' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("read_run_output");
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)
             ?? throw new McpException($"Unknown run id '{runId}'.");
@@ -121,10 +118,7 @@ public sealed class CommandExecutionMcpTools(
     [Description("Cancels an in-flight run started by dotnet_run, git_run, or clone_repository. If the run already finished, returns its existing status rather than an error.")]
     public async Task<McpCancelRunResult> CancelRunAsync([Description("The run id to cancel.")] Guid runId)
     {
-        if (!permissionStore.IsEnabled("cancel_run"))
-        {
-            throw new McpException("The 'cancel_run' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("cancel_run");
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None);
         if (run is null || run.Kind == RunKind.RepositoryDelete)

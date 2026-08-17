@@ -29,10 +29,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
         [Description("The feed URL, e.g. \"https://pkgs.dev.azure.com/org/_packaging/feed/nuget/v3/index.json\" or \"https://nuget.pkg.github.com/org/index.json\".")] string feedUrl,
         [Description("The personal access token.")] string token)
     {
-        if (!permissionStore.IsEnabled("authorize_nuget_feed"))
-        {
-            throw new McpException("The 'authorize_nuget_feed' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("authorize_nuget_feed");
 
         if (string.IsNullOrWhiteSpace(feedUrl) || string.IsNullOrWhiteSpace(token))
         {
@@ -61,10 +58,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
     [Description("Lists every NuGet feed URL with a credential authorized via authorize_nuget_feed, with when it was authorized. Never includes the token itself, which this service never returns from any tool result.")]
     public Task<IReadOnlyList<NuGetFeedAuthorizationSummary>> ListAuthorizedNuGetFeedsAsync()
     {
-        if (!permissionStore.IsEnabled("list_authorized_nuget_feeds"))
-        {
-            throw new McpException("The 'list_authorized_nuget_feeds' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("list_authorized_nuget_feeds");
 
         return nuGetFeedCredentialStore.ListAuthorizedFeedsAsync(CancellationToken.None);
     }
@@ -76,10 +70,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
     public async Task<McpRevokeNuGetFeedResult> RevokeNuGetFeedAuthorizationAsync(
         [Description("The feed URL to revoke.")] string feedUrl)
     {
-        if (!permissionStore.IsEnabled("revoke_nuget_feed_authorization"))
-        {
-            throw new McpException("The 'revoke_nuget_feed_authorization' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
-        }
+        permissionStore.EnsureEnabled("revoke_nuget_feed_authorization");
 
         if (string.IsNullOrWhiteSpace(feedUrl))
         {
