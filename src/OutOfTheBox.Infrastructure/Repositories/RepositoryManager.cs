@@ -147,28 +147,23 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed)
+        if (!TryResolveExistingPath(name, out var targetPath, out var rejectionReason))
         {
-            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
-        }
-
-        var targetPath = resolution.ResolvedPath!;
-
-        if (!Directory.Exists(targetPath))
-        {
-            var now = DateTimeOffset.UtcNow;
-            await runRepository.AddAsync(new Run
+            if (rejectionReason == RepositoryActionRejectionReason.NotFound)
             {
-                Id = Guid.NewGuid(),
-                Kind = RunKind.RepositoryDelete,
-                RepositoryPath = targetPath,
-                StartedAt = now,
-                CompletedAt = now,
-                Outcome = RunOutcome.NotFound,
-            }, cancellationToken);
+                var now = DateTimeOffset.UtcNow;
+                await runRepository.AddAsync(new Run
+                {
+                    Id = Guid.NewGuid(),
+                    Kind = RunKind.RepositoryDelete,
+                    RepositoryPath = targetPath,
+                    StartedAt = now,
+                    CompletedAt = now,
+                    Outcome = RunOutcome.NotFound,
+                }, cancellationToken);
+            }
 
-            return new RepositoryActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+            return new RepositoryActionResult.Rejected(rejectionReason);
         }
 
         var runId = Guid.NewGuid();
@@ -253,16 +248,9 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed)
+        if (!TryResolveExistingPath(name, out var targetPath, out var rejectionReason))
         {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
-        }
-
-        var targetPath = resolution.ResolvedPath!;
-        if (!Directory.Exists(targetPath))
-        {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+            return new RepositoryGitActionResult.Rejected(rejectionReason);
         }
 
         var newResolution = workingDirectoryResolver.Resolve(newName);
@@ -343,13 +331,11 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        if (ResolveExistingRepositoryPath(name) is not string targetPath)
         {
             return [];
         }
 
-        var targetPath = resolution.ResolvedPath!;
         var currentBranch = (await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken))?.Trim();
         var localOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
         var remoteOutput = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["branch", "-r", "--format=%(refname:short)"], cancellationToken) ?? string.Empty;
@@ -390,16 +376,9 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed)
+        if (!TryResolveExistingPath(name, out var targetPath, out var rejectionReason))
         {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
-        }
-
-        var targetPath = resolution.ResolvedPath!;
-        if (!Directory.Exists(targetPath))
-        {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+            return new RepositoryGitActionResult.Rejected(rejectionReason);
         }
 
         var runId = Guid.NewGuid();
@@ -512,13 +491,11 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        if (ResolveExistingRepositoryPath(name) is not string targetPath)
         {
             return [];
         }
 
-        var targetPath = resolution.ResolvedPath!;
         var remoteNames = await GetRemoteNamesAsync(targetPath, cancellationToken);
 
         // %x1f/%x1e (unit/record separator control characters) delimit fields/records instead of a
@@ -567,13 +544,11 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        if (ResolveExistingRepositoryPath(name) is not string targetPath)
         {
             return null;
         }
 
-        var targetPath = resolution.ResolvedPath!;
         var remoteNames = await GetRemoteNamesAsync(targetPath, cancellationToken);
 
         // Same %x1f/%x1e delimiter trick as ListCommitsAsync - %b (the message body) can itself
@@ -672,13 +647,10 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        if (ResolveExistingRepositoryPath(name) is not string targetPath)
         {
             return null;
         }
-
-        var targetPath = resolution.ResolvedPath!;
 
         // --format= (empty pretty-format) suppresses the commit header entirely - the operator
         // already sees author/date/message on the page itself, so repeating it here would just be
@@ -693,13 +665,11 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed || !Directory.Exists(resolution.ResolvedPath))
+        if (ResolveExistingRepositoryPath(name) is not string targetPath)
         {
             return [];
         }
 
-        var targetPath = resolution.ResolvedPath!;
         var output = await GitCaptureRunner.CaptureAsync(processRunner, logger, targetPath, ["status", "--porcelain"], cancellationToken);
 
         return string.IsNullOrEmpty(output) ? [] : ParsePorcelainPaths(output);
@@ -831,16 +801,9 @@ public sealed class RepositoryManager(
     /// <inheritdoc />
     public async Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed)
+        if (!TryResolveExistingPath(name, out var targetPath, out var rejectionReason))
         {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
-        }
-
-        var targetPath = resolution.ResolvedPath!;
-        if (!Directory.Exists(targetPath))
-        {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+            return new RepositoryGitActionResult.Rejected(rejectionReason);
         }
 
         var runId = Guid.NewGuid();
@@ -880,6 +843,49 @@ public sealed class RepositoryManager(
         {
             runRegistry.Release(targetPath);
         }
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="name"/> to its absolute path, or null if the name is invalid/escaping
+    /// or the directory doesn't exist - the exact "either problem means there's nothing to do" check
+    /// every read-only inspection method (<see cref="ListBranchesAsync"/>, <see cref="ListCommitsAsync"/>,
+    /// <see cref="GetCommitDetailAsync"/>, <see cref="GetCommitFileDiffAsync"/>,
+    /// <see cref="ListDirtyFilePathsAsync"/>) repeats verbatim, since none of them need to distinguish
+    /// the two cases - both just mean "return the type's own empty/null default."
+    /// </summary>
+    private string? ResolveExistingRepositoryPath(string name)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        return resolution.IsAllowed && Directory.Exists(resolution.ResolvedPath) ? resolution.ResolvedPath : null;
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="name"/> to its absolute path, distinguishing why it failed - the
+    /// same two-step "confined name, then existing directory" check <see cref="DeleteAsync"/>,
+    /// <see cref="RunGitActionAsync"/>, <see cref="SwitchBranchAsync"/>, <see cref="CheckoutCommitAsync"/>,
+    /// and <see cref="RenameAsync"/>'s own source-side resolution all repeated verbatim, each returning
+    /// a distinct <see cref="RepositoryActionRejectionReason"/> a caller then wraps in its own result
+    /// type (<see cref="RepositoryActionResult"/> or <see cref="RepositoryGitActionResult"/>).
+    /// </summary>
+    private bool TryResolveExistingPath(string name, out string targetPath, out RepositoryActionRejectionReason rejectionReason)
+    {
+        var resolution = workingDirectoryResolver.Resolve(name);
+        if (!resolution.IsAllowed)
+        {
+            targetPath = string.Empty;
+            rejectionReason = RepositoryActionRejectionReason.InvalidName;
+            return false;
+        }
+
+        targetPath = resolution.ResolvedPath!;
+        if (!Directory.Exists(targetPath))
+        {
+            rejectionReason = RepositoryActionRejectionReason.NotFound;
+            return false;
+        }
+
+        rejectionReason = default;
+        return true;
     }
 
     private async Task<HashSet<string>> GetRemoteNamesAsync(string targetPath, CancellationToken cancellationToken)
@@ -933,16 +939,9 @@ public sealed class RepositoryManager(
     /// <param name="cancellationToken">Cancels the invocation.</param>
     private async Task<RepositoryGitActionResult> RunGitActionAsync(string name, string[] gitArguments, bool touchesNetwork, CancellationToken cancellationToken)
     {
-        var resolution = workingDirectoryResolver.Resolve(name);
-        if (!resolution.IsAllowed)
+        if (!TryResolveExistingPath(name, out var targetPath, out var rejectionReason))
         {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.InvalidName);
-        }
-
-        var targetPath = resolution.ResolvedPath!;
-        if (!Directory.Exists(targetPath))
-        {
-            return new RepositoryGitActionResult.Rejected(RepositoryActionRejectionReason.NotFound);
+            return new RepositoryGitActionResult.Rejected(rejectionReason);
         }
 
         var runId = Guid.NewGuid();
