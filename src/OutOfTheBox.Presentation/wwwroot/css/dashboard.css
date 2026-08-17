@@ -534,12 +534,131 @@ dialog::backdrop {
     background: var(--gradient-brand);
 }
 
+.login-logo-wrap {
+    position: relative;
+    display: inline-flex;
+    margin-bottom: 0.25rem;
+}
+
 .login-logo {
     width: 72px;
     height: 72px;
     border-radius: 18px;
     box-shadow: 0 8px 24px -8px rgba(236, 72, 153, 0.5);
-    margin-bottom: 0.25rem;
+}
+
+/* One-shot entrance played on every fresh load of the login page (a real full-page navigation, not a
+   Blazor route change - there's no SPA state to track "already played" against, and there doesn't
+   need to be). Every animation here has no explicit animation-iteration-count, so each plays its one
+   default iteration and stops - "only play once" is what a CSS animation already does unless told
+   otherwise, not something requiring extra code. Scoped inside prefers-reduced-motion: no-preference
+   so a user who's asked for reduced motion gets the plain, immediately-visible card instead - the
+   opacity: 0 starting keyframes only ever apply where the animation itself is also enabled, so
+   nothing is invisible-by-default outside that query. animation-fill-mode: both (the second "both" in
+   each shorthand) holds each element's from-state during its own start delay and its to-state after
+   finishing, so staggered elements don't flash unstyled before their delay elapses. */
+@media (prefers-reduced-motion: no-preference) {
+    .login-card {
+        animation: login-card-in 0.5s ease-out both;
+    }
+
+    .login-logo {
+        /* Two animations, comma-separated: the one-shot entrance (finite, no explicit
+           iteration-count defaults to 1) - the overshoot-then-settle wobble (60% keyframe
+           scales/rotates past the final resting state before easing back) comes from this
+           cubic-bezier, not the keyframes themselves, the same "back" easing shape a spring
+           settles with - followed by an infinite, faint breathing glow that starts right as the
+           entrance finishes (its own 0.65s delay matches the entrance's own duration). The pulse's
+           keyframes only declare a 50% box-shadow - 0%/100% are left to default to .login-logo's own
+           static box-shadow (declared above, outside this media query), which is what the pulse
+           breathes out from and back to, and what a reduced-motion user (who never runs either
+           animation) sees permanently instead. */
+        animation:
+            login-logo-in 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+            login-logo-pulse 2.6s ease-in-out 0.65s infinite;
+    }
+
+    /* A separate element, not the logo image's own ::before/::after - generated content doesn't
+       reliably render on <img> (a replaced element) across browsers, so the ring lives on the plain
+       wrapper div around it instead. */
+    .login-logo-wrap::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 18px;
+        box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.65);
+        animation: login-glow-ring 0.9s ease-out 0.2s both;
+        pointer-events: none;
+    }
+
+    .login-card h1 {
+        animation: login-fade-up 0.45s ease-out 0.25s both;
+    }
+
+    .login-card form {
+        animation: login-fade-up 0.45s ease-out 0.4s both;
+    }
+}
+
+@keyframes login-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes login-logo-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.4) rotate(-25deg);
+    }
+
+    60% {
+        opacity: 1;
+        transform: scale(1.08) rotate(4deg);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+@keyframes login-glow-ring {
+    0% {
+        opacity: 0.6;
+        transform: scale(0.6);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1.9);
+    }
+}
+
+/* Faint continuous breathing glow kept running after the one-shot entrance - only the midpoint is
+   declared, so it breathes out from (and back to) .login-logo's own static resting box-shadow. */
+@keyframes login-logo-pulse {
+    50% {
+        box-shadow: 0 8px 30px -6px rgba(236, 72, 153, 0.85);
+    }
+}
+
+@keyframes login-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .login-card h1 {
