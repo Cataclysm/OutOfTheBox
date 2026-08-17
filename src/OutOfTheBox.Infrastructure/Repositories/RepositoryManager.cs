@@ -17,13 +17,19 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 
 /// <inheritdoc cref="IRepositoryManager" />
 /// <remarks>
-/// Registered scoped (it depends on the scoped <see cref="IRunRepository"/>), called directly from
-/// Blazor component code-behind - never through an HTTP endpoint, per specs/repository-management's
-/// "reachable only from the authenticated dashboard" requirement. <see cref="CloneAsync"/>'s
-/// background continuation resolves its own <see cref="IRunRepository"/> from a fresh
-/// <see cref="IServiceScopeFactory"/>-created scope rather than closing over the caller's injected
-/// instance - the calling Blazor circuit's scope (and its <c>DbContext</c>) may not outlive the
-/// clone, which keeps running after <see cref="CloneAsync"/> itself has already returned.
+/// Implements all four repository interfaces (<see cref="IRepositoryManager"/> itself,
+/// <see cref="IRepositoryGitActions"/>, <see cref="IRepositoryBranchManager"/>,
+/// <see cref="IRepositoryHistoryReader"/>) in one class - they're split for each consumer's benefit
+/// (depend only on the slice you call), not because the implementation itself separates cleanly; every
+/// method here shares the same private helpers, lock registry, and stats-refresh plumbing regardless
+/// of which interface declares it. Registered scoped (it depends on the scoped
+/// <see cref="IRunRepository"/>), called directly from Blazor component code-behind - never through an
+/// HTTP endpoint, per specs/repository-management's "reachable only from the authenticated dashboard"
+/// requirement. <see cref="CloneAsync"/>'s background continuation resolves its own
+/// <see cref="IRunRepository"/> from a fresh <see cref="IServiceScopeFactory"/>-created scope rather
+/// than closing over the caller's injected instance - the calling Blazor circuit's scope (and its
+/// <c>DbContext</c>) may not outlive the clone, which keeps running after <see cref="CloneAsync"/>
+/// itself has already returned.
 /// </remarks>
 public sealed class RepositoryManager(
     IWorkingDirectoryResolver workingDirectoryResolver,
@@ -37,7 +43,7 @@ public sealed class RepositoryManager(
     IGitCredentialStore gitCredentialStore,
     IServiceScopeFactory serviceScopeFactory,
     IOptions<ServiceOptions> options,
-    ILogger<RepositoryManager> logger) : IRepositoryManager
+    ILogger<RepositoryManager> logger) : IRepositoryManager, IRepositoryGitActions, IRepositoryBranchManager, IRepositoryHistoryReader
 {
     // Unit/record separator control characters delimit ListCommitsAsync's `git log --format` fields -
     // see that method's own remarks for why, not a printable delimiter a commit subject could contain.

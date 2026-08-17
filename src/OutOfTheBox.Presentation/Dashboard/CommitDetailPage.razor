@@ -4,6 +4,7 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
+@inject IRepositoryHistoryReader RepositoryHistoryReader
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @implements IDisposable
 
@@ -164,7 +165,7 @@ else
         _loadedKey = key;
         _loading = true;
         _detail = null;
-        _detail = await RepositoryManager.GetCommitDetailAsync(Name, Hash, CancellationToken.None);
+        _detail = await RepositoryHistoryReader.GetCommitDetailAsync(Name, Hash, CancellationToken.None);
         _loading = false;
 
         await RefreshSummaryAsync();

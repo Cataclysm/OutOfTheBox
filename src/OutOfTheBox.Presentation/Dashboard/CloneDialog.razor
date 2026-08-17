@@ -2,6 +2,7 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 @inject IRepositoryManager RepositoryManager
+@inject IRepositoryBranchManager RepositoryBranchManager
 
 <dialog @ref="_dialogElement">
     <div class="dialog-body">
@@ -86,7 +87,7 @@
         }
 
         // Debounced, not looked up on every keystroke - git ls-remote is a real network round trip
-        // (up to IRepositoryManager.ListRemoteBranchesAsync's own 10s timeout), per
+        // (up to IRepositoryBranchManager.ListRemoteBranchesAsync's own 10s timeout), per
         // specs/repository-management's "Branches populate after entering a URL" requirement.
         _branchLookupCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -137,7 +138,7 @@
             return;
         }
 
-        var branches = await RepositoryManager.ListRemoteBranchesAsync(url, cts.Token);
+        var branches = await RepositoryBranchManager.ListRemoteBranchesAsync(url, cts.Token);
         if (cts.IsCancellationRequested)
         {
             return;

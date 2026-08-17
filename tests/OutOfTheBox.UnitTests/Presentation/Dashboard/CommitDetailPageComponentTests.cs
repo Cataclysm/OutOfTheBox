@@ -32,6 +32,7 @@ public sealed class CommitDetailPageComponentTests : DashboardComponentTestConte
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryManager>(_repositoryManager);
+        Services.AddSingleton<IRepositoryHistoryReader>(_repositoryManager);
         Services.AddSingleton(_repositoryStatsEventBus);
         Services.AddScoped<ICodePreviewInterop, CodePreviewInterop>();
     }
@@ -167,7 +168,7 @@ public sealed class CommitDetailPageComponentTests : DashboardComponentTestConte
     /// <inheritdoc />
     public new void Dispose() => base.Dispose();
 
-    private sealed class FakeRepositoryManager : IRepositoryManager
+    private sealed class FakeRepositoryManager : IRepositoryManager, IRepositoryHistoryReader
     {
         public CommitDetail? Detail { get; set; }
 
@@ -179,18 +180,9 @@ public sealed class CommitDetailPageComponentTests : DashboardComponentTestConte
 
         public Task<RepositoryActionResult> CloneAsync(string url, string name, string? branch, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

@@ -1,7 +1,8 @@
 @using System.Globalization
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
-@inject IRepositoryManager RepositoryManager
+@inject IRepositoryHistoryReader RepositoryHistoryReader
+@inject IRepositoryBranchManager RepositoryBranchManager
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @inject NavigationManager NavigationManager
 @implements IDisposable
@@ -179,7 +180,7 @@ else
     /// <summary>
     /// Raised after a branch-switch attempt from a commit's ref pill (regardless of outcome) - the
     /// parent page's own branch dropdown/summary has no other way to learn about a switch triggered
-    /// from here, since it isn't the one that called <see cref="IRepositoryManager.SwitchBranchAsync"/>.
+    /// from here, since it isn't the one that called <see cref="IRepositoryBranchManager.SwitchBranchAsync"/>.
     /// </summary>
     [Parameter]
     public EventCallback OnBranchSwitched { get; set; }
@@ -230,7 +231,7 @@ else
 
     private async Task LoadAsync(int take)
     {
-        var commits = await RepositoryManager.ListCommitsAsync(RepositoryName, 0, take, CancellationToken.None);
+        var commits = await RepositoryHistoryReader.ListCommitsAsync(RepositoryName, 0, take, CancellationToken.None);
         _commits = commits;
         _graph = CommitGraphLayout.Compute(commits);
         _hasMore = commits.Count == take;
@@ -248,7 +249,7 @@ else
     private async Task CheckoutAsync(string hash)
     {
         _error = null;
-        var result = await RepositoryManager.CheckoutCommitAsync(RepositoryName, hash, CancellationToken.None);
+        var result = await RepositoryBranchManager.CheckoutCommitAsync(RepositoryName, hash, CancellationToken.None);
 
         _error = result switch
         {
@@ -280,7 +281,7 @@ else
     private async Task SwitchBranchAsync(string branch)
     {
         _error = null;
-        var result = await RepositoryManager.SwitchBranchAsync(RepositoryName, branch, CancellationToken.None);
+        var result = await RepositoryBranchManager.SwitchBranchAsync(RepositoryName, branch, CancellationToken.None);
 
         _error = result switch
         {

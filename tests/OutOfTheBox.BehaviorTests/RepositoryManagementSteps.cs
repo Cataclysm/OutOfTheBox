@@ -43,6 +43,8 @@ public sealed class RepositoryManagementSteps : IDisposable
 
     private IRepositoryManager RepositoryManager => _scope!.ServiceProvider.GetRequiredService<IRepositoryManager>();
 
+    private IRepositoryHistoryReader RepositoryHistoryReader => _scope!.ServiceProvider.GetRequiredService<IRepositoryHistoryReader>();
+
     private IRunRepository RunRepository => _scope!.ServiceProvider.GetRequiredService<IRunRepository>();
 
     private RunRegistry RunRegistry => _scope!.ServiceProvider.GetRequiredService<RunRegistry>();
@@ -303,10 +305,10 @@ public sealed class RepositoryManagementSteps : IDisposable
     {
         await EnsureFactoryAsync();
 
-        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var commits = await RepositoryHistoryReader.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
         var initialCommitHash = Assert.Single(commits).Hash;
 
-        _diffResult = await RepositoryManager.GetCommitFileDiffAsync("GitFixture", initialCommitHash, relativePath, CancellationToken.None);
+        _diffResult = await RepositoryHistoryReader.GetCommitFileDiffAsync("GitFixture", initialCommitHash, relativePath, CancellationToken.None);
     }
 
     [Then(@"the diff shows ""(.*)"" as the changed file with an added ""(.*)"" line")]
@@ -327,10 +329,10 @@ public sealed class RepositoryManagementSteps : IDisposable
     {
         await EnsureFactoryAsync();
 
-        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var commits = await RepositoryHistoryReader.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
         var initialCommitHash = Assert.Single(commits).Hash;
 
-        _commitDetail = await RepositoryManager.GetCommitDetailAsync("GitFixture", initialCommitHash, CancellationToken.None);
+        _commitDetail = await RepositoryHistoryReader.GetCommitDetailAsync("GitFixture", initialCommitHash, CancellationToken.None);
     }
 
     [Then(@"the changed file ""(.*)"" shows (\d+) lines? added and (\d+) lines? removed")]
@@ -355,7 +357,7 @@ public sealed class RepositoryManagementSteps : IDisposable
     public async Task WhenAnOperatorListsTheFixtureRepositorySDirtyFilePaths()
     {
         await EnsureFactoryAsync();
-        _dirtyFilePaths = await RepositoryManager.ListDirtyFilePathsAsync("GitFixture", CancellationToken.None);
+        _dirtyFilePaths = await RepositoryHistoryReader.ListDirtyFilePathsAsync("GitFixture", CancellationToken.None);
     }
 
     [Then(@"the dirty file paths include ""(.*)""")]
@@ -386,10 +388,10 @@ public sealed class RepositoryManagementSteps : IDisposable
     {
         await EnsureFactoryAsync();
 
-        var commits = await RepositoryManager.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
+        var commits = await RepositoryHistoryReader.ListCommitsAsync("GitFixture", 0, 1, CancellationToken.None);
         var newestCommitHash = Assert.Single(commits).Hash;
 
-        _commitDetail = await RepositoryManager.GetCommitDetailAsync("GitFixture", newestCommitHash, CancellationToken.None);
+        _commitDetail = await RepositoryHistoryReader.GetCommitDetailAsync("GitFixture", newestCommitHash, CancellationToken.None);
     }
 
     [Then(@"its single parent shows the initial commit's subject")]

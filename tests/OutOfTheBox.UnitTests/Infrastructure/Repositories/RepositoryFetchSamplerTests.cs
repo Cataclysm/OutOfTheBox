@@ -34,6 +34,7 @@ public sealed class RepositoryFetchSamplerTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddSingleton<IRepositoryManager>(_fakeManager);
+        services.AddSingleton<IRepositoryGitActions>(_fakeManager);
         services.AddTransient(_ => _dbContextFactory.CreateContext());
         _serviceProvider = services.BuildServiceProvider();
     }
@@ -191,7 +192,7 @@ public sealed class RepositoryFetchSamplerTests : IDisposable
         }
     }
 
-    private sealed class FakeRepositoryManager : IRepositoryManager
+    private sealed class FakeRepositoryManager : IRepositoryManager, IRepositoryGitActions
     {
         public IReadOnlyList<RepositorySummary> Summaries { get; set; } = [];
 
@@ -239,30 +240,6 @@ public sealed class RepositoryFetchSamplerTests : IDisposable
             throw new NotSupportedException("Not exercised by these tests.");
 
         public Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-
-        public Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken) =>
             throw new NotSupportedException("Not exercised by these tests.");
     }
 

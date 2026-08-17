@@ -17,7 +17,7 @@ namespace OutOfTheBox.Infrastructure.Repositories;
 /// (already-known refs), so ahead/behind and "remote gone" only ever reflect what the last real
 /// fetch/pull/push saw. Without this, that only ever happened when an operator manually triggered
 /// pull/push/fetch (or an MCP `git_run`) against a repository - a repository nobody touches would
-/// show stale ahead/behind indefinitely. Goes through <see cref="IRepositoryManager.FetchAsync"/>,
+/// show stale ahead/behind indefinitely. Goes through <see cref="IRepositoryGitActions.FetchAsync"/>,
 /// not a raw <c>git fetch</c> invocation, so every existing side effect of a fetch (the per-repository
 /// lock, credential-outcome recording feeding <see cref="RepositoryCredentialHealth"/>, the immediate
 /// stats refresh) applies here identically to an operator-triggered one - a side benefit is that a
@@ -85,12 +85,17 @@ public sealed class RepositoryFetchSampler(
     /// </summary>
     public async Task FetchAllOnceAsync(CancellationToken cancellationToken)
     {
-        // A fresh scope per sweep, not a captive constructor dependency - IRepositoryManager is
-        // scoped (it depends on the scoped IRunRepository), and this is a singleton-lifetime
-        // BackgroundService, the same "resolve a fresh scope internally" reasoning GitCredentialStore's
-        // own remarks already document for the same underlying constraint.
+        // A fresh scope per sweep, not a captive constructor dependency - the concrete
+        // RepositoryManager is scoped (it depends on the scoped IRunRepository), and this is a
+        // singleton-lifetime BackgroundService, the same "resolve a fresh scope internally"
+        // reasoning GitCredentialStore's own remarks already document for the same underlying
+        // constraint. Resolves both interface slices it needs (ListAsync, FetchAsync) rather than
+        // the concrete type - real DI resolves both to the same scoped RepositoryManager instance
+        // (see RepositoryManagementServiceCollectionExtensions), but depending on the interfaces
+        // keeps this class substitutable in tests, unlike the concrete (sealed) type.
         await using var scope = serviceScopeFactory.CreateAsyncScope();
         var repositoryManager = scope.ServiceProvider.GetRequiredService<IRepositoryManager>();
+        var repositoryGitActions = scope.ServiceProvider.GetRequiredService<IRepositoryGitActions>();
 
         IReadOnlyList<RepositorySummary> summaries;
         try
@@ -122,15 +127,15 @@ public sealed class RepositoryFetchSampler(
                 continue;
             }
 
-            await FetchOneAsync(repositoryManager, summary.Name, cancellationToken);
+            await FetchOneAsync(repositoryGitActions, summary.Name, cancellationToken);
         }
     }
 
-    private async Task FetchOneAsync(IRepositoryManager repositoryManager, string name, CancellationToken cancellationToken)
+    private async Task FetchOneAsync(IRepositoryGitActions repositoryGitActions, string name, CancellationToken cancellationToken)
     {
         try
         {
-            var result = await repositoryManager.FetchAsync(name, cancellationToken);
+            var result = await repositoryGitActions.FetchAsync(name, cancellationToken);
 
             // Succeeded needs no action (FetchAsync already refreshed and published this
             // repository's stats). Rejected (busy with another run, deleted since being listed) is

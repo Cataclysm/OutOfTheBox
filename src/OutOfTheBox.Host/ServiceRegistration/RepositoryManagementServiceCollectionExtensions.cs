@@ -45,7 +45,19 @@ public static class RepositoryManagementServiceCollectionExtensions
         // ICredentialProtector's own remarks.
         services.AddSingleton<ICredentialProtector, DpapiCredentialProtector>();
 
-        services.AddScoped<IRepositoryManager, RepositoryManager>();
+        // Registered as the concrete type, then each of its four interfaces resolving to that same
+        // scoped instance - RepositoryManager implements IRepositoryManager (lifecycle),
+        // IRepositoryGitActions (pull/push/force-push/fetch/clean), IRepositoryBranchManager
+        // (branches/checkout), and IRepositoryHistoryReader (commit/file history) in one class, split
+        // purely so each consumer depends on the slice it actually calls - see IRepositoryManager's
+        // own remarks. A consumer needing more than one slice (RepositoryFetchSampler needs
+        // lifecycle + git-actions) resolves each interface it needs individually rather than the
+        // concrete type, so it stays substitutable in tests.
+        services.AddScoped<RepositoryManager>();
+        services.AddScoped<IRepositoryManager>(sp => sp.GetRequiredService<RepositoryManager>());
+        services.AddScoped<IRepositoryGitActions>(sp => sp.GetRequiredService<RepositoryManager>());
+        services.AddScoped<IRepositoryBranchManager>(sp => sp.GetRequiredService<RepositoryManager>());
+        services.AddScoped<IRepositoryHistoryReader>(sp => sp.GetRequiredService<RepositoryManager>());
         services.AddHostedService<RepositoryStatsSampler>();
 
         // Periodically re-derives git's credential helper and this machine's NuGet configuration from

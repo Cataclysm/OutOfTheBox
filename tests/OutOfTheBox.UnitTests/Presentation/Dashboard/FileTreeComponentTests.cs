@@ -50,7 +50,7 @@ public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDis
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IRepositoryFileBrowser>(new FakeRepositoryFileBrowser(_repositoryRoot));
-        Services.AddSingleton<IRepositoryManager>(_repositoryManager);
+        Services.AddSingleton<IRepositoryHistoryReader>(_repositoryManager);
         Services.AddScoped<ICodePreviewInterop, CodePreviewInterop>();
     }
 
@@ -419,28 +419,14 @@ public sealed class FileTreeComponentTests : DashboardComponentTestContext, IDis
     // filter) - every other member throws, the same "not exercised, say so" precedent
     // FakeRepositoryFileBrowser already established, so a future test accidentally depending on one
     // of them fails loudly instead of silently returning a meaningless default.
-    private sealed class FakeRepositoryManager : IRepositoryManager
+    private sealed class FakeRepositoryManager : IRepositoryHistoryReader
     {
         public IReadOnlyList<string> DirtyPaths { get; set; } = [];
 
         public Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken) =>
             Task.FromResult(DirtyPaths);
 
-        public Task<IReadOnlyList<RepositorySummary>> ListAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryActionResult> CloneAsync(string url, string name, string? branch, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

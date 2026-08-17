@@ -1,7 +1,7 @@
 @using Microsoft.JSInterop
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Presentation.Dashboard.CodePreview
-@inject IRepositoryManager RepositoryManager
+@inject IRepositoryHistoryReader RepositoryHistoryReader
 @inject IJSRuntime JS
 @inject ICodePreviewInterop CodePreviewInterop
 @implements IAsyncDisposable
@@ -68,7 +68,7 @@
         StateHasChanged();
         await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
 
-        _diff = await RepositoryManager.GetCommitFileDiffAsync(repositoryName, hash, path, CancellationToken.None);
+        _diff = await RepositoryHistoryReader.GetCommitFileDiffAsync(repositoryName, hash, path, CancellationToken.None);
         _pendingRender = _diff is not null;
 
         _loading = false;

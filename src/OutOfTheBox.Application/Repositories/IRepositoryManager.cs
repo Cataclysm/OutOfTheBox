@@ -5,10 +5,15 @@ using OutOfTheBox.Domain.Repositories;
 namespace OutOfTheBox.Application.Repositories;
 
 /// <summary>
-/// Lists, clones, and deletes repositories on the operator's behalf - called directly from Blazor
-/// component code-behind, never through an HTTP endpoint (per specs/repository-management's
+/// Lists, clones, deletes, and renames repositories on the operator's behalf - called directly from
+/// Blazor component code-behind, never through an HTTP endpoint (per specs/repository-management's
 /// "reachable only from the authenticated dashboard" requirement; see design.md's "Repository
-/// management" decision, the same in-process pattern as the resource-monitoring kill action).
+/// management" decision, the same in-process pattern as the resource-monitoring kill action). The
+/// concrete <c>RepositoryManager</c> also implements <see cref="IRepositoryGitActions"/>,
+/// <see cref="IRepositoryBranchManager"/>, and <see cref="IRepositoryHistoryReader"/> - split into
+/// four narrower interfaces (repository lifecycle, git sync actions, branch management, and read-only
+/// commit/file history) so each consumer depends only on the slice it actually calls, rather than one
+/// fifteen-method interface every caller pulled in regardless of which two or three methods it used.
 /// </summary>
 public interface IRepositoryManager
 {
@@ -31,27 +36,11 @@ public interface IRepositoryManager
     /// </summary>
     Task<RepositoryActionResult> DeleteAsync(string name, CancellationToken cancellationToken);
 
-    /// <summary>Runs <c>git pull</c> against the named repository, holding its per-repository lock for the duration. Runs to completion before returning - no streamed output, per specs/repository-management's "Dashboard-only pull/push/force-push/fetch/clean actions" requirement.</summary>
-    Task<RepositoryGitActionResult> PullAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>Runs <c>git push</c> against the named repository. See <see cref="PullAsync"/>'s own remarks.</summary>
-    Task<RepositoryGitActionResult> PushAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>Runs <c>git push --force</c> against the named repository. See <see cref="PullAsync"/>'s own remarks; the dashboard requires confirmation before calling this given its irreversibility.</summary>
-    Task<RepositoryGitActionResult> ForcePushAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>Runs <c>git fetch</c> against the named repository. See <see cref="PullAsync"/>'s own remarks.</summary>
-    Task<RepositoryGitActionResult> FetchAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>Runs <c>git clean -xdf</c> against the named repository. See <see cref="PullAsync"/>'s own remarks; the dashboard requires confirmation before calling this given its irreversibility.</summary>
-    Task<RepositoryGitActionResult> CleanAsync(string name, CancellationToken cancellationToken);
-
     /// <summary>
     /// Renames the repository named <paramref name="name"/> to <paramref name="newName"/> - a plain
     /// directory move confined to the configured root, same as every other repository-name
     /// resolution. This only changes what this service calls the repository; its git remotes,
-    /// history, and working tree contents are untouched. Runs to completion before returning, like
-    /// <see cref="PullAsync"/>'s own remarks describe.
+    /// history, and working tree contents are untouched. Runs to completion before returning.
     /// </summary>
     Task<RepositoryGitActionResult> RenameAsync(string name, string newName, CancellationToken cancellationToken);
 
@@ -62,70 +51,4 @@ public interface IRepositoryManager
     /// service never cloned, or the history record has since been pruned).
     /// </summary>
     Task<string?> GetCloneSourceUrlAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Enumerates the named repository's local and remote-tracking branches (<c>git branch -a</c>),
-    /// for the detail subpage's branch-switch dropdown.
-    /// </summary>
-    Task<IReadOnlyList<RepositoryBranch>> ListBranchesAsync(string name, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Switches the named repository's checked-out branch to <paramref name="branch"/>. If it names
-    /// an existing local branch, checks it out directly; if it names a remote branch with no local
-    /// counterpart, first creates a local branch tracking it, then checks that out - per
-    /// specs/repository-management's "Repository detail provides a branch-switch control"
-    /// requirement.
-    /// </summary>
-    Task<RepositoryGitActionResult> SwitchBranchAsync(string name, string branch, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Enumerates the branches of a remote repository at <paramref name="url"/> without cloning it
-    /// (<c>git ls-remote --heads</c>), for the dashboard's clone dialog to populate its branch
-    /// dropdown once the operator has entered a source URL. Returns an empty list if the lookup
-    /// fails (unreachable/invalid URL) - failure here never blocks cloning with no explicit branch.
-    /// </summary>
-    Task<IReadOnlyList<string>> ListRemoteBranchesAsync(string url, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Lists up to <paramref name="take"/> commits (skipping the first <paramref name="skip"/>)
-    /// reachable from any branch or tag (<c>git log --all</c>), most-recent-first, for the detail
-    /// subpage's commit graph. Returns an empty list for an invalid name or a repository that isn't
-    /// a git repository - never throws for those cases.
-    /// </summary>
-    Task<IReadOnlyList<CommitSummary>> ListCommitsAsync(string name, int skip, int take, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Checks out the specific commit <paramref name="hash"/> in the named repository, resulting in
-    /// a detached HEAD there - per specs/repository-management's "A commit can be checked out as a
-    /// detached HEAD" requirement. Lock-guarded like every other mutating repository action; the
-    /// dashboard requires confirmation before calling this given it changes the checked-out state.
-    /// </summary>
-    Task<RepositoryGitActionResult> CheckoutCommitAsync(string name, string hash, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Fetches the full detail of one commit (<c>git show</c>) - full message body, separate author/
-    /// committer identity, and the list of files it touched - for the commit detail subpage.
-    /// <see langword="null"/> for an invalid repository name, a repository that isn't a git
-    /// repository, or a hash it doesn't contain.
-    /// </summary>
-    Task<CommitDetail?> GetCommitDetailAsync(string name, string hash, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Fetches the unified diff for one file as changed by <paramref name="hash"/> (<c>git show</c>,
-    /// scoped to that file's path), for the commit detail subpage's per-file diff view.
-    /// <see langword="null"/> for an invalid repository name, a repository that isn't a git
-    /// repository, a hash it doesn't contain, or a path the commit didn't actually touch - as well as
-    /// for a file git itself declines to produce a text diff for (e.g. binary content), which
-    /// produces no diff body to show.
-    /// </summary>
-    Task<string?> GetCommitFileDiffAsync(string name, string hash, string relativePath, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Repo-relative paths of every file with an uncommitted working-tree change - modified, staged,
-    /// deleted, or untracked (<c>git status --porcelain</c>) - for the file tree browser's "dirty
-    /// files only" filter. A renamed/copied path is reported once, under its current (new) path,
-    /// matching what the file tree itself lists. Empty for an invalid repository name, a repository
-    /// that isn't a git repository, or a clean working tree.
-    /// </summary>
-    Task<IReadOnlyList<string>> ListDirtyFilePathsAsync(string name, CancellationToken cancellationToken);
 }

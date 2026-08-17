@@ -5,6 +5,7 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
+@inject IRepositoryBranchManager RepositoryBranchManager
 @inject IRunRepository RunRepository
 @inject IWorkingDirectoryResolver WorkingDirectoryResolver
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
@@ -200,7 +201,7 @@ else
         await RefreshRunsAsync();
 
         _cloneSourceUrl = await RepositoryManager.GetCloneSourceUrlAsync(Name, CancellationToken.None);
-        _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
+        _branches = await RepositoryBranchManager.ListBranchesAsync(Name, CancellationToken.None);
 
         // Otherwise this page, left open on a repository whose stats aren't cached yet, would sit
         // showing "Computing…" forever - unlike Repositories.razor, it has no other event subscription
@@ -242,7 +243,7 @@ else
         }
 
         _branchSwitchError = null;
-        var result = await RepositoryManager.SwitchBranchAsync(Name, branch, CancellationToken.None);
+        var result = await RepositoryBranchManager.SwitchBranchAsync(Name, branch, CancellationToken.None);
 
         if (result is RepositoryGitActionResult.Failed failed)
         {
@@ -267,7 +268,7 @@ else
     private async Task RefreshBranchStateAsync()
     {
         await RefreshSummaryAsync();
-        _branches = await RepositoryManager.ListBranchesAsync(Name, CancellationToken.None);
+        _branches = await RepositoryBranchManager.ListBranchesAsync(Name, CancellationToken.None);
     }
 
     private void OnRepositoryStatsChanged(string repositoryName)

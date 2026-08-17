@@ -68,6 +68,8 @@ public sealed class RepositoriesComponentTests : DashboardComponentTestContext, 
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
         Services.AddSingleton<IGitCredentialStore>(new NoOpGitCredentialStore());
         Services.AddSingleton<IRepositoryManager>(repositoryManager);
+        Services.AddSingleton<IRepositoryGitActions>(repositoryManager);
+        Services.AddSingleton<IRepositoryBranchManager>(repositoryManager);
         Services.AddSingleton<IRunRepository>(_ => new EfRunRepository(_dbContextFactory.CreateContext()));
         Services.AddSingleton(_runRegistry);
         Services.AddSingleton(_runEventBus);

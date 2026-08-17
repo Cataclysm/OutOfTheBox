@@ -1,20 +1,20 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
-@inject IRepositoryManager RepositoryManager
+@inject IRepositoryGitActions RepositoryGitActions
 
-<button type="button" class="icon-button @FlashClass("pull")" title="@Title("pull", "Pull")" @onclick="@(() => RunGitActionAsync("pull", RepositoryManager.PullAsync))">
+<button type="button" class="icon-button @FlashClass("pull")" title="@Title("pull", "Pull")" @onclick="@(() => RunGitActionAsync("pull", RepositoryGitActions.PullAsync))">
     <Icon Name="pull" />
 </button>
-<button type="button" class="icon-button @FlashClass("push")" title="@Title("push", "Push")" @onclick="@(() => RunGitActionAsync("push", RepositoryManager.PushAsync))">
+<button type="button" class="icon-button @FlashClass("push")" title="@Title("push", "Push")" @onclick="@(() => RunGitActionAsync("push", RepositoryGitActions.PushAsync))">
     <Icon Name="push" />
 </button>
-<button type="button" class="icon-button @FlashClass("force-push")" title="@Title("force-push", "Force push")" @onclick="@(() => ConfirmAndRunAsync("force-push", "Force push", $"Force-push '{RepositoryName}'? This can overwrite the remote's history.", RepositoryManager.ForcePushAsync))">
+<button type="button" class="icon-button @FlashClass("force-push")" title="@Title("force-push", "Force push")" @onclick="@(() => ConfirmAndRunAsync("force-push", "Force push", $"Force-push '{RepositoryName}'? This can overwrite the remote's history.", RepositoryGitActions.ForcePushAsync))">
     <Icon Name="force-push" />
 </button>
-<button type="button" class="icon-button @FlashClass("fetch")" title="@Title("fetch", "Fetch")" @onclick="@(() => RunGitActionAsync("fetch", RepositoryManager.FetchAsync))">
+<button type="button" class="icon-button @FlashClass("fetch")" title="@Title("fetch", "Fetch")" @onclick="@(() => RunGitActionAsync("fetch", RepositoryGitActions.FetchAsync))">
     <Icon Name="fetch" />
 </button>
-<button type="button" class="icon-button @FlashClass("clean")" title="@Title("clean", "Clean (git clean -xdf)")" @onclick="@(() => ConfirmAndRunAsync("clean", "Clean", $"Run 'git clean -xdf' on '{RepositoryName}'? This permanently deletes every untracked file.", RepositoryManager.CleanAsync))">
+<button type="button" class="icon-button @FlashClass("clean")" title="@Title("clean", "Clean (git clean -xdf)")" @onclick="@(() => ConfirmAndRunAsync("clean", "Clean", $"Run 'git clean -xdf' on '{RepositoryName}'? This permanently deletes every untracked file.", RepositoryGitActions.CleanAsync))">
     <Icon Name="clean" />
 </button>
 

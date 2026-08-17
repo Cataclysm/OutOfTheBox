@@ -557,7 +557,7 @@ public sealed class RepositoryManagerTests : IDisposable
         Assert.Empty(await manager.ListBranchesAsync("does-not-exist", CancellationToken.None));
     }
 
-    private static IEnumerable<Func<string, Task<RepositoryGitActionResult>>> GitActionOperations(IRepositoryManager manager) =>
+    private static IEnumerable<Func<string, Task<RepositoryGitActionResult>>> GitActionOperations(IRepositoryGitActions manager) =>
     [
         name => manager.PullAsync(name, CancellationToken.None),
         name => manager.PushAsync(name, CancellationToken.None),

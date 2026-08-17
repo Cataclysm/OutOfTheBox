@@ -1,7 +1,7 @@
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryFileBrowser FileBrowser
-@inject IRepositoryManager RepositoryManager
+@inject IRepositoryHistoryReader RepositoryHistoryReader
 @implements IDisposable
 
 <div class="history-filters">
@@ -92,7 +92,7 @@
 
     private async Task RefreshDirtyPathsAsync()
     {
-        _dirtyPaths = [.. await RepositoryManager.ListDirtyFilePathsAsync(RepositoryName, CancellationToken.None)];
+        _dirtyPaths = [.. await RepositoryHistoryReader.ListDirtyFilePathsAsync(RepositoryName, CancellationToken.None)];
         await InvokeAsync(StateHasChanged);
     }
 
@@ -116,7 +116,7 @@
                 await Task.Delay(PollInterval, cancellationToken);
                 var fresh = await FileBrowser.ListDirectoryAsync(RepositoryName, string.Empty, cancellationToken);
                 var freshDirtyPaths = _dirtyOnly
-                    ? await RepositoryManager.ListDirtyFilePathsAsync(RepositoryName, cancellationToken)
+                    ? await RepositoryHistoryReader.ListDirtyFilePathsAsync(RepositoryName, cancellationToken)
                     : null;
                 cancellationToken.ThrowIfCancellationRequested();
                 _entries = fresh;
