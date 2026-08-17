@@ -142,17 +142,7 @@ public sealed class NuGetFeedCredentialStore(IServiceScopeFactory serviceScopeFa
     private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedUrl, byte[]? encryptedPassword, CancellationToken cancellationToken)
     {
         var existing = await dbContext.NuGetFeedAuthorizations.FirstOrDefaultAsync(a => a.FeedUrl == normalizedUrl, cancellationToken);
-        var updated = new NuGetFeedAuthorization(normalizedUrl, DateTimeOffset.UtcNow, encryptedPassword);
-
-        if (existing is null)
-        {
-            dbContext.NuGetFeedAuthorizations.Add(updated);
-        }
-        else
-        {
-            dbContext.Entry(existing).CurrentValues.SetValues(updated);
-        }
-
+        EfUpsert.Save(dbContext, existing, new NuGetFeedAuthorization(normalizedUrl, DateTimeOffset.UtcNow, encryptedPassword));
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

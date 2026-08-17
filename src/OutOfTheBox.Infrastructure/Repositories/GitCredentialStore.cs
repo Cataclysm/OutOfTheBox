@@ -210,15 +210,7 @@ public sealed class GitCredentialStore(
                 LastAuthSuccessAtUtc = succeeded ? now : existing.LastAuthSuccessAtUtc,
             };
 
-        if (existing is null)
-        {
-            dbContext.GitHostCredentialHealth.Add(updated);
-        }
-        else
-        {
-            dbContext.Entry(existing).CurrentValues.SetValues(updated);
-        }
-
+        EfUpsert.Save(dbContext, existing, updated);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -250,15 +242,7 @@ public sealed class GitCredentialStore(
                 LastAuthSuccessAtUtc = succeeded ? now : existing.LastAuthSuccessAtUtc,
             };
 
-        if (existing is null)
-        {
-            dbContext.RepositoryCredentialHealth.Add(updated);
-        }
-        else
-        {
-            dbContext.Entry(existing).CurrentValues.SetValues(updated);
-        }
-
+        EfUpsert.Save(dbContext, existing, updated);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -285,17 +269,7 @@ public sealed class GitCredentialStore(
     private static async Task UpsertAuthorizationAsync(OutOfTheBoxDbContext dbContext, string normalizedHost, byte[] encryptedToken, CancellationToken cancellationToken)
     {
         var existing = await dbContext.GitHostAuthorizations.FirstOrDefaultAsync(a => a.Host == normalizedHost, cancellationToken);
-        var updated = new GitHostAuthorization(normalizedHost, DateTimeOffset.UtcNow, encryptedToken);
-
-        if (existing is null)
-        {
-            dbContext.GitHostAuthorizations.Add(updated);
-        }
-        else
-        {
-            dbContext.Entry(existing).CurrentValues.SetValues(updated);
-        }
-
+        EfUpsert.Save(dbContext, existing, new GitHostAuthorization(normalizedHost, DateTimeOffset.UtcNow, encryptedToken));
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
