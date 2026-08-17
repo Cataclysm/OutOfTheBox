@@ -66,7 +66,7 @@
         _pendingRender = false;
         _loading = true;
         StateHasChanged();
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+        await JS.ShowModalAsync(_dialogElement);
 
         _diff = await RepositoryHistoryReader.GetCommitFileDiffAsync(repositoryName, hash, path, CancellationToken.None);
         _pendingRender = _diff is not null;
@@ -93,7 +93,7 @@
         await CodePreviewInterop.SetWordWrapAsync(_previewElementId, _wordWrap);
     }
 
-    private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+    private async Task CloseAsync() => await JS.CloseAsync(_dialogElement);
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);

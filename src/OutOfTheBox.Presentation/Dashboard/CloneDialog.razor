@@ -72,7 +72,7 @@
         _error = null;
         _nameManuallyEdited = false;
         StateHasChanged();
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+        await JS.ShowModalAsync(_dialogElement);
     }
 
     private async Task OnUrlChangedAsync(ChangeEventArgs e)
@@ -173,7 +173,7 @@
                 return;
             }
 
-            await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+            await JS.CloseAsync(_dialogElement);
 
             if (result is RepositoryActionResult.Accepted accepted)
             {
@@ -186,5 +186,5 @@
         }
     }
 
-    private async Task CancelAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+    private async Task CancelAsync() => await JS.CloseAsync(_dialogElement);
 }

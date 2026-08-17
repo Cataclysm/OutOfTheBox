@@ -35,12 +35,12 @@
         _confirmLabel = confirmLabel;
         _onConfirmed = onConfirmed;
         StateHasChanged();
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+        await JS.ShowModalAsync(_dialogElement);
     }
 
     private async Task ConfirmAsync()
     {
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+        await JS.CloseAsync(_dialogElement);
         var callback = _onConfirmed;
         _onConfirmed = null;
 
@@ -53,6 +53,6 @@
     private async Task CancelAsync()
     {
         _onConfirmed = null;
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+        await JS.CloseAsync(_dialogElement);
     }
 }

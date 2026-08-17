@@ -51,7 +51,7 @@
         _onSaved = onSaved;
         _onCancelled = onCancelled;
         StateHasChanged();
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+        await JS.ShowModalAsync(_dialogElement);
     }
 
     private async Task SaveAsync()
@@ -88,7 +88,7 @@
                 return;
             }
 
-            await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+            await JS.CloseAsync(_dialogElement);
             var callback = _onSaved;
             _onSaved = null;
             _onCancelled = null;
@@ -106,7 +106,7 @@
 
     private async Task CancelAsync()
     {
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+        await JS.CloseAsync(_dialogElement);
         var callback = _onCancelled;
         _onSaved = null;
         _onCancelled = null;

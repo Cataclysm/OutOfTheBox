@@ -164,7 +164,7 @@
         _kind = PreviewKind.Unsupported;
         _loading = true;
         StateHasChanged();
-        await JS.InvokeVoidAsync("outOfTheBoxDialogs.showModal", _dialogElement);
+        await JS.ShowModalAsync(_dialogElement);
 
         var resolvedPath = await FileBrowser.ResolveConfinedFilePathAsync(repositoryName, relativePath, CancellationToken.None);
         if (resolvedPath is null)
@@ -367,7 +367,7 @@
         return trimmed.StartsWith("<svg", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task CloseAsync() => await JS.InvokeVoidAsync("outOfTheBoxDialogs.close", _dialogElement);
+    private async Task CloseAsync() => await JS.CloseAsync(_dialogElement);
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync() => await CodePreviewInterop.DestroyAsync(_previewElementId);
