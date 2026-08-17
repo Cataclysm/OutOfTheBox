@@ -17,6 +17,9 @@
                     Wrap lines
                 </label>
             }
+            <button type="button" class="icon-button dialog-close-button" @onclick="CloseAsync" title="Close">
+                <Icon Name="close" />
+            </button>
         </div>
         @if (_loading)
         {
@@ -30,11 +33,6 @@
         {
             <textarea id="@_codePreview.ElementId" class="file-preview-code" data-mime="@DiffMimeType" readonly>@_diff</textarea>
         }
-        <div class="dialog-actions">
-            <button type="button" @onclick="CloseAsync">
-                <Icon Name="close" CssClass="icon-inline" /> Close
-            </button>
-        </div>
     </div>
 </dialog>
 
