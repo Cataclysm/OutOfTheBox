@@ -35,6 +35,18 @@ public sealed class McpSettingsComponentTests : DashboardComponentTestContext
     }
 
     [Fact]
+    public void Renders_a_risk_icon_matching_each_row_s_tooltip_level()
+    {
+        var cut = Render<McpSettings>();
+        cut.WaitForAssertion(() => Assert.Contains("find_files", cut.Markup));
+
+        Assert.Contains("mcp-risk-dangerous", FindLabelFor(cut, "delete_repository").InnerHtml);
+        Assert.Contains("mcp-risk-info", FindLabelFor(cut, "list_repositories").InnerHtml);
+        Assert.Contains("mcp-risk-safe", FindLabelFor(cut, "find_files").InnerHtml);
+        Assert.Contains(McpPermissionTooltips.For("delete_repository").Risk, FindLabelFor(cut, "delete_repository").InnerHtml);
+    }
+
+    [Fact]
     public void A_default_enabled_plain_tool_checkbox_starts_checked_and_disabling_it_persists()
     {
         var cut = Render<McpSettings>();
@@ -63,10 +75,14 @@ public sealed class McpSettingsComponentTests : DashboardComponentTestContext
         Assert.Contains(("dotnet:publish", true), _permissionStore.SetCalls);
     }
 
+    // Each label's own visible text is now just its trailing text node (everything else is the input
+    // and the tooltip's <span> subtree) - matching on the label's full TextContent would also match
+    // against the hidden tooltip bubble's What/How/Risk text nested inside it.
+    private static AngleSharp.Dom.IElement FindLabelFor(IRenderedComponent<McpSettings> cut, string labelText) =>
+        cut.FindAll("label").Single(label => label.ChildNodes.Last().TextContent.Trim() == labelText);
+
     private static IHtmlInputElement FindCheckboxFor(IRenderedComponent<McpSettings> cut, string labelText) =>
-        (IHtmlInputElement)cut.FindAll("label")
-            .Single(label => label.TextContent.Trim() == labelText)
-            .QuerySelector("input[type=checkbox]")!;
+        (IHtmlInputElement)FindLabelFor(cut, labelText).QuerySelector("input[type=checkbox]")!;
 
     private sealed class FakeMcpPermissionStore : IMcpPermissionStore
     {

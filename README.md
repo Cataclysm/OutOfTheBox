@@ -81,7 +81,7 @@ or download it from the About page after logging in and install it properly (see
 You'll land on a login page; enter the same shared bearer token the API uses (there's no separate
 dashboard credential) to get a session cookie.
 
-Once logged in, three top-level views are available:
+Once logged in, five top-level views are available:
 
 - **Status** — every run currently in flight (any kind), host CPU/RAM, and the live process tree
   each command run spawned, with a kill button per process.
@@ -103,6 +103,19 @@ Once logged in, three top-level views are available:
   so the sbx-side caller can do those two itself; everything else (delete, pull/push/force-push/
   fetch/clean, branch switching, commit checkout, the file browser) is dashboard-only, by design —
   there's no MCP tool for any of it.
+- **Credentials** — every stored git host and NuGet feed credential (host/feed URL, when authorized,
+  health), independent of the MCP tools that can also authorize/revoke them.
+- **MCP Settings** — a per-tool and per-`dotnet_run`/`git_run`-subcommand on/off switch for the sbx
+  caller, grouped into fieldsets (dotnet subcommands, git subcommands, run management, repository
+  management, file management, git/NuGet credentials, diagnostics). Every mutating or credential
+  tool defaults to disabled; every read-only or already-vetted tool/subcommand defaults to enabled.
+  Each row carries a colored risk icon — a red warning triangle for anything that can destroy data,
+  reach outside the repository, or expose a credential; a yellow info mark for anything safe but
+  potentially information-revealing (e.g. `list_authorized_git_hosts`); a green check for everything
+  else — and hovering or focusing the icon opens a tooltip explaining what the tool/subcommand does,
+  how it works, and why it's rated that way. Changes persist to the database and take effect
+  immediately, no restart needed; call `get_mcp_permissions` from the sbx side to see the current
+  allowed set, since an operator can change it mid-session.
 
 ## Running a Claude Code instance in the sbx sandbox
 
@@ -117,21 +130,29 @@ client to the server described above. To get it working:
    `https://<host>:<port>/mcp` (Streamable HTTP transport), with an `Authorization: Bearer <token>`
    header set to the token from step 1. Exactly how you register a remote MCP server depends on your
    sandbox's own Claude Code configuration mechanism - nothing repository-specific to copy in, unlike
-   a skill: the ten tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
-   `transfer_file`, `list_repositories`, `clone_repository`, `get_run_resources`,
-   `get_environment_info`, `get_file_lock_info`) are discovered automatically once connected, each
-   with a self-describing schema.
+   a skill: nineteen plain tools (`dotnet_run`, `git_run`, `read_run_output`, `cancel_run`,
+   `transfer_file`, `list_repositories`, `clone_repository`, `delete_repository`, `find_files`,
+   `get_file_info`, `delete_path`, `get_file_lock_info`, `authorize_git_host`,
+   `list_authorized_git_hosts`, `revoke_git_host_authorization`, `authorize_nuget_feed`,
+   `list_authorized_nuget_feeds`, `revoke_nuget_feed_authorization`, `get_environment_info`), plus
+   `get_mcp_permissions`, are discovered automatically once connected, each with a self-describing
+   schema. Which of these — and which `dotnet_run`/`git_run` subcommand — are actually *usable* is
+   separately, dynamically operator-controlled from the dashboard's MCP Settings page (see above);
+   call `get_mcp_permissions` for the current allowed set rather than assuming, since an operator can
+   change it mid-session.
 3. **Trust the certificate.** If it's self-signed (typical for this deployment shape), download it
    from the dashboard's About page (`https://<host>:<port>/dashboard-certificate` once logged in)
    and trust it on the sandbox side, or have the caller independently verify the connection is
    otherwise safe — see [`INSTALL.md`](INSTALL.md#certificate) for the full walkthrough (system-wide
    trust, `NODE_EXTRA_CA_CERTS`, or a one-off `curl --cacert` check).
 
-From there, the Claude Code instance in the sandbox can start a `dotnet`/`git` run, poll its
-progress, cancel it, pull back a produced file, and list/clone repositories — using the tools
-directly, with no separate client documentation needed. Repository *deletion* and the dashboard are
-both explicitly out of its reach (no MCP tool for either); those stay operator-only, from the
-dashboard above.
+From there, the Claude Code instance in the sandbox can start a `dotnet`/`git` run (subject to
+MCP Settings' subcommand allowlist), poll its progress, cancel it, pull back a produced file, and
+list/clone repositories — using the tools directly, with no separate client documentation needed.
+The dashboard itself stays operator-only regardless of MCP Settings (there's no MCP tool that reaches
+it), and a handful of tools (`delete_repository`, `delete_path`, `clone_repository`, the credential
+authorize/revoke tools) default to disabled precisely because they're destructive or handle secrets —
+an operator has to deliberately opt back in from MCP Settings.
 
 ## Documentation
 

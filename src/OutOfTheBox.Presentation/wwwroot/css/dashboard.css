@@ -22,6 +22,7 @@
     --brand-indigo: #4c1d95;
     --brand-violet: #6d28d9;
     --danger: #ff5c5c;
+    --warning: #fbbf24;
     --success: #4ade80;
     --gradient-brand: linear-gradient(135deg, var(--accent-2), var(--accent));
     --gradient-header: linear-gradient(120deg, var(--brand-indigo), var(--bg-raised) 70%);
@@ -855,6 +856,132 @@ dialog::backdrop {
 
 .truncated-indicator::before {
     content: "⚠";
+}
+
+/* MCP Settings' static risk-key legend at the top of the page - three plain icon+label pairs, no
+   hover behavior of their own (unlike the per-row .mcp-tip below). */
+.mcp-settings-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: -0.5rem 0 1.25rem;
+}
+
+.mcp-settings-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* MCP Settings' per-row risk icon + hover/focus tooltip. .mcp-tip is the positioning anchor (one per
+   row); .mcp-tip-icon is the small colored badge itself (also reused, standalone, by the legend
+   above); .mcp-tip-bubble is the floating explanation card, hidden until the anchor is hovered or
+   keyboard-focused so it's reachable without a mouse. */
+.mcp-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+}
+
+.mcp-tip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 50%;
+    flex: none;
+}
+
+.mcp-tip-icon.mcp-risk-dangerous {
+    background: rgba(255, 92, 92, 0.18);
+    color: var(--danger);
+}
+
+.mcp-tip-icon.mcp-risk-dangerous::before {
+    content: "⚠";
+}
+
+.mcp-tip-icon.mcp-risk-info {
+    background: rgba(251, 191, 36, 0.18);
+    color: var(--warning);
+}
+
+.mcp-tip-icon.mcp-risk-info::before {
+    content: "ⓘ";
+}
+
+.mcp-tip-icon.mcp-risk-safe {
+    background: rgba(74, 222, 128, 0.18);
+    color: var(--success);
+}
+
+.mcp-tip-icon.mcp-risk-safe::before {
+    content: "✓";
+}
+
+/* Opens downward (top: 100%), not upward - the page's sticky header sits right above the topmost
+   fieldset, so an upward-opening bubble on the very first rows would clip under it; downward always
+   has the rest of the scrollable page to expand into instead. */
+.mcp-tip-bubble {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.6rem);
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    width: max-content;
+    max-width: 300px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 0.65rem 0.8rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--text);
+    text-align: left;
+    white-space: normal;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.mcp-tip-bubble::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--border-strong);
+}
+
+.mcp-tip-bubble strong {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 0.5rem;
+}
+
+.mcp-tip-bubble strong:first-child {
+    margin-top: 0;
+}
+
+.mcp-tip:hover .mcp-tip-bubble,
+.mcp-tip:focus .mcp-tip-bubble,
+.mcp-tip:focus-within .mcp-tip-bubble {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 .run-output {

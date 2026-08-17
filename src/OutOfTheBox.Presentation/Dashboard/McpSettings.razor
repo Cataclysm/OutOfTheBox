@@ -12,8 +12,15 @@
 <p>
     Enable or disable individual MCP tools, and individual <code>dotnet_run</code>/<code>git_run</code>
     subcommands, for the sbx sandbox caller. Changes apply immediately to the next call - nothing here
-    needs a restart.
+    needs a restart. Hover or focus a row's icon for what it allows, how it works, and why it's rated
+    that way.
 </p>
+
+<div class="mcp-settings-legend">
+    <span><span class="mcp-tip-icon mcp-risk-dangerous" aria-hidden="true"></span> dangerous - can destroy data, reach outside the repository, or expose a credential</span>
+    <span><span class="mcp-tip-icon mcp-risk-info" aria-hidden="true"></span> safe, but may reveal information</span>
+    <span><span class="mcp-tip-icon mcp-risk-safe" aria-hidden="true"></span> safe</span>
+</div>
 
 @if (_state is null)
 {
@@ -27,8 +34,10 @@ else
             @foreach (var subcommand in DotnetSubcommands)
             {
                 var key = McpToolCatalog.SubcommandKey("dotnet", subcommand);
+                var tip = McpPermissionTooltips.For(key);
                 <label>
                     <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                    @RenderTip(tip)
                     @subcommand
                 </label>
             }
@@ -39,8 +48,10 @@ else
             @foreach (var subcommand in GitSubcommands)
             {
                 var key = McpToolCatalog.SubcommandKey("git", subcommand);
+                var tip = McpPermissionTooltips.For(key);
                 <label>
                     <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                    @RenderTip(tip)
                     @subcommand
                 </label>
             }
@@ -52,8 +63,10 @@ else
                 <legend>@group.Name</legend>
                 @foreach (var key in group.Keys)
                 {
+                    var tip = McpPermissionTooltips.For(key);
                     <label>
                         <input type="checkbox" checked="@_state[key]" @onchange="@(e => ToggleAsync(key, (bool)e.Value!))" />
+                        @RenderTip(tip)
                         @key
                     </label>
                 }
@@ -90,6 +103,22 @@ else
         var all = await PermissionStore.GetAllAsync(CancellationToken.None);
         _state = new Dictionary<string, bool>(all, StringComparer.Ordinal);
     }
+
+    private static string RiskClass(McpPermissionRiskLevel level) => level switch
+    {
+        McpPermissionRiskLevel.Dangerous => "mcp-risk-dangerous",
+        McpPermissionRiskLevel.InfoExposure => "mcp-risk-info",
+        _ => "mcp-risk-safe",
+    };
+
+    private static RenderFragment RenderTip(McpPermissionTooltip tip) => @<span class="mcp-tip" tabindex="0">
+        <span class="mcp-tip-icon @RiskClass(tip.Level)" aria-hidden="true"></span>
+        <span class="mcp-tip-bubble">
+            <strong>What</strong>@tip.What
+            <strong>How</strong>@tip.How
+            <strong>Risk</strong>@tip.Risk
+        </span>
+    </span>;
 
     private async Task ToggleAsync(string key, bool enabled)
     {
