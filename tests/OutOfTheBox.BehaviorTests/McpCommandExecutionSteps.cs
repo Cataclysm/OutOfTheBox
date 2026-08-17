@@ -59,6 +59,18 @@ public sealed class McpCommandExecutionSteps : IDisposable
         // to invoke git.exe at all: it must be rejected by the repository lock first.
         await StartRunAsync(Client, "git_run", subcommand, fixtureName, timeoutSeconds: null);
 
+    [When(@"an authenticated caller starts a dotnet_run ""(.*)"" with an escaping --results-directory against ""(.*)""")]
+    public async Task WhenAnAuthenticatedCallerStartsADotnetRunWithAnEscapingResultsDirectoryAgainst(string subcommand, string fixtureName)
+    {
+        _toolCallResult = await McpTestClient.CallToolAsync(
+            Client,
+            "dotnet_run",
+            new { arguments = new[] { subcommand, "--results-directory", Path.Combine("..", "..", "escape") }, workingDirectory = fixtureName },
+            CommandExecutionServiceFactory.TestBearerToken,
+            CancellationToken.None);
+        _runId = ExtractRunId(_toolCallResult);
+    }
+
     [Given(@"an in-flight dotnet_run against ""(.*)"" with a (\d+) second timeout")]
     public async Task GivenAnInFlightDotnetRunAgainstWithATimeout(string fixtureName, int timeoutSeconds) =>
         await StartRunAsync(Client, "dotnet_run", "test", fixtureName, timeoutSeconds);

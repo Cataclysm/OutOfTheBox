@@ -9,6 +9,7 @@ using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Application.Repositories;
+using OutOfTheBox.Domain.Execution;
 using OutOfTheBox.Domain.Repositories;
 using OutOfTheBox.Domain.Runs;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,7 @@ namespace OutOfTheBox.Presentation.Mcp;
 [McpServerToolType]
 public sealed class CommandExecutionMcpTools(
     IWorkingDirectoryResolver workingDirectoryResolver,
+    IPathSanitizer pathSanitizer,
     IProcessRunner processRunner,
     RunRegistry runRegistry,
     IRunRepository runRepository,
@@ -44,26 +46,26 @@ public sealed class CommandExecutionMcpTools(
     IOptions<ServiceOptions> options,
     ILogger<CommandExecutionMcpTools> logger)
 {
-    /// <summary>Starts a <c>dotnet</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result.</summary>
-    /// <param name="arguments">The full <c>dotnet</c> argument list, e.g. <c>["build"]</c> or <c>["test", "--filter", "MyTests"]</c>.</param>
+    /// <summary>Starts a <c>dotnet</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only <c>restore</c>/<c>build</c>/<c>test</c> are allowed.</summary>
+    /// <param name="arguments">The full <c>dotnet</c> argument list, e.g. <c>["build"]</c> or <c>["test", "--filter", "MyTests"]</c>. The subcommand (first element) must be <c>restore</c>, <c>build</c>, or <c>test</c>.</param>
     /// <param name="workingDirectory">Repository-relative working directory to run in.</param>
     /// <param name="timeoutSeconds">Optional execution timeout override, in seconds; clamped to the configured maximum.</param>
     [McpServerTool]
-    [Description("Starts a `dotnet` command against a repository on the host. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight.")]
+    [Description("Starts a `dotnet` command against a repository on the host - only restore/build/test are allowed. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
     public Task<McpStartRunResult> DotnetRunAsync(
-        [Description("The full `dotnet` argument list, e.g. [\"build\"] or [\"test\", \"--filter\", \"MyTests\"].")] IReadOnlyList<string> arguments,
+        [Description("The full `dotnet` argument list, e.g. [\"build\"] or [\"test\", \"--filter\", \"MyTests\"]. The subcommand (first element) must be restore, build, or test.")] IReadOnlyList<string> arguments,
         [Description("Repository-relative working directory to run in.")] string workingDirectory,
         [Description("Optional execution timeout override, in seconds; clamped to the configured maximum.")] int? timeoutSeconds = null) =>
         StartRunAsync("dotnet", RunKind.DotnetCommand, arguments, workingDirectory, timeoutSeconds);
 
-    /// <summary>Starts a <c>git</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. No subcommand is restricted.</summary>
-    /// <param name="arguments">The full <c>git</c> argument list, e.g. <c>["status"]</c> or <c>["log", "--oneline", "-10"]</c>.</param>
+    /// <summary>Starts a <c>git</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only <c>fetch</c>/<c>checkout</c>/<c>pull</c> and read-only inspection subcommands are allowed.</summary>
+    /// <param name="arguments">The full <c>git</c> argument list, e.g. <c>["status"]</c> or <c>["log", "--oneline", "-10"]</c>. The subcommand (first element) must be one of <c>fetch</c>/<c>checkout</c>/<c>pull</c>/<c>status</c>/<c>log</c>/<c>diff</c>/<c>show</c>/<c>branch</c>/<c>rev-parse</c>.</param>
     /// <param name="workingDirectory">Repository-relative working directory to run in.</param>
     /// <param name="timeoutSeconds">Optional execution timeout override, in seconds; clamped to the configured maximum.</param>
     [McpServerTool]
-    [Description("Starts a `git` command against a repository on the host - no subcommand is restricted. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight.")]
+    [Description("Starts a `git` command against a repository on the host - only fetch/checkout/pull plus read-only inspection (status/log/diff/show/branch/rev-parse) are allowed. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
     public Task<McpStartRunResult> GitRunAsync(
-        [Description("The full `git` argument list, e.g. [\"status\"] or [\"log\", \"--oneline\", \"-10\"].")] IReadOnlyList<string> arguments,
+        [Description("The full `git` argument list, e.g. [\"status\"] or [\"log\", \"--oneline\", \"-10\"]. The subcommand (first element) must be fetch, checkout, pull, status, log, diff, show, branch, or rev-parse.")] IReadOnlyList<string> arguments,
         [Description("Repository-relative working directory to run in.")] string workingDirectory,
         [Description("Optional execution timeout override, in seconds; clamped to the configured maximum.")] int? timeoutSeconds = null) =>
         StartRunAsync("git", RunKind.GitCommand, arguments, workingDirectory, timeoutSeconds);
@@ -141,7 +143,18 @@ public sealed class CommandExecutionMcpTools(
             throw new McpException($"workingDirectory '{workingDirectory}' is outside the configured root.");
         }
 
+        if (!CommandSubcommandPolicy.IsAllowed(executable, arguments[0]))
+        {
+            throw new McpException($"'{arguments[0]}' is not an allowed {executable} subcommand. Allowed: {string.Join(", ", CommandSubcommandPolicy.AllowedSubcommandsFor(executable))}.");
+        }
+
         var repositoryRoot = resolution.ResolvedPath!;
+
+        if (pathSanitizer.Validate(executable, arguments, repositoryRoot) is string pathRejection)
+        {
+            throw new McpException(pathRejection);
+        }
+
         var runId = Guid.NewGuid();
         var cancelRequestCts = new CancellationTokenSource();
 

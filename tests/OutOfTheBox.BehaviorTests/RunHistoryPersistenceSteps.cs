@@ -27,7 +27,7 @@ public sealed class RunHistoryPersistenceSteps : IDisposable
         using var client = _factory.CreateClient();
 
         var start = await McpTestClient.CallToolAsync(
-            client, "dotnet_run", new { arguments = new[] { "--version" }, workingDirectory = fixtureName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
+            client, "dotnet_run", new { arguments = new[] { "build" }, workingDirectory = fixtureName }, CommandExecutionServiceFactory.TestBearerToken, CancellationToken.None);
         Assert.False(start.IsToolError, start.ContentText);
         _runId = JsonDocument.Parse(start.ContentText!).RootElement.GetProperty("runId").GetGuid();
 

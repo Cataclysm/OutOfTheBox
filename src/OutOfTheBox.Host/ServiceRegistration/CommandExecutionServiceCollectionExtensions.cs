@@ -38,6 +38,7 @@ public static class CommandExecutionServiceCollectionExtensions
         // project's own ServiceRegistration extension methods) is the one place allowed to reference
         // both Infrastructure and Presentation; neither references the other directly.
         services.AddSingleton<IWorkingDirectoryResolver, WorkingDirectoryResolver>();
+        services.AddSingleton<IPathSanitizer, PathSanitizer>();
         services.AddSingleton<IProcessRunner, CliProcessRunner>();
         services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
         services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
