@@ -18,7 +18,7 @@ Feature: MCP Server
 
     Scenario: Listing available tools
         When an authenticated caller lists MCP tools
-        Then the tool list contains exactly "dotnet_run, git_run, read_run_output, cancel_run, transfer_file, list_repositories, clone_repository, delete_repository, find_files, get_file_info, delete_path, authorize_git_host, list_authorized_git_hosts, revoke_git_host_authorization, authorize_nuget_feed, list_authorized_nuget_feeds, revoke_nuget_feed_authorization, get_run_resources, get_environment_info, get_file_lock_info"
+        Then the tool list contains exactly "dotnet_run, git_run, read_run_output, cancel_run, transfer_file, list_repositories, clone_repository, delete_repository, find_files, get_file_info, delete_path, authorize_git_host, list_authorized_git_hosts, revoke_git_host_authorization, authorize_nuget_feed, list_authorized_nuget_feeds, revoke_nuget_feed_authorization, get_run_resources, get_environment_info, get_file_lock_info, get_mcp_permissions"
 
     Scenario: Unknown tool name
         When an authenticated caller calls the unknown MCP tool "rename_repository"

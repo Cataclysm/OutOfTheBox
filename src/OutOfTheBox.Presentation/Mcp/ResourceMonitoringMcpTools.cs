@@ -30,7 +30,7 @@ public sealed class ResourceMonitoringMcpTools(IRunRepository runRepository, Res
     {
         if (!permissionStore.IsEnabled("get_run_resources"))
         {
-            throw new McpException("The 'get_run_resources' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'get_run_resources' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)

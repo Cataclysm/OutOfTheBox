@@ -56,7 +56,7 @@ public sealed class RepositoryAccessMcpTools(
     {
         if (!permissionStore.IsEnabled("list_repositories"))
         {
-            throw new McpException("The 'list_repositories' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'list_repositories' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         return repositoryManager.ListAsync(CancellationToken.None);
@@ -71,7 +71,7 @@ public sealed class RepositoryAccessMcpTools(
     {
         if (!permissionStore.IsEnabled("delete_repository"))
         {
-            throw new McpException("The 'delete_repository' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'delete_repository' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(name))
@@ -122,7 +122,7 @@ public sealed class RepositoryAccessMcpTools(
     {
         if (!permissionStore.IsEnabled("clone_repository"))
         {
-            throw new McpException("The 'clone_repository' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'clone_repository' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(name))

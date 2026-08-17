@@ -30,7 +30,7 @@ public sealed class FileLockDiagnosticsMcpTools(IWorkingDirectoryResolver workin
     {
         if (!permissionStore.IsEnabled("get_file_lock_info"))
         {
-            throw new McpException("The 'get_file_lock_info' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'get_file_lock_info' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))

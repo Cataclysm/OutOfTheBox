@@ -33,7 +33,7 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
     {
         if (!permissionStore.IsEnabled("find_files"))
         {
-            throw new McpException("The 'find_files' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'find_files' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(repository))
@@ -65,7 +65,7 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
     {
         if (!permissionStore.IsEnabled("get_file_info"))
         {
-            throw new McpException("The 'get_file_info' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'get_file_info' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))
@@ -112,7 +112,7 @@ public sealed class FileManagementMcpTools(IWorkingDirectoryResolver workingDire
     {
         if (!permissionStore.IsEnabled("delete_path"))
         {
-            throw new McpException("The 'delete_path' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'delete_path' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))

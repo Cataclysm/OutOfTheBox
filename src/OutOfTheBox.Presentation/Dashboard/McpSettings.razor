@@ -64,7 +64,7 @@ else
 
 @code {
     /// <summary>
-    /// The eighteen plain tools, grouped for the page the same way <c>Credentials.razor</c>/
+    /// The nineteen plain tools, grouped for the page the same way <c>Credentials.razor</c>/
     /// <c>History.razor</c> already group their own filter <c>&lt;fieldset&gt;</c>s - purely a
     /// presentation grouping, not reflected in <see cref="McpToolCatalog"/> itself (Domain doesn't
     /// know about UI layout).
@@ -76,7 +76,7 @@ else
         ("File management", ["find_files", "get_file_info", "delete_path", "transfer_file", "get_file_lock_info"]),
         ("Git credentials", ["authorize_git_host", "list_authorized_git_hosts", "revoke_git_host_authorization"]),
         ("NuGet credentials", ["authorize_nuget_feed", "list_authorized_nuget_feeds", "revoke_nuget_feed_authorization"]),
-        ("Diagnostics", ["get_environment_info"]),
+        ("Diagnostics", ["get_environment_info", "get_mcp_permissions"]),
     ];
 
     private static readonly IReadOnlyCollection<string> DotnetSubcommands = CommandSubcommandPolicy.KnownSubcommandsFor("dotnet");

@@ -25,7 +25,7 @@ public sealed class EnvironmentInfoMcpTools(IEnvironmentInfoProvider environment
     {
         if (!permissionStore.IsEnabled("get_environment_info"))
         {
-            throw new McpException("The 'get_environment_info' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'get_environment_info' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         var info = await environmentInfoProvider.GetEnvironmentInfoAsync(CancellationToken.None);

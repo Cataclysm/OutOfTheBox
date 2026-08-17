@@ -49,26 +49,26 @@ public sealed class CommandExecutionMcpTools(
     IOptions<ServiceOptions> options,
     ILogger<CommandExecutionMcpTools> logger)
 {
-    /// <summary>Starts a <c>dotnet</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only <c>restore</c>/<c>build</c>/<c>test</c> are allowed.</summary>
-    /// <param name="arguments">The full <c>dotnet</c> argument list, e.g. <c>["build"]</c> or <c>["test", "--filter", "MyTests"]</c>. The subcommand (first element) must be <c>restore</c>, <c>build</c>, or <c>test</c>.</param>
+    /// <summary>Starts a <c>dotnet</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only a subset of subcommands is allowed, and which ones is operator-configurable and can change at any time - call <c>get_mcp_permissions</c> to see the current set rather than assuming.</summary>
+    /// <param name="arguments">The full <c>dotnet</c> argument list, e.g. <c>["build"]</c> or <c>["test", "--filter", "MyTests"]</c>. The subcommand (first element) must be one currently enabled per <c>get_mcp_permissions</c> - <c>restore</c>/<c>build</c>/<c>test</c> are enabled by default, but an operator may have enabled others (or disabled these) since you last checked.</param>
     /// <param name="workingDirectory">Repository-relative working directory to run in.</param>
     /// <param name="timeoutSeconds">Optional execution timeout override, in seconds; clamped to the configured maximum.</param>
     [McpServerTool]
-    [Description("Starts a `dotnet` command against a repository on the host - only restore/build/test are allowed. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
+    [Description("Starts a `dotnet` command against a repository on the host. Which subcommands are allowed is operator-configurable via the MCP Settings dashboard page and can change at any time while you're working - call get_mcp_permissions for the current allowed set rather than assuming; a call that worked earlier can start being rejected if an operator turns that subcommand off. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
     public Task<McpStartRunResult> DotnetRunAsync(
-        [Description("The full `dotnet` argument list, e.g. [\"build\"] or [\"test\", \"--filter\", \"MyTests\"]. The subcommand (first element) must be restore, build, or test.")] IReadOnlyList<string> arguments,
+        [Description("The full `dotnet` argument list, e.g. [\"build\"] or [\"test\", \"--filter\", \"MyTests\"]. The subcommand (first element) must currently be enabled per get_mcp_permissions.")] IReadOnlyList<string> arguments,
         [Description("Repository-relative working directory to run in.")] string workingDirectory,
         [Description("Optional execution timeout override, in seconds; clamped to the configured maximum.")] int? timeoutSeconds = null) =>
         StartRunAsync("dotnet", RunKind.DotnetCommand, arguments, workingDirectory, timeoutSeconds);
 
-    /// <summary>Starts a <c>git</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only <c>fetch</c>/<c>checkout</c>/<c>pull</c> and read-only inspection subcommands are allowed.</summary>
-    /// <param name="arguments">The full <c>git</c> argument list, e.g. <c>["status"]</c> or <c>["log", "--oneline", "-10"]</c>. The subcommand (first element) must be one of <c>fetch</c>/<c>checkout</c>/<c>pull</c>/<c>status</c>/<c>log</c>/<c>diff</c>/<c>show</c>/<c>branch</c>/<c>rev-parse</c>.</param>
+    /// <summary>Starts a <c>git</c> command against a repository on the host and returns immediately with a run id - poll <c>read_run_output</c> for its progress and result. Only a subset of subcommands is allowed, and which ones is operator-configurable and can change at any time - call <c>get_mcp_permissions</c> to see the current set rather than assuming.</summary>
+    /// <param name="arguments">The full <c>git</c> argument list, e.g. <c>["status"]</c> or <c>["log", "--oneline", "-10"]</c>. The subcommand (first element) must be one currently enabled per <c>get_mcp_permissions</c> - <c>fetch</c>/<c>checkout</c>/<c>pull</c>/<c>status</c>/<c>log</c>/<c>diff</c>/<c>show</c>/<c>branch</c>/<c>rev-parse</c> are enabled by default, but an operator may have enabled others (or disabled these) since you last checked.</param>
     /// <param name="workingDirectory">Repository-relative working directory to run in.</param>
     /// <param name="timeoutSeconds">Optional execution timeout override, in seconds; clamped to the configured maximum.</param>
     [McpServerTool]
-    [Description("Starts a `git` command against a repository on the host - only fetch/checkout/pull plus read-only inspection (status/log/diff/show/branch/rev-parse) are allowed. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
+    [Description("Starts a `git` command against a repository on the host. Which subcommands are allowed is operator-configurable via the MCP Settings dashboard page and can change at any time while you're working - call get_mcp_permissions for the current allowed set rather than assuming; a call that worked earlier can start being rejected if an operator turns that subcommand off. Returns immediately with a run id - call read_run_output to poll for progress and the final result. Rejected if the same repository already has another dotnet/git run or clone in flight, or if an argument's path would resolve outside the repository.")]
     public Task<McpStartRunResult> GitRunAsync(
-        [Description("The full `git` argument list, e.g. [\"status\"] or [\"log\", \"--oneline\", \"-10\"]. The subcommand (first element) must be fetch, checkout, pull, status, log, diff, show, branch, or rev-parse.")] IReadOnlyList<string> arguments,
+        [Description("The full `git` argument list, e.g. [\"status\"] or [\"log\", \"--oneline\", \"-10\"]. The subcommand (first element) must currently be enabled per get_mcp_permissions.")] IReadOnlyList<string> arguments,
         [Description("Repository-relative working directory to run in.")] string workingDirectory,
         [Description("Optional execution timeout override, in seconds; clamped to the configured maximum.")] int? timeoutSeconds = null) =>
         StartRunAsync("git", RunKind.GitCommand, arguments, workingDirectory, timeoutSeconds);
@@ -84,7 +84,7 @@ public sealed class CommandExecutionMcpTools(
     {
         if (!permissionStore.IsEnabled("read_run_output"))
         {
-            throw new McpException("The 'read_run_output' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'read_run_output' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None)
@@ -123,7 +123,7 @@ public sealed class CommandExecutionMcpTools(
     {
         if (!permissionStore.IsEnabled("cancel_run"))
         {
-            throw new McpException("The 'cancel_run' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'cancel_run' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         var run = await runRepository.FindByIdAsync(runId, CancellationToken.None);
@@ -163,7 +163,7 @@ public sealed class CommandExecutionMcpTools(
 
         if (!permissionStore.IsEnabled(McpToolCatalog.SubcommandKey(executable, arguments[0])))
         {
-            throw new McpException($"'{arguments[0]}' is currently disabled for {executable} in MCP Settings.");
+            throw new McpException($"'{arguments[0]}' is currently disabled for {executable} in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         var repositoryRoot = resolution.ResolvedPath!;

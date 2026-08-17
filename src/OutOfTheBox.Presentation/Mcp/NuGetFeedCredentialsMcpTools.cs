@@ -31,7 +31,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
     {
         if (!permissionStore.IsEnabled("authorize_nuget_feed"))
         {
-            throw new McpException("The 'authorize_nuget_feed' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'authorize_nuget_feed' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(feedUrl) || string.IsNullOrWhiteSpace(token))
@@ -63,7 +63,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
     {
         if (!permissionStore.IsEnabled("list_authorized_nuget_feeds"))
         {
-            throw new McpException("The 'list_authorized_nuget_feeds' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'list_authorized_nuget_feeds' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         return nuGetFeedCredentialStore.ListAuthorizedFeedsAsync(CancellationToken.None);
@@ -78,7 +78,7 @@ public sealed class NuGetFeedCredentialsMcpTools(INuGetFeedCredentialStore nuGet
     {
         if (!permissionStore.IsEnabled("revoke_nuget_feed_authorization"))
         {
-            throw new McpException("The 'revoke_nuget_feed_authorization' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'revoke_nuget_feed_authorization' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(feedUrl))

@@ -32,7 +32,7 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
     {
         if (!permissionStore.IsEnabled("authorize_git_host"))
         {
-            throw new McpException("The 'authorize_git_host' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'authorize_git_host' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(token))
@@ -62,7 +62,7 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
     {
         if (!permissionStore.IsEnabled("list_authorized_git_hosts"))
         {
-            throw new McpException("The 'list_authorized_git_hosts' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'list_authorized_git_hosts' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         return gitCredentialStore.ListAuthorizedHostsAsync(CancellationToken.None);
@@ -77,7 +77,7 @@ public sealed class GitCredentialsMcpTools(IGitCredentialStore gitCredentialStor
     {
         if (!permissionStore.IsEnabled("revoke_git_host_authorization"))
         {
-            throw new McpException("The 'revoke_git_host_authorization' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'revoke_git_host_authorization' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(host))

@@ -44,7 +44,7 @@ public sealed class FileTransferMcpTools(
     {
         if (!permissionStore.IsEnabled("transfer_file"))
         {
-            throw new McpException("The 'transfer_file' tool is currently disabled in MCP Settings.");
+            throw new McpException("The 'transfer_file' tool is currently disabled in MCP Settings - call get_mcp_permissions to see the current allowed set.");
         }
 
         if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(path))

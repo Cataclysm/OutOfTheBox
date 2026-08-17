@@ -6,11 +6,11 @@ namespace OutOfTheBox.Domain.Mcp;
 
 /// <summary>
 /// The fixed, complete set of every <see cref="McpToolPermissionEntry.Key"/> this service ever
-/// recognizes - the eighteen plain MCP tools (every tool except <c>dotnet_run</c>/<c>git_run</c>,
+/// recognizes - the nineteen plain MCP tools (every tool except <c>dotnet_run</c>/<c>git_run</c>,
 /// which are governed entirely by their own subcommand keys instead of a single master key) plus one
 /// key per <see cref="CommandSubcommandPolicy"/> catalog entry. What the MCP Settings dashboard page
-/// renders and groups, and what a fresh <c>McpToolPermissions</c> row gets seeded with the first time
-/// it's seen.
+/// renders and groups, what a fresh <c>McpToolPermissions</c> row gets seeded with the first time it's
+/// seen, and what <c>get_mcp_permissions</c> reports back to an MCP caller.
 /// </summary>
 public static class McpToolCatalog
 {
@@ -22,7 +22,7 @@ public static class McpToolCatalog
         "find_files", "get_file_info", "delete_path", "transfer_file", "get_file_lock_info",
         "authorize_git_host", "list_authorized_git_hosts", "revoke_git_host_authorization",
         "authorize_nuget_feed", "list_authorized_nuget_feeds", "revoke_nuget_feed_authorization",
-        "get_environment_info",
+        "get_environment_info", "get_mcp_permissions",
     ];
 
     // Every plain tool that mutates state at all - creates, deletes, or stores/removes a credential -
@@ -40,7 +40,7 @@ public static class McpToolCatalog
     /// <summary>The subcommand key for <paramref name="executable"/>/<paramref name="subcommand"/>, e.g. <c>"dotnet:publish"</c>.</summary>
     public static string SubcommandKey(string executable, string subcommand) => $"{executable}:{subcommand}";
 
-    /// <summary>Every key this service ever recognizes - the eighteen plain tool keys, then every known dotnet subcommand key, then every known git subcommand key.</summary>
+    /// <summary>Every key this service ever recognizes - the nineteen plain tool keys, then every known dotnet subcommand key, then every known git subcommand key.</summary>
     public static IEnumerable<string> AllKeys()
     {
         foreach (var key in PlainToolKeys)

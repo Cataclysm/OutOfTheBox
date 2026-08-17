@@ -75,6 +75,7 @@ public sealed class McpPermissionStoreTests : IDisposable
     [InlineData("list_authorized_git_hosts")]
     [InlineData("list_authorized_nuget_feeds")]
     [InlineData("get_environment_info")]
+    [InlineData("get_mcp_permissions")]
     public async Task LoadAsync_seeds_every_read_only_plain_tool_and_cancel_run_as_enabled(string key)
     {
         var store = CreateStore();
