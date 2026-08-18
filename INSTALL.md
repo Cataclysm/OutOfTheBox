@@ -2,7 +2,7 @@
 
 ## Today: development run
 
-There is no packaged release yet (see [Planned](#planned-production-install) below). To run the service directly:
+For a packaged install, download the latest `OutOfTheBoxSetup.exe` from [GitHub Releases](https://github.com/Cataclysm/OutOfTheBox/releases/latest) and skip to [Production install](#production-install) below. To run the service directly from source instead (for development):
 
 ```
 dotnet run --project src/OutOfTheBox.Host
@@ -158,6 +158,12 @@ opened) and rejected outright if it exceeds the configured size limit, rather th
 Packaged as a WiX Toolset installer: a Burn bootstrapper (`OutOfTheBoxSetup.exe`) that ensures the
 .NET 10 SDK and Git for Windows are present (installing either one silently if missing, skipping
 the check entirely if already satisfied), then runs the actual MSI.
+
+**Most operators want a prebuilt release, not to build one**: download `OutOfTheBoxSetup.exe` from
+[GitHub Releases](https://github.com/Cataclysm/OutOfTheBox/releases/latest) (built and published by
+this repository's own `release.yml` GitHub Actions workflow whenever a `vX.Y.Z` tag is pushed) and
+skip straight to [Install](#3-install) below. The steps immediately below (1/1a/2) are for building
+it yourself instead - contributing a change, or not trusting a prebuilt binary.
 
 ### 1. Publish
 

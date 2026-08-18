@@ -6,7 +6,7 @@ A Windows-hosted service that lets a Claude Code instance running in a remote sb
 
 ## Status
 
-Feature-complete and packaged as a WiX Toolset installer ([`INSTALL.md`](INSTALL.md)); only manual end-to-end verification on a real, clean Windows machine remains (see the newer full workflow plan in [`E2ETESTPLAN.md`](E2ETESTPLAN.md)). See [`openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md) for that original checklist and [`design.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/design.md) for the full architecture rationale; later work lives in its own `openspec/changes/<name>/` (in-flight) or `openspec/changes/archive/` (merged) directories.
+Released as v1.0.0, packaged as a WiX Toolset installer - grab `OutOfTheBoxSetup.exe` from the [latest release](https://github.com/Cataclysm/OutOfTheBox/releases/latest) or see [`INSTALL.md`](INSTALL.md) for the full walkthrough (including building it yourself). Manual end-to-end verification on a real, clean Windows machine is still outstanding (see the full workflow plan in [`E2ETESTPLAN.md`](E2ETESTPLAN.md)) - treat a fresh install/upgrade/uninstall as not yet independently confirmed beyond this repository's own automated test suite and CI. See [`openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/tasks.md) for that original checklist and [`design.md`](openspec/changes/archive/2026-08-09-sbx-dotnet-command-service/design.md) for the full architecture rationale; later work lives in its own `openspec/changes/<name>/` (in-flight) or `openspec/changes/archive/` (merged) directories.
 
 ## What it does
 
