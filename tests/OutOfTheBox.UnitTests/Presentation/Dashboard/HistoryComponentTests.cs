@@ -1,12 +1,9 @@
 // Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
 
-using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Events;
-using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Persistence;
 using OutOfTheBox.Domain.Runs;
 using OutOfTheBox.Infrastructure.Events;
-using OutOfTheBox.Infrastructure.Execution;
 using OutOfTheBox.Infrastructure.Persistence;
 using OutOfTheBox.Presentation.Dashboard;
 using OutOfTheBox.UnitTests.Infrastructure.Persistence;
@@ -14,7 +11,6 @@ using Bunit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.UnitTests.Presentation.Dashboard;
 
@@ -36,12 +32,6 @@ public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisp
         // The Clear filters button now renders <Icon>, which reads its vendored SVG via
         // IWebHostEnvironment - see TestWebHostEnvironment's own remarks.
         Services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
-
-        // The repository filter resolves an operator-typed name against the configured root before
-        // querying - a real resolver backed by the same root every test's fake repository paths
-        // (`C:\repositories\...`) already assume, matching RepositoriesComponentTests' own pattern.
-        var options = Options.Create(new ServiceOptions { RootDirectory = @"C:\repositories" });
-        Services.AddSingleton<IWorkingDirectoryResolver>(new WorkingDirectoryResolver(options, NullLogger<WorkingDirectoryResolver>.Instance));
     }
 
     [Fact]
@@ -85,6 +75,28 @@ public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisp
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("alpha", cut.Markup);
+            Assert.DoesNotContain("beta", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public async Task Filtering_by_a_partial_repository_name_still_matches()
+    {
+        // Reproduces the reported bug: the Repository filter used to resolve the typed text against
+        // the configured root and require an exact, fully-resolvable repository name - a partial
+        // name (what Repositories.razor's own search field already accepts) matched nothing.
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        await runRepository.AddAsync(Sample(RunKind.DotnetCommand, @"C:\repositories\alpha-project"), CancellationToken.None);
+        await runRepository.AddAsync(Sample(RunKind.GitCommand, @"C:\repositories\beta"), CancellationToken.None);
+
+        var cut = Render<History>();
+        cut.WaitForAssertion(() => Assert.Contains("alpha-project", cut.Markup));
+
+        cut.Find("input[placeholder='Repository name']").Input("alph");
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("alpha-project", cut.Markup);
             Assert.DoesNotContain("beta", cut.Markup);
         });
     }

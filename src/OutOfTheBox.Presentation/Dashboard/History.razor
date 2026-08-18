@@ -1,10 +1,8 @@
 @page "/history"
 @attribute [Authorize]
 @using System.Globalization
-@using OutOfTheBox.Application.Execution
 @inject IRunRepository RunRepository
 @inject IRunEventBus RunEventBus
-@inject IWorkingDirectoryResolver WorkingDirectoryResolver
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
@@ -189,25 +187,23 @@ else
 
     private async Task RefreshAsync()
     {
-        // The filter is a repository name (what an operator actually thinks in), but Run.RepositoryPath
-        // stores the resolved absolute path - resolved the same way any other repository-relative
-        // reference is before it's used to query. An unresolvable name (e.g. one that would escape
-        // the configured root) matches nothing rather than silently falling back to "no filter."
-        var repositoryPathFilter = string.IsNullOrWhiteSpace(_repositoryFilter)
-            ? null
-            : WorkingDirectoryResolver.Resolve(_repositoryFilter) is { IsAllowed: true, ResolvedPath: { } resolvedPath }
-                ? resolvedPath
-                : Guid.NewGuid().ToString();
-
         var query = new RunQuery
         {
             Kinds = _selectedKinds.Count > 0 ? _selectedKinds : null,
             Outcomes = Enum.TryParse<RunOutcome>(_selectedOutcome, out var outcome) ? [outcome] : null,
-            RepositoryPath = repositoryPathFilter,
             SearchText = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
         };
 
-        _runs = await RunRepository.ListAsync(query, CancellationToken.None);
+        var runs = await RunRepository.ListAsync(query, CancellationToken.None);
+
+        // Client-side partial match on the displayed repository name, not a server-side RunQuery.RepositoryPath
+        // filter - that field does an exact match (it's what RepositoryDetail.razor's own history tab
+        // relies on, scoping to one already-resolved repository), so reusing it here made this field
+        // require the operator to type a full, exactly-resolvable repository name instead of the
+        // partial-match behavior Repositories.razor's own search field already gives.
+        _runs = string.IsNullOrWhiteSpace(_repositoryFilter)
+            ? runs
+            : [.. runs.Where(r => RunDisplay.RepositoryName(r).Contains(_repositoryFilter, StringComparison.OrdinalIgnoreCase))];
     }
 
     private void SortBy(SortColumn column)
