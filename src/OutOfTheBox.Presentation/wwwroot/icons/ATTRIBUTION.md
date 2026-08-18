@@ -35,6 +35,7 @@ Vendored subset (dashboard action icons only, not the full icon set):
 | `circle-user.svg` | Commit detail: author/committer avatar fallback (no Gravatar image for that email) |
 | `key.svg` | Needs-credential marker next to a repository's name; Save button in the credential dialogs (Add/Edit, clone-retry PAT prompt) |
 | `plus.svg` | Credentials page: add a new credential |
+| `external-link.svg` | About page: link to the GitHub repository |
 
 To add another icon, download the matching `<name>.svg` from
 `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`

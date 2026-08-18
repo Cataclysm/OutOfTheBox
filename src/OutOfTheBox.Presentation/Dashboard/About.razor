@@ -1,3 +1,7 @@
+@* Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+   Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+   root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text. *@
+
 @page "/about"
 @attribute [Authorize]
 @using OutOfTheBox.Application.Configuration
@@ -22,15 +26,19 @@
     <dd>@VersionInfo.Current</dd>
     <dt>Author</dt>
     <dd>Written by Dennis Freise (<a href="mailto:dennis.freise@final-frontier.org">dennis.freise@final-frontier.org</a>), with help from Claude Code.</dd>
+    <dt>Source code</dt>
+    <dd><a href="https://github.com/Cataclysm/OutOfTheBox" target="_blank" rel="noopener noreferrer"><Icon Name="external-link" CssClass="icon-inline" />GitHub repository</a></dd>
 </dl>
 
 <h2>License</h2>
 <p>
-    This software is provided "as is", without warranty of any kind, express or implied, including but
-    not limited to the warranties of merchantability, fitness for a particular purpose, and
-    noninfringement. In no event shall the author be liable for any claim, damages, or other liability,
-    whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with
-    the software or the use or other dealings in the software.
+    @VersionInfo.DisplayName is free software, licensed under the
+    <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU Affero General Public License v3.0 (AGPL-3.0)</a>.
+    You're free to use, modify, and redistribute it, including running a modified version as a hosted
+    service - but if you do, the AGPL requires making that version's source available to anyone who
+    interacts with it over a network, under this same license. See the
+    <a href="https://github.com/Cataclysm/OutOfTheBox/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a>
+    file for the full text, including its own warranty disclaimer and liability limitation.
 </p>
 
 <h2>Connecting an agent</h2>
