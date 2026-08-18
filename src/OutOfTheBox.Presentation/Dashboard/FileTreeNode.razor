@@ -5,7 +5,7 @@
 
 @if (DirtyPaths is null || IsDirtyRelevant)
 {
-    <div class="file-tree-row" @onclick="OnRowClickAsync">
+    <div class="file-tree-row @(_exiting ? ListAnimation.ExitingClass : null)" @onclick="OnRowClickAsync">
         <Icon Name="@(IsDirectory ? (_expanded ? "folder-open" : "folder") : "file")" />
 
         @if (_renaming)
@@ -139,6 +139,9 @@
     private CancellationTokenSource? _pollCts;
     private bool _renaming;
     private string _renameValue = string.Empty;
+
+    /// <summary>Set once this node's own delete succeeds, while it plays its exit animation before <see cref="OnChanged"/> tells the parent to drop it - see <see cref="ListAnimation"/>.</summary>
+    private bool _exiting;
 
     private string RelativePath => string.IsNullOrEmpty(ParentRelativePath) ? Name : $"{ParentRelativePath}/{Name}";
 
@@ -298,6 +301,9 @@
         var result = await FileBrowser.DeleteAsync(RepositoryName, RelativePath, CancellationToken.None);
         if (result is RepositoryFileActionResult.Succeeded)
         {
+            _exiting = true;
+            StateHasChanged();
+            await Task.Delay(ListAnimation.ExitDuration);
             await OnChanged.InvokeAsync();
         }
     }

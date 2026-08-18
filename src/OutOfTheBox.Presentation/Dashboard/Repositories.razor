@@ -73,7 +73,7 @@ else
             <tbody>
                 @foreach (var repository in Sorted(filtered))
                 {
-                    <tr @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
+                    <tr @key="repository.Name" class="@(_exitingNames.Contains(repository.Name) ? ListAnimation.ExitingClass : null)" @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{repository.Name}"))">
                         <td class="col-shrink"><span class="kind-badge">@(repository.IsActive ? "Active" : "Idle")</span></td>
                         <td class="ellipsis" title="@repository.Name">
                             @repository.Name
@@ -130,6 +130,9 @@ else
     private CloneDialog? _cloneDialog;
     private RenameDialog? _renameDialog;
     private PatPromptDialog? _patPromptDialog;
+
+    /// <summary>Repository names currently mid-delete, playing their exit animation - see <see cref="ListAnimation"/>.</summary>
+    private readonly HashSet<string> _exitingNames = [];
 
     /// <summary>
     /// Clones this page itself started, keyed by run id, kept only until that run reaches a
@@ -321,7 +324,12 @@ else
 
     private async Task DeleteAsync(string name)
     {
+        _exitingNames.Add(name);
+        StateHasChanged();
+        await Task.Delay(ListAnimation.ExitDuration);
+
         await RepositoryManager.DeleteAsync(name, CancellationToken.None);
+        _exitingNames.Remove(name);
         await RefreshAsync();
     }
 

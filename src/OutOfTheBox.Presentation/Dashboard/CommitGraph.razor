@@ -36,7 +36,7 @@ else
                 @for (var i = 0; i < _commits.Count; i++)
                 {
                     var commit = _commits[i];
-                    <tr class="@(IsCheckedOut(commit) ? "commit-row-current" : null)" @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
+                    <tr @key="commit.Hash" class="@(IsCheckedOut(commit) ? "commit-row-current" : null)" @onclick="@(() => NavigationManager.NavigateTo($"repository-management/{RepositoryName}/commits/{commit.Hash}"))">
                         <td class="commit-graph-cell"></td>
                         <td class="ellipsis" title="@commit.Subject">
                             @foreach (var reference in commit.Refs)

@@ -704,6 +704,76 @@ dialog::backdrop {
     padding: 1.5rem 0;
 }
 
+/* Generic list/row entrance and exit animation, reused by every dynamic list in the dashboard
+   (History/Repositories/Credentials/commit-graph tables, the Status page's run and process lists,
+   file tree rows) - gated the same way as the login page's own one-shot entrance animations (see
+   below): scoped inside prefers-reduced-motion: no-preference so a reduced-motion operator gets
+   instant appearance/disappearance instead of motion, exactly per this feature's requirement.
+
+   The entrance half needs no C# involvement at all: applying the animation directly to the
+   row/item selector itself, rather than a class toggled from code, means only a genuinely *new*
+   DOM node plays it - Blazor's @key-based diffing reuses/patches the existing DOM node for an item
+   that merely moved, re-sorted, or changed content, so that node's animation never restarts. This
+   is why every foreach that renders one of these selectors needs an explicit @key on its own
+   element (a bare @foreach without one lets Blazor's positional diffing patch an unrelated existing
+   node's content instead of inserting a new one, which would both animate the wrong row and skip
+   animating the actually-new one).
+
+   The exit half can't be a pure CSS side effect the way entrance is - Blazor removes a dropped
+   item's DOM node synchronously within the same render that drops it from the C# collection, before
+   any CSS transition/animation would have a chance to play. Call sites that want an exit animation
+   (RepositoryManagement's delete, Credentials' remove, FileTreeNode's own delete, a run leaving
+   Status's run list) instead add ListAnimation.ExitingClass to the row for one extra render, await
+   ListAnimation.ExitDuration, and only then actually remove the item and refresh - see
+   ListAnimation.cs's own remarks for why that duration isn't itself skipped under reduced motion
+   (the fixed pause happens for every operator; only the visible motion is conditional here). */
+@media (prefers-reduced-motion: no-preference) {
+    .data-table tbody tr,
+    .run-list > li,
+    .process-list > li,
+    .file-tree-row,
+    .empty-state {
+        animation: list-item-in 0.22s ease-out both;
+    }
+
+    /* Higher specificity than ".data-table tbody tr" etc. above needs !important to actually win -
+       a combinator selector like ".run-list > li" outranks a lone class selector on specificity
+       alone. Deliberately still scoped inside this same media query rather than living outside it -
+       a reduced-motion operator gets no animation here either, just the plain pointer-events: none
+       while ListAnimation.ExitDuration's fixed pause elapses. */
+    .list-item-exiting {
+        animation: list-item-out 0.2s ease-in both !important;
+    }
+}
+
+.list-item-exiting {
+    pointer-events: none;
+}
+
+@keyframes list-item-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes list-item-out {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+}
+
 .run-list {
     list-style: none;
     padding: 0;
@@ -769,6 +839,24 @@ dialog::backdrop {
     height: 2px;
     background: var(--gradient-brand);
     opacity: 0.85;
+}
+
+/* Status page's fixed 7-tile row never adds/removes a tile at runtime (only each tile's own text
+   updates), so the generic "@key-diffed new node" entrance trick above doesn't apply here - these
+   play once on the Status page's own first render instead, each slightly later than the last for a
+   left-to-right wave instead of 7 tiles popping in unison. */
+@media (prefers-reduced-motion: no-preference) {
+    .resource-tile {
+        animation: list-item-in 0.28s ease-out both;
+    }
+
+    .resource-tile:nth-child(1) { animation-delay: 0s; }
+    .resource-tile:nth-child(2) { animation-delay: 0.035s; }
+    .resource-tile:nth-child(3) { animation-delay: 0.07s; }
+    .resource-tile:nth-child(4) { animation-delay: 0.105s; }
+    .resource-tile:nth-child(5) { animation-delay: 0.14s; }
+    .resource-tile:nth-child(6) { animation-delay: 0.175s; }
+    .resource-tile:nth-child(7) { animation-delay: 0.21s; }
 }
 
 .resource-tile-label {
@@ -1644,6 +1732,7 @@ dd {
     height: 8px;
     border-radius: 50%;
     flex: none;
+    transition: background-color 0.2s ease;
 }
 
 .git-status-dot.clean {

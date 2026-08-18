@@ -61,7 +61,7 @@ else
     <ul class="run-list">
         @foreach (var run in _runs)
         {
-            <li class="status-run">
+            <li @key="run.Id" class="status-run @(_exitingRunIds.Contains(run.Id) ? ListAnimation.ExitingClass : null)">
                 <div class="run-row">
                     <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span>
                     <span class="run-repository">@RunDisplay.RepositoryName(run)</span>
@@ -76,7 +76,7 @@ else
                     <ul class="process-list">
                         @foreach (var process in processes)
                         {
-                            <li class="process-row">
+                            <li @key="process.ProcessId" class="process-row">
                                 <span>@process.ProcessName (@process.ProcessId)</span>
                                 <span>@FormatPercent(process.CpuPercent)</span>
                                 <span>@FormatBytes(process.RamBytes)</span>
@@ -104,6 +104,9 @@ else
     private HostResourceSample _host = new(0, [], 0, 0, 0, 0, 0);
     private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
     private readonly HashSet<Guid> _expandedRunIds = [];
+
+    /// <summary>Run ids that just went terminal and are playing their exit animation before dropping off this list - see <see cref="ListAnimation"/>.</summary>
+    private readonly HashSet<Guid> _exitingRunIds = [];
     private InstalledToolVersions _toolVersions = new(null, null);
 
     /// <inheritdoc />
@@ -131,6 +134,18 @@ else
 
         _ = InvokeAsync(async () =>
         {
+            // A run reaching a terminal state drops off this list on the very next refresh - played
+            // as an exit animation on its own row first, rather than the row just vanishing, the same
+            // "animate the specific thing that changed" treatment RepositoryManagement/Credentials
+            // give their own delete/remove actions.
+            if (runEvent.Type == RunEventType.Terminal)
+            {
+                _exitingRunIds.Add(runEvent.RunId);
+                StateHasChanged();
+                await Task.Delay(ListAnimation.ExitDuration);
+                _exitingRunIds.Remove(runEvent.RunId);
+            }
+
             await RefreshAsync();
             StateHasChanged();
         });

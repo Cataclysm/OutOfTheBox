@@ -80,7 +80,7 @@ else
         <tbody>
             @foreach (var run in SortedRuns())
             {
-                <tr @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
+                <tr @key="run.Id" @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
                     <td class="col-shrink"><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
                     <td class="col-shrink">@run.Outcome.Label()</td>
                     <td class="col-shrink ellipsis" title="@RunDisplay.RepositoryName(run)">@RunDisplay.RepositoryName(run)</td>
