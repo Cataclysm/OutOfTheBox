@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+// Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+// root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text.
+
 // Thin wrapper around the native <dialog> element's imperative show/close API - Blazor has no
 // built-in binding for it, and a plain @onclick can't call a DOM method directly.
 window.outOfTheBoxDialogs = {

@@ -154,6 +154,13 @@ it), and a handful of tools (`delete_repository`, `delete_path`, `clone_reposito
 authorize/revoke tools) default to disabled precisely because they're destructive or handle secrets —
 an operator has to deliberately opt back in from MCP Settings.
 
+## License
+
+[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE) — free to use, modify, and redistribute,
+including running a modified version as a hosted service, provided that version's source stays
+available under the same license to anyone who interacts with it over a network. See the About
+page's own License section (once logged in) for the same summary.
+
 ## Documentation
 
 - [`BUILD.md`](BUILD.md) — building and testing this repository
