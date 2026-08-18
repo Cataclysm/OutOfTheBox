@@ -7,6 +7,13 @@
          (this installer's whole point is to *establish* that runtime, so the installer's own
          custom action can't assume it's there yet). -->
     <TargetFramework>net472</TargetFramework>
+    <!-- The WixToolset.Dtf.* packages below carry the same Open Source Maintenance Fee EULA gate
+         as WixToolset.Sdk itself (WIX7015) despite this being a plain Microsoft.NET.Sdk project,
+         not a WixToolset.Sdk one - matches the same property already set directly in
+         OutOfTheBox.Msi.wixproj/OutOfTheBox.Bootstrapper.wixproj, missed here originally since it
+         wasn't obviously needed on a non-WiX-SDK project until CI (a genuinely fresh machine,
+         unlike a dev box that may have already accepted it once via `wix eula accept`) hit it. -->
+    <AcceptEula>wix7</AcceptEula>
     <!-- Overrides the repo-root Directory.Build.props' <Nullable>enable</Nullable>/
          <ImplicitUsings>enable</ImplicitUsings> - net472's default C# language version (7.3)
          predates both nullable reference type syntax and global using directives entirely. -->
