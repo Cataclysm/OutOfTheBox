@@ -76,6 +76,7 @@ public sealed class GitCredentialStore(
         }
 
         credentialEventBus.Publish();
+        _ = RefetchAffectedRepositoriesAsync(normalizedHost);
         return new GitCredentialAuthorizeResult.Succeeded();
     }
 
@@ -188,6 +189,76 @@ public sealed class GitCredentialStore(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Could not refresh repository '{Repository}' after revoking the credential for '{Host}'.", summary.Name, normalizedHost);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fire-and-forget: after a git host credential is added or replaced, immediately retries a real
+    /// <c>git fetch</c> for every repository whose <c>origin</c> remote resolves to
+    /// <paramref name="normalizedHost"/> and is currently flagged <see cref="RepositorySummary.NeedsCredential"/> -
+    /// so a repository that was failing on a missing/expired PAT clears its "needs credential" badge
+    /// as soon as the new one actually works, instead of waiting for <c>RepositoryFetchSampler</c>'s
+    /// own next periodic tick (up to <c>ServiceOptions.RepositoryFetchIntervalSeconds</c>, 5 minutes
+    /// by default). Goes through <see cref="IRepositoryGitActions.FetchAsync"/>, not a plain git-status
+    /// recompute the way <see cref="RevokeAsync"/>'s own <see cref="RefreshAffectedRepositoriesAsync"/>
+    /// does - only a real fetch attempt actually exercises the new credential and lets
+    /// <see cref="RecordRepositoryOutcomeAsync"/> clear the per-repository health record
+    /// <c>NeedsCredential</c> is derived from; a revoke has no "does it work now" question to answer,
+    /// which is why that path only recomputes already-known git status instead. Detached from the
+    /// caller's own request-scoped <see cref="CancellationToken"/> (uses <see cref="CancellationToken.None"/>
+    /// throughout) so a fetch already in flight isn't cut short just because the HTTP
+    /// request/circuit that triggered the authorize already returned - the same "outlives the
+    /// caller's scope" reasoning this class's own remarks document for resolving dependencies lazily
+    /// from a fresh scope. Best-effort: skips a repository not already flagged as needing this
+    /// credential, and never lets one repository's failure stop the others or surface anywhere -
+    /// <see cref="AuthorizeAsync"/> itself already succeeded and returned by the time this runs.
+    /// </summary>
+    private async Task RefetchAffectedRepositoriesAsync(string normalizedHost)
+    {
+        await using var scope = serviceScopeFactory.CreateAsyncScope();
+        var repositoryManager = scope.ServiceProvider.GetRequiredService<IRepositoryManager>();
+        var repositoryGitActions = scope.ServiceProvider.GetRequiredService<IRepositoryGitActions>();
+
+        IReadOnlyList<RepositorySummary> summaries;
+        try
+        {
+            summaries = await repositoryManager.ListAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not enumerate repositories to refetch after authorizing the credential for '{Host}'.", normalizedHost);
+            return;
+        }
+
+        foreach (var summary in summaries)
+        {
+            if (!summary.NeedsCredential)
+            {
+                continue;
+            }
+
+            var origin = summary.Remotes.FirstOrDefault(r => r.Name == "origin");
+            if (origin is null || !GitRemoteUrlParser.TryGetHost(origin.Url, out var repoHost) || Normalize(repoHost) != normalizedHost)
+            {
+                continue;
+            }
+
+            try
+            {
+                var result = await repositoryGitActions.FetchAsync(summary.Name, CancellationToken.None);
+                if (result is RepositoryGitActionResult.Failed failed)
+                {
+                    logger.LogWarning(
+                        "Fetch retry after authorizing the credential for '{Host}' still failed for repository '{Name}': {ErrorMessage}",
+                        normalizedHost,
+                        summary.Name,
+                        failed.ErrorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Unexpected error retrying the fetch for repository '{Name}' after authorizing the credential for '{Host}'.", summary.Name, normalizedHost);
             }
         }
     }
