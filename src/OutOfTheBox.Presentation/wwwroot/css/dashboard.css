@@ -1,3 +1,7 @@
+/* Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+   Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+   root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text. */
+
 /* Single dark theme, no light-mode alternative and no prefers-color-scheme branching - per
    design.md's "Dashboard theme: dark-only, no toggle" decision. Brand palette below is sampled
    directly from the product logo (installer/Assets, wwwroot/img/logo.png): a warm orange-to-pink
@@ -36,6 +40,18 @@
 
 * {
     box-sizing: border-box;
+}
+
+html {
+    /* .dashboard-content below is centered (margin: 0 auto) inside the page - without this, its
+       centering point depends on whether a vertical scrollbar happens to be showing (a short page
+       has none, so the content centers across the full window width; a tall one reserves ~15-17px
+       for the scrollbar track, centering across a narrower area instead), so the entire header/nav/
+       content column visibly jumped left by half that width on any navigation - or even any
+       same-page change - that crossed the "does this page's content overflow the viewport" line.
+       Reserving the gutter unconditionally keeps the available width constant regardless of whether
+       a given page's content actually needs to scroll. */
+    scrollbar-gutter: stable;
 }
 
 html, body {
@@ -230,21 +246,6 @@ input[type="checkbox"] {
 }
 
 .icon-button:hover {
-    color: var(--text);
-}
-
-/* Same muted-gray look as .icon-button, but sized to fit an icon-plus-text-label toolbar action
-   (e.g. Credentials page's "Add credential") instead of .icon-button's fixed 2.1rem square - a
-   derived class, not a change to .icon-button itself, so every existing icon-only button stays
-   exactly as it is. Width/height are intentionally left unset (inherits the plain button rule's own
-   padding, which sizes correctly to icon+text content). */
-.icon-button-labeled {
-    display: inline-flex;
-    align-items: center;
-    color: var(--text-muted);
-}
-
-.icon-button-labeled:hover {
     color: var(--text);
 }
 
@@ -1060,6 +1061,150 @@ dialog::backdrop {
 
 .history-filters input[type="text"], .history-filters select {
     min-width: 160px;
+}
+
+/* History/Repositories/Credentials' own filter bars - deliberately a separate class from
+   .history-filters above rather than a shared rewrite: that class's flex/label-wraps-its-control
+   shape is also used, unchanged, by FileTree's own (single-checkbox, nothing to misalign) filter
+   bar. grid-auto-flow: column is what lines labels and controls up along two shared rows: with an
+   explicit two-row template, laying out items column-by-column packs each (label, control) pair
+   emitted back-to-back in the markup into one column - the label lands in row 1, its control
+   directly below it in row 2, and the next pair starts a new column - without needing every
+   label/control to share a measured width. A standalone control with no label of its own (an
+   inline checkbox, an icon button) carries .run-filters-action instead of following a label span -
+   auto-flow would otherwise still place it in row 1 of the next column purely because that's the
+   first free cell it reaches, so that class's own grid-row: 2 overrides that to line it up with the
+   other row-2 controls, leaving row 1 of that same column empty (harmless - an empty grid cell
+   renders nothing).
+
+   Column count and which single column gets 1fr (the field whose text input should absorb the bar's
+   remaining width) differs per page, so grid-template-columns itself lives on each page's own
+   .run-filters-history/-repositories/-credentials modifier below instead of here. */
+.run-filters {
+    display: grid;
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    column-gap: 1.25rem;
+    row-gap: 0.4rem;
+    align-items: center;
+    /* stretch (the grid default, restated explicitly here), not start - an auto-sized column already
+       equals its content's own natural width so stretching it is a no-op, but the one 1fr column
+       per page actually has room to fill, and its label/input need to stretch into it rather than
+       hug left. */
+    justify-items: stretch;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+}
+
+.run-filters-history {
+    grid-template-columns: auto auto auto 1fr auto; /* Kind, Outcome, Repository, Search, Clear */
+}
+
+.run-filters-repositories {
+    grid-template-columns: 1fr auto auto auto auto; /* Search, Active only, Git status, Clear, Clone */
+}
+
+.run-filters-credentials {
+    grid-template-columns: auto 1fr auto auto; /* Type, Server / Feed, Clear, Add credential */
+}
+
+.run-filter-label {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.run-filters input[type="text"], .run-filters select, .kind-filter-dropdown summary {
+    min-width: 160px;
+}
+
+.run-filters-action {
+    grid-row: 2;
+}
+
+/* Repositories' "Active only" inline checkbox - a checkbox-then-text row, not a stacked field
+   label, the same distinction .history-filters draws for its own inline checkbox labels. */
+.run-filters label:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+}
+
+/* Kind's checkbox list as a dropdown, native <details>/<summary> rather than a JS-driven open/close
+   state - a <summary> click is the browser's own toggle, and (unlike a hand-rolled open flag) a
+   click on any checkbox inside the panel never bubbles into closing it, since only a <summary>
+   click toggles a <details> element at all. No outside-click-to-dismiss handling - clicking the
+   summary again (or just filtering the list, which is instant per checkbox) closes it, which is
+   enough for a 6-item list, without needing dialog-interop.js's backdrop-dismiss machinery here too. */
+.kind-filter-dropdown {
+    position: relative;
+}
+
+.kind-filter-dropdown summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    transition: border-color 0.15s ease;
+}
+
+.kind-filter-dropdown summary::-webkit-details-marker {
+    display: none;
+}
+
+.kind-filter-dropdown summary::after {
+    content: "▾";
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.kind-filter-dropdown[open] summary::after {
+    content: "▴";
+}
+
+.kind-filter-dropdown summary:hover {
+    border-color: var(--border-strong);
+}
+
+.kind-filter-dropdown-panel {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    min-width: 200px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 0.6rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.kind-filter-dropdown-panel label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
 }
 
 /* MCP Settings' own toggle groups - unlike .history-filters (one horizontal bar of a few filter

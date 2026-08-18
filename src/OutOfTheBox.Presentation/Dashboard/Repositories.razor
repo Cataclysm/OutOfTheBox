@@ -1,3 +1,7 @@
+@* Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+   Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+   root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text. *@
+
 @page "/repository-management"
 @attribute [Authorize]
 @using OutOfTheBox.Application.Concurrency
@@ -15,27 +19,26 @@
 
 <h1>Repositories</h1>
 
-<div class="history-filters">
-    <label>
-        Search
-        <input type="text" @bind="_searchText" @bind:event="oninput" placeholder="Repository name" />
-    </label>
-    <label>
+<div class="run-filters run-filters-repositories">
+    <span class="run-filter-label">Search</span>
+    <input type="text" @bind="_searchText" @bind:event="oninput" placeholder="Repository name" />
+
+    <label class="run-filters-action">
         <input type="checkbox" @bind="_activeOnly" /> Active only
     </label>
-    <label>
-        Git status
-        <select @bind="_gitStatusFilter">
-            <option value="">(any)</option>
-            <option value="clean">Clean</option>
-            <option value="dirty">Dirty</option>
-            <option value="no-git">Not a git repository</option>
-        </select>
-    </label>
-    <button type="button" class="icon-button" title="Clear filters" @onclick="ClearFilters">
+
+    <span class="run-filter-label">Git status</span>
+    <select @bind="_gitStatusFilter">
+        <option value="">(any)</option>
+        <option value="clean">Clean</option>
+        <option value="dirty">Dirty</option>
+        <option value="no-git">Not a git repository</option>
+    </select>
+
+    <button type="button" class="icon-button run-filters-action" title="Clear filters" @onclick="ClearFilters">
         <Icon Name="clear-filters" />
     </button>
-    <button type="button" class="icon-button" title="Clone repository" @onclick="@(() => _cloneDialog!.ShowAsync())">
+    <button type="button" class="icon-button run-filters-action" title="Clone repository" @onclick="@(() => _cloneDialog!.ShowAsync())">
         <Icon Name="download" />
     </button>
 </div>

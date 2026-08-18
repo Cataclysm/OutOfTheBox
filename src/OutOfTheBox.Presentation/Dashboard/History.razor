@@ -1,3 +1,7 @@
+@* Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+   Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+   root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text. *@
+
 @page "/history"
 @attribute [Authorize]
 @using System.Globalization
@@ -10,40 +14,37 @@
 
 <h1>History</h1>
 
-<div class="history-filters">
-    <fieldset>
-        <legend>Kind</legend>
-        @foreach (var kind in AllKinds)
-        {
-            <label>
-                <input type="checkbox" checked="@_selectedKinds.Contains(kind)" @onchange="@(e => ToggleKind(kind, (bool)e.Value!))" />
-                @kind.ShortLabel()
-            </label>
-        }
-    </fieldset>
-
-    <label>
-        Outcome
-        <select @bind="_selectedOutcome" @bind:after="RefreshAsync">
-            <option value="">(any)</option>
-            @foreach (var outcome in AllOutcomes)
+<div class="run-filters run-filters-history">
+    <span class="run-filter-label">Kind</span>
+    <details class="kind-filter-dropdown">
+        <summary>@KindFilterSummary()</summary>
+        <div class="kind-filter-dropdown-panel">
+            @foreach (var kind in AllKinds)
             {
-                <option value="@outcome">@outcome.Label()</option>
+                <label>
+                    <input type="checkbox" checked="@_selectedKinds.Contains(kind)" @onchange="@(e => ToggleKind(kind, (bool)e.Value!))" />
+                    @kind.ShortLabel()
+                </label>
             }
-        </select>
-    </label>
+        </div>
+    </details>
 
-    <label>
-        Repository
-        <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="Repository name" />
-    </label>
+    <span class="run-filter-label">Outcome</span>
+    <select @bind="_selectedOutcome" @bind:after="RefreshAsync">
+        <option value="">(any)</option>
+        @foreach (var outcome in AllOutcomes)
+        {
+            <option value="@outcome">@outcome.Label()</option>
+        }
+    </select>
 
-    <label>
-        Search
-        <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="Search repository, arguments, file path, source URL" />
-    </label>
+    <span class="run-filter-label">Repository</span>
+    <input type="text" @bind="_repositoryFilter" @bind:event="oninput" @bind:after="RefreshAsync" placeholder="Repository name" />
 
-    <button type="button" class="icon-button" title="Clear filters" @onclick="ClearFiltersAsync">
+    <span class="run-filter-label">Search</span>
+    <input type="text" value="@_searchText" @oninput="OnSearchInput" placeholder="Search repository, arguments, file path, source URL" />
+
+    <button type="button" class="icon-button run-filters-action" title="Clear filters" @onclick="ClearFiltersAsync">
         <Icon Name="clear-filters" />
     </button>
 </div>
@@ -94,7 +95,13 @@ else
     private static readonly RunKind[] AllKinds = Enum.GetValues<RunKind>();
     private static readonly RunOutcome[] AllOutcomes = Enum.GetValues<RunOutcome>();
 
-    private readonly HashSet<RunKind> _selectedKinds = [];
+    // Starts with every kind checked, not empty - RunQuery treats an empty set the same as "no
+    // filter" (see RefreshAsync below), so an empty _selectedKinds looked, at first load, like
+    // nothing was selected while the dropdown's own summary said "All kinds" - checked state and
+    // summary text disagreeing. Starting all-checked makes "checked" mean "included" throughout:
+    // the summary and the checkboxes agree at load, and unchecking one kind now excludes just that
+    // kind rather than the old (inverted) "check one to show only that kind" behavior.
+    private readonly HashSet<RunKind> _selectedKinds = [.. AllKinds];
     private string _selectedOutcome = string.Empty;
     private string _repositoryFilter = string.Empty;
     private string _searchText = string.Empty;
@@ -152,6 +159,19 @@ else
         return RefreshAsync();
     }
 
+    // "All kinds" for both the empty selection (no filter applied) and every kind individually
+    // checked (equivalent to no filter) - a checked-out-of-N summary reading "6 kinds" when nothing
+    // is actually being excluded would be misleading.
+    private string KindFilterSummary()
+    {
+        if (_selectedKinds.Count == 0 || _selectedKinds.Count == AllKinds.Length)
+        {
+            return "All kinds";
+        }
+
+        return _selectedKinds.Count == 1 ? _selectedKinds.Single().ShortLabel() : $"{_selectedKinds.Count} kinds";
+    }
+
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         _searchText = e.Value?.ToString() ?? string.Empty;
@@ -179,6 +199,7 @@ else
     private Task ClearFiltersAsync()
     {
         _selectedKinds.Clear();
+        _selectedKinds.UnionWith(AllKinds);
         _selectedOutcome = string.Empty;
         _repositoryFilter = string.Empty;
         _searchText = string.Empty;
@@ -189,7 +210,9 @@ else
     {
         var query = new RunQuery
         {
-            Kinds = _selectedKinds.Count > 0 ? _selectedKinds : null,
+            // Every kind checked (the default/cleared state) is filtered identically to none checked -
+            // both mean "no kind filter", not "match every kind via an explicit IN-list".
+            Kinds = _selectedKinds.Count > 0 && _selectedKinds.Count < AllKinds.Length ? _selectedKinds : null,
             Outcomes = Enum.TryParse<RunOutcome>(_selectedOutcome, out var outcome) ? [outcome] : null,
             SearchText = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText,
         };

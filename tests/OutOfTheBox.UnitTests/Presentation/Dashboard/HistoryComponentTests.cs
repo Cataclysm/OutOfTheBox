@@ -1,4 +1,6 @@
-// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>. All rights reserved.
+// Copyright (c) 2026 Dennis Freise <dennis.freise@final-frontier.org>
+// Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
+// root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text.
 
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Persistence;
@@ -48,9 +50,12 @@ public sealed class HistoryComponentTests : DashboardComponentTestContext, IDisp
             Assert.Contains("git-repository", cut.Markup);
         });
 
-        var gitCheckbox = cut.FindAll("input[type=checkbox]")
-            .Single(input => input.ParentElement!.TextContent.Trim() == RunKind.GitCommand.ShortLabel());
-        gitCheckbox.Change(true);
+        // Every kind starts checked (checked = included, matching the dropdown's own "All kinds"
+        // summary at load) - unchecking one excludes just that kind, rather than the checkbox-list's
+        // old "check one to show only that one" behavior.
+        var dotnetCheckbox = cut.FindAll("input[type=checkbox]")
+            .Single(input => input.ParentElement!.TextContent.Trim() == RunKind.DotnetCommand.ShortLabel());
+        dotnetCheckbox.Change(false);
 
         cut.WaitForAssertion(() =>
         {
