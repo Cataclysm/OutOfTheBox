@@ -1,0 +1,97 @@
+name: Release
+
+# Triggered by pushing a version tag (e.g. `git tag v1.2.3 && git push origin v1.2.3`) - the tag
+# itself is the release's version, passed to every build/publish step below via -p:Version, rather
+# than requiring a separate commit that bumps Directory.Build.props' own <Version> first. That
+# property stays a plain local-dev default (currently 1.0.0); it's never what an actual release
+# ships under.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+# Pinned to the same v2.0.4 release documented in INSTALL.md's "Fetch the Azure Artifacts
+# Credential Provider" step - bump both places (here and ci.yml) together if it ever changes.
+env:
+  CREDENTIAL_PROVIDER_URL: https://github.com/microsoft/artifacts-credprovider/releases/download/v2.0.4/Microsoft.win-x64.NuGet.CredentialProvider.zip
+
+# Only the GITHUB_TOKEN permission `gh release create` below actually needs - everything else
+# stays at its default (read-only).
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Strips the leading "v" (v1.2.3 -> 1.2.3) - MSBuild's Version property, WiX's ProductVersion,
+      # and the GitHub release title all use this bare form.
+      - name: Derive version from the tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v")
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      # Full gate before packaging anything - a tag pushed against a commit nobody actually ran CI
+      # against (or one where CI's own result was never checked) shouldn't be able to produce a
+      # published release. Same three commands as ci.yml's build-and-test job.
+      - name: Build
+        run: dotnet build OutOfTheBox.slnx
+
+      - name: Unit tests
+        run: dotnet test tests/OutOfTheBox.UnitTests/OutOfTheBox.UnitTests.csproj --no-build
+
+      - name: Architecture tests
+        run: dotnet test tests/OutOfTheBox.ArchitectureTests/OutOfTheBox.ArchitectureTests.csproj --no-build
+
+      - name: Behavior tests
+        run: dotnet test tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj --no-build
+
+      - name: Custom-action tests
+        run: dotnet test installer/OutOfTheBox.Msi.CustomActions.Tests
+
+      - name: Publish Host (self-contained win-x64)
+        run: dotnet publish src/OutOfTheBox.Host -p:PublishProfile=win-x64 -p:Version=${{ env.VERSION }} -o artifacts/publish/OutOfTheBox.Host
+
+      - name: Fetch Azure Artifacts Credential Provider
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri $env:CREDENTIAL_PROVIDER_URL -OutFile artifacts/publish/azure-artifacts-credential-provider.zip
+          Expand-Archive artifacts/publish/azure-artifacts-credential-provider.zip artifacts/publish/AzureArtifactsCredentialProvider -Force
+
+      # Order matters - see ci.yml's installer-build job for why.
+      - name: Build MSI
+        run: dotnet build installer/OutOfTheBox.Msi -c Release -p:Version=${{ env.VERSION }}
+
+      - name: Build Bootstrapper
+        run: dotnet build installer/OutOfTheBox.Bootstrapper -c Release -p:Version=${{ env.VERSION }}
+
+      # gh (pre-installed on every GitHub-hosted runner) over a third-party marketplace action -
+      # one fewer external action to trust/pin for something this simple. --generate-notes builds
+      # the release body from merged PRs/commits since the previous tag automatically.
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes `
+            "installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe" `
+            "installer/OutOfTheBox.Msi/bin/x64/Release/OutOfTheBox.Msi.msi"

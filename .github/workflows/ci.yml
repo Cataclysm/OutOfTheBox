@@ -1,0 +1,110 @@
+name: CI
+
+# Windows-only throughout: PerformanceCounter, WMI, Windows Service hosting (see CLAUDE.md) - no
+# other runner OS is viable for any job here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Pinned to the same v2.0.4 release documented in INSTALL.md's "Fetch the Azure Artifacts
+# Credential Provider" step - bump both places together if the vendored release ever changes.
+env:
+  CREDENTIAL_PROVIDER_URL: https://github.com/microsoft/artifacts-credprovider/releases/download/v2.0.4/Microsoft.win-x64.NuGet.CredentialProvider.zip
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # setup-dotnet's own built-in `cache: true` needs NuGet lock files to key off, and this repo
+      # doesn't use them (Central Package Management via Directory.Packages.props instead) - a
+      # manual cache keyed on every project/package-version file is the equivalent for CPM.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Mirrors BUILD.md's own documented commands verbatim, one project at a time, so a failure
+      # points straight at the same project name an operator would run locally - not a single
+      # opaque `dotnet test OutOfTheBox.slnx` covering all three at once.
+      - name: Build
+        run: dotnet build OutOfTheBox.slnx
+
+      - name: Unit tests
+        run: dotnet test tests/OutOfTheBox.UnitTests/OutOfTheBox.UnitTests.csproj --no-build
+
+      - name: Architecture tests
+        run: dotnet test tests/OutOfTheBox.ArchitectureTests/OutOfTheBox.ArchitectureTests.csproj --no-build
+
+      # Slow: spawns real dotnet.exe/git.exe child processes against tests/Fixtures/, including two
+      # scenarios that deliberately let a command hang and confirm it gets killed by its own timeout.
+      - name: Behavior tests
+        run: dotnet test tests/OutOfTheBox.BehaviorTests/OutOfTheBox.BehaviorTests.csproj --no-build
+
+  # Separate job (runs in parallel with build-and-test) rather than a step tacked onto it - a
+  # broken installer project shouldn't have to wait behind the slow behavior-test suite to be
+  # caught, and this way a PR that never touches installer/ still gets the same coverage instead of
+  # silently drifting until someone actually tries to cut a release. Builds the MSI/Bootstrapper the
+  # same way a release does (see release.yml) but never publishes anything - purely "does this still
+  # build," per the WiX pivot's own lesson (see memory: test the real build path, not just a CLI
+  # diagnostic's say-so).
+  installer-build:
+    name: Installer build check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Custom-action tests
+        run: dotnet test installer/OutOfTheBox.Msi.CustomActions.Tests
+
+      - name: Publish Host (self-contained win-x64)
+        run: dotnet publish src/OutOfTheBox.Host -p:PublishProfile=win-x64 -o artifacts/publish/OutOfTheBox.Host
+
+      - name: Fetch Azure Artifacts Credential Provider
+        shell: pwsh
+        run: |
+          # Invoke-WebRequest's default progress bar rendering is pathologically slow in a
+          # non-interactive host like this one - silencing it turns a multi-minute download
+          # (observed live) into a few seconds.
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri $env:CREDENTIAL_PROVIDER_URL -OutFile artifacts/publish/azure-artifacts-credential-provider.zip
+          Expand-Archive artifacts/publish/azure-artifacts-credential-provider.zip artifacts/publish/AzureArtifactsCredentialProvider -Force
+
+      # Must build in this order (not in parallel) - the Bootstrapper's own wixproj carries a
+      # build-ordering-only ProjectReference to the Msi project, but that only forces ordering
+      # when built as a solution; a plain two-command build has to run them in this sequence by
+      # hand too, per INSTALL.md's own warning.
+      - name: Build MSI
+        run: dotnet build installer/OutOfTheBox.Msi -c Release
+
+      - name: Build Bootstrapper
+        run: dotnet build installer/OutOfTheBox.Bootstrapper -c Release
+
+      # Short retention - this is a "did it build" smoke artifact for a PR reviewer to poke at
+      # manually if they want, not a release asset (see release.yml for those).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OutOfTheBoxSetup-dev
+          path: installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe
+          retention-days: 7
