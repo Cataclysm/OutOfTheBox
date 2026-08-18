@@ -18,16 +18,16 @@ jobs:
     name: Build and test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       # setup-dotnet's own built-in `cache: true` needs NuGet lock files to key off, and this repo
       # doesn't use them (Central Package Management via Directory.Packages.props instead) - a
       # manual cache keyed on every project/package-version file is the equivalent for CPM.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
@@ -62,13 +62,13 @@ jobs:
     name: Installer build check
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
@@ -103,7 +103,7 @@ jobs:
 
       # Short retention - this is a "did it build" smoke artifact for a PR reviewer to poke at
       # manually if they want, not a release asset (see release.yml for those).
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: OutOfTheBoxSetup-dev
           path: installer/OutOfTheBox.Bootstrapper/bin/x64/Release/OutOfTheBoxSetup.exe
