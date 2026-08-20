@@ -781,9 +781,13 @@ dialog::backdrop {
 }
 
 /* No cell padding here - LiveResourceGraph/.process-table-container already carry their own margin,
-   and the .data-table default padding would just double up with it. */
+   and the .data-table default padding would just double up with it. --bg-sunken (darker than the
+   .data-table's own --bg-raised, which this cell would otherwise just inherit) so the graph/process
+   cards sitting inside it (both still --bg-raised) actually stand out against it, rather than the
+   card and the space behind it reading as one continuous surface. */
 .run-expansion-cell {
     padding: 0;
+    background: var(--bg-sunken);
 }
 
 .resource-tiles {
