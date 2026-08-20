@@ -107,8 +107,8 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
             return [];
         }
 
-        var allProcesses = await WmiProcessTree.GetAllProcessesAsync(cancellationToken);
-        var descendantsByRoot = WmiProcessTree.DiscoverDescendants(allProcesses, [.. trackedRoots.Select(r => r.ProcessId)]);
+        var allProcesses = await ProcessTree.GetAllProcessesAsync(cancellationToken);
+        var descendantsByRoot = ProcessTree.DiscoverDescendants(allProcesses, [.. trackedRoots.Select(r => r.ProcessId)]);
 
         var aggregates = new List<RunResourceAggregate>();
 

@@ -16,12 +16,9 @@ namespace OutOfTheBox.Presentation.Mcp;
 /// truncated, let the process keep running" policy.
 /// </summary>
 /// <remarks>
-/// Retained for the process's lifetime once created - there is no eviction in this version. Bounded
-/// per run by <paramref name="capBytes"/> the same way streamed output already is; unbounded only in
-/// run *count* over a long-running service handling many MCP-started runs. Accepted as a reasonable
-/// v1 gap (the same class of documented, accepted risk <see cref="OutOfTheBox.Application.Concurrency.RunRegistry"/>'s
-/// own remarks already carry for a different concern) rather than building eviction machinery
-/// tasks.md never called for; revisit if this proves to matter in practice.
+/// Bounded per run by <paramref name="capBytes"/> the same way streamed output already is; the
+/// buffer itself carries no eviction logic - see <see cref="McpRunOutputRegistry"/>, which owns the
+/// buffer's lifetime and drops it a while after the run's terminal event.
 /// </remarks>
 public sealed class McpRunOutputBuffer(long capBytes)
 {

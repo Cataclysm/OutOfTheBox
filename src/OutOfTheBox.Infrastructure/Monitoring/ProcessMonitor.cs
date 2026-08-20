@@ -23,25 +23,25 @@ public sealed class ProcessMonitor(RunRegistry runRegistry, ILogger<ProcessMonit
             return false;
         }
 
-        // A fresh WMI walk, not the last-sampled snapshot - kills are rare, operator-triggered
+        // A fresh process-tree walk, not the last-sampled snapshot - kills are rare, operator-triggered
         // actions, so re-verifying scope from scratch here is cheap relative to the certainty it
         // buys, per design.md's "Kill scope enforcement" decision.
-        IReadOnlyDictionary<int, WmiProcessInfo> allProcesses;
+        IReadOnlyDictionary<int, ProcessInfo> allProcesses;
         try
         {
-            allProcesses = await WmiProcessTree.GetAllProcessesAsync(cancellationToken);
+            allProcesses = await ProcessTree.GetAllProcessesAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Without this, a broken WMI service would surface only as an unhandled exception in
+            // Without this, a failed snapshot would surface only as an unhandled exception in
             // the Blazor circuit handling the operator's kill click - visible as "something broke,"
             // but with no indication why. Fails the kill attempt (matching every other "couldn't
             // verify scope, refuse to kill" path's false return) rather than propagating.
-            logger.LogError(ex, "Failed to enumerate processes via WMI while attempting to kill process {ProcessId}.", processId);
+            logger.LogError(ex, "Failed to enumerate processes while attempting to kill process {ProcessId}.", processId);
             return false;
         }
 
-        var descendantsByRoot = WmiProcessTree.DiscoverDescendants(allProcesses, [.. trackedRoots.Select(r => r.ProcessId)]);
+        var descendantsByRoot = ProcessTree.DiscoverDescendants(allProcesses, [.. trackedRoots.Select(r => r.ProcessId)]);
 
         var isInScope = descendantsByRoot.Values.Any(tree => tree.Contains(processId));
         if (!isInScope)

@@ -19,7 +19,6 @@
          wins over the older, vulnerable one EF Core Sqlite would otherwise pull in transitively. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" />
-    <PackageReference Include="System.Management" />
   </ItemGroup>
 
   <ItemGroup>
