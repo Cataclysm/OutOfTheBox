@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using OutOfTheBox.Application.Events;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Presentation.Mcp;
 
@@ -25,15 +26,32 @@ public sealed class McpRunOutputRegistry : IDisposable
 
     private readonly ConcurrentDictionary<Guid, McpRunOutputBuffer> _buffers = new();
     private readonly IDisposable _subscription;
+    private readonly ILogger<McpRunOutputRegistry> _logger;
 
     /// <summary>Subscribes to <paramref name="runEventBus"/> for terminal-event-driven eviction (see class remarks).</summary>
-    public McpRunOutputRegistry(IRunEventBus runEventBus) => _subscription = runEventBus.Subscribe(OnRunEvent);
+    public McpRunOutputRegistry(IRunEventBus runEventBus, ILogger<McpRunOutputRegistry> logger)
+    {
+        _logger = logger;
+        _subscription = runEventBus.Subscribe(OnRunEvent);
+    }
 
     /// <summary>Creates and registers a new buffer for <paramref name="runId"/>, capped at <paramref name="capBytes"/>.</summary>
     public McpRunOutputBuffer Create(Guid runId, long capBytes)
     {
         var buffer = new McpRunOutputBuffer(capBytes);
         _buffers[runId] = buffer;
+
+        // Memory-diagnostics breadcrumb (see MemoryDiagnosticsSamplerService): a buffer count that
+        // keeps climbing across the RetentionAfterTerminal-minus-eviction-log gap below would point
+        // at eviction not actually firing for some run kind.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "McpRunOutputBuffer created for run {RunId}, {BufferCount} buffers now tracked.",
+                runId,
+                _buffers.Count);
+        }
+
         return buffer;
     }
 
@@ -51,7 +69,16 @@ public sealed class McpRunOutputRegistry : IDisposable
         // run, or one of the other MCP run kinds with no output buffer) - Terminal fires for every
         // run kind, not just the three that call Create above.
         _ = Task.Delay(RetentionAfterTerminal).ContinueWith(
-            completedDelay => _buffers.TryRemove(runEvent.RunId, out _),
+            completedDelay =>
+            {
+                if (_buffers.TryRemove(runEvent.RunId, out _) && _logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "McpRunOutputBuffer evicted for run {RunId}, {BufferCount} buffers now tracked.",
+                        runEvent.RunId,
+                        _buffers.Count);
+                }
+            },
             TaskScheduler.Default);
     }
 

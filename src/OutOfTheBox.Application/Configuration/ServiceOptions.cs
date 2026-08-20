@@ -117,4 +117,14 @@ public sealed class ServiceOptions
     /// <see cref="RepositoryFetchIntervalSeconds"/> - not a hot path, just not instant either.
     /// </summary>
     public int CredentialSyncIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// How often the background memory-diagnostics sampler logs one process-memory/GC/tracked-state
+    /// line (Information level, under the <c>OutOfTheBox</c> category the file log already keeps at
+    /// that level), in seconds. Deliberately coarse (default 300s) - this exists to build a
+    /// long-running, greppable time series for diagnosing service memory growth, not a live view
+    /// (that's what <see cref="ResourceSamplerIntervalSeconds"/> already drives), so it doesn't need
+    /// anywhere near that cadence and would just add log volume for no benefit if it had one.
+    /// </summary>
+    public int MemoryDiagnosticsIntervalSeconds { get; set; } = 300;
 }

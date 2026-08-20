@@ -131,6 +131,13 @@ public sealed class RunRegistry
             .Where(h => h.ProcessId is not null)
             .Select(h => (h.RunId, h.ProcessId!.Value))];
 
+    /// <summary>
+    /// The number of runs/transfers currently tracked by run id - diagnostic-only: a value that never
+    /// settles back down over time would point at a run/transfer never reaching
+    /// <see cref="Release"/>/<see cref="ReleaseTransfer"/>.
+    /// </summary>
+    public int Count => _activeRunsByRunId.Count;
+
     private sealed record RunHandle(Guid RunId, CancellationTokenSource CancellationTokenSource)
     {
         public int? ProcessId { get; set; }

@@ -23,6 +23,7 @@ public static class ResourceMonitoringServiceCollectionExtensions
         services.AddSingleton<IResourceSampler, HostResourceSampler>();
         services.AddSingleton<IProcessMonitor, ProcessMonitor>();
         services.AddHostedService<HostResourceSamplerService>();
+        services.AddHostedService<MemoryDiagnosticsSamplerService>();
 
         return services;
     }
