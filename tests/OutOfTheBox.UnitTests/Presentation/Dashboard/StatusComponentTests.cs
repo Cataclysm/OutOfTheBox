@@ -287,7 +287,9 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         // Already auto-expanded (already running at page load) - no toggle click needed first.
         cut.WaitForAssertion(() => Assert.Contains("process-kill-button", cut.Markup), TimeSpan.FromSeconds(2));
 
-        cut.Find(".process-kill-button").Click();
+        // Find+Click wrapped in one InvokeAsync so no re-render (e.g. chart JS interop) can land
+        // between the two and invalidate the found element's event handler id.
+        await cut.InvokeAsync(() => cut.Find(".process-kill-button").Click());
 
         Assert.Equal((4321, startTime), _processMonitor.LastKillCall);
     }
