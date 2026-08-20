@@ -4,6 +4,7 @@
 
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Infrastructure.Monitoring;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OutOfTheBox.UnitTests.Infrastructure.Monitoring;
 
@@ -19,7 +20,7 @@ public sealed class HostResourceSamplerTests : IDisposable
 {
     private readonly HostResourceSampler _sampler;
 
-    public HostResourceSamplerTests() => _sampler = new HostResourceSampler(new RunRegistry(), new SystemClock());
+    public HostResourceSamplerTests() => _sampler = new HostResourceSampler(new RunRegistry(), new SystemClock(), NullLogger<HostResourceSampler>.Instance);
 
     [Fact]
     public async Task SampleAsync_returns_plausible_host_figures()

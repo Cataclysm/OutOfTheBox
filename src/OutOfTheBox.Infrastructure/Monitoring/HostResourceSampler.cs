@@ -3,12 +3,14 @@
 // root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text.
 
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Versioning;
 using OutOfTheBox.Application.Concurrency;
 using OutOfTheBox.Application.Monitoring;
 using OutOfTheBox.Domain.Monitoring;
+using Microsoft.Extensions.Logging;
 
 namespace OutOfTheBox.Infrastructure.Monitoring;
 
@@ -30,11 +32,13 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
     private readonly PerformanceCounter _diskReadCounter;
     private readonly PerformanceCounter _diskWriteCounter;
     private readonly ConcurrentDictionary<int, (TimeSpan ProcessorTime, DateTimeOffset Timestamp)> _lastProcessSample = new();
+    private readonly ILogger<HostResourceSampler> _logger;
 
     /// <summary>Constructs the counters and primes them (see the discarded-first-reading remark above).</summary>
-    public HostResourceSampler(RunRegistry runRegistry, IClock clock)
+    public HostResourceSampler(RunRegistry runRegistry, IClock clock, ILogger<HostResourceSampler> logger)
     {
         _runRegistry = runRegistry;
+        _logger = logger;
         _clock = clock;
 
         _totalCpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
@@ -150,11 +154,28 @@ public sealed class HostResourceSampler : IResourceSampler, IDisposable
         }
         catch (ArgumentException)
         {
-            // Exited between WMI discovery and this sample - skip it for this tick.
+            // Exited between process-tree discovery and this sample - skip it for this tick.
             return null;
         }
         catch (InvalidOperationException)
         {
+            return null;
+        }
+        catch (Win32Exception ex)
+        {
+            // Access denied opening the process handle (observed in production: Process.GetProcessTimes()
+            // failing this way for a short-lived process this service account couldn't query, during a
+            // build's first-ever restore) - uncaught, this took down the *entire* tick (host sample
+            // included), not just this one process's, since nothing between here and
+            // HostResourceSamplerService.TickAsync's outer catch handled it. Skip this one process the
+            // same way an exited-mid-tick process already is, rather than losing every run's/the host's
+            // sample for the whole tick over one unreadable process. Logged (not silent) so a recurrence
+            // is still visible without taking the tick down.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(ex, "Could not query process {ProcessId} for resource sampling - skipping it for this tick.", processId);
+            }
+
             return null;
         }
     }
