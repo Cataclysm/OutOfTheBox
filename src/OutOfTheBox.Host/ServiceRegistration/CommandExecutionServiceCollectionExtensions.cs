@@ -45,6 +45,7 @@ public static class CommandExecutionServiceCollectionExtensions
         services.AddSingleton<IPathSanitizer, PathSanitizer>();
         services.AddSingleton<IProcessRunner, CliProcessRunner>();
         services.AddSingleton<IInstalledToolVersionsProvider, InstalledToolVersionsProvider>();
+        services.AddSingleton<IRootDirectoryDiskSpaceProvider, RootDirectoryDiskSpaceProvider>();
         services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
         services.AddSingleton<IFileLockInspector, RestartManagerFileLockInspector>();
 

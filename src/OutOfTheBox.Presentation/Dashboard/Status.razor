@@ -5,6 +5,7 @@
 @page "/"
 @attribute [Authorize]
 @using System.Globalization
+@using OutOfTheBox.Application.Diagnostics
 @using OutOfTheBox.Application.Execution
 @using OutOfTheBox.Application.Monitoring
 @using OutOfTheBox.Presentation.Dashboard.Charts
@@ -13,6 +14,7 @@
 @inject IResourceEventBus ResourceEventBus
 @inject IProcessMonitor ProcessMonitor
 @inject IInstalledToolVersionsProvider InstalledToolVersionsProvider
+@inject IRootDirectoryDiskSpaceProvider DiskSpaceProvider
 @inject NavigationManager NavigationManager
 @implements IDisposable
 
@@ -20,19 +22,10 @@
 
 <h1>Status</h1>
 
+<!-- Two rows, per direct request - identity/version tiles (rarely change, nothing to watch) apart
+     from the live resource tiles (the ones an operator is actually monitoring), rather than all
+     seven crowded into one row. -->
 <div class="resource-tiles">
-    <div class="resource-tile">
-        <span class="resource-tile-label">Host CPU</span>
-        <span class="resource-tile-value">@FormatPercent(_host.TotalCpuPercent)</span>
-    </div>
-    <div class="resource-tile">
-        <span class="resource-tile-label">Host RAM</span>
-        <span class="resource-tile-value">@FormatBytes(_host.TotalRamBytes - _host.AvailableRamBytes) / @FormatBytes(_host.TotalRamBytes)</span>
-    </div>
-    <div class="resource-tile">
-        <span class="resource-tile-label">Service RAM</span>
-        <span class="resource-tile-value">@FormatBytes(_host.ServiceRamBytes)</span>
-    </div>
     <div class="resource-tile">
         <span class="resource-tile-label">Service</span>
         <span class="resource-tile-value">@VersionInfo.Current</span>
@@ -48,6 +41,25 @@
     <div class="resource-tile">
         <span class="resource-tile-label">.NET Version</span>
         <span class="resource-tile-value">@(_toolVersions.DotnetVersion ?? "not detected")</span>
+    </div>
+</div>
+
+<div class="resource-tiles">
+    <div class="resource-tile">
+        <span class="resource-tile-label">Host CPU</span>
+        <span class="resource-tile-value">@FormatPercent(_host.TotalCpuPercent)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Host RAM</span>
+        <span class="resource-tile-value">@FormatBytes(_host.TotalRamBytes - _host.AvailableRamBytes) / @FormatBytes(_host.TotalRamBytes)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Service RAM</span>
+        <span class="resource-tile-value">@FormatBytes(_host.ServiceRamBytes)</span>
+    </div>
+    <div class="resource-tile">
+        <span class="resource-tile-label">Disk Space</span>
+        <span class="resource-tile-value">@FormatBytes(_diskSpace.AvailableFreeBytes) free / @FormatBytes(_diskSpace.TotalBytes)</span>
     </div>
 </div>
 
@@ -181,6 +193,7 @@ else
     /// <summary>Run ids that just went terminal and are playing their exit animation before dropping off this list - see <see cref="ListAnimation"/>.</summary>
     private readonly HashSet<Guid> _exitingRunIds = [];
     private InstalledToolVersions _toolVersions = new(null, null);
+    private DiskSpaceInfo _diskSpace = new(0, 0);
     private ProcessSortColumn _processSortColumn = ProcessSortColumn.Name;
     private bool _processSortAscending = true;
 
@@ -210,6 +223,7 @@ else
         }
 
         _toolVersions = await InstalledToolVersionsProvider.GetVersionsAsync(CancellationToken.None);
+        _diskSpace = await DiskSpaceProvider.GetDiskSpaceAsync(CancellationToken.None);
         _runSubscription = RunEventBus.Subscribe(OnRunEvent);
         _resourceSubscription = ResourceEventBus.Subscribe(OnResourceSnapshot);
 

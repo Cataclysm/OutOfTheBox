@@ -2,6 +2,7 @@
 // Licensed under the GNU Affero General Public License v3.0 or later - see LICENSE in the project
 // root, or <https://www.gnu.org/licenses/agpl-3.0.html>, for the full text.
 
+using OutOfTheBox.Application.Diagnostics;
 using OutOfTheBox.Application.Events;
 using OutOfTheBox.Application.Execution;
 using OutOfTheBox.Application.Monitoring;
@@ -43,6 +44,7 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         Services.AddSingleton<IChartInterop>(_chartInterop);
         Services.AddSingleton(new ResourceHistoryBuffer(new SystemClock()));
         Services.AddSingleton<IInstalledToolVersionsProvider>(new StubInstalledToolVersionsProvider(new InstalledToolVersions("10.0.100", "2.43.0")));
+        Services.AddSingleton<IRootDirectoryDiskSpaceProvider>(new StubRootDirectoryDiskSpaceProvider(new DiskSpaceInfo(500_000_000_000, 200_000_000_000)));
     }
 
     [Fact]
@@ -457,6 +459,11 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
     private sealed class StubInstalledToolVersionsProvider(InstalledToolVersions versions) : IInstalledToolVersionsProvider
     {
         public Task<InstalledToolVersions> GetVersionsAsync(CancellationToken cancellationToken) => Task.FromResult(versions);
+    }
+
+    private sealed class StubRootDirectoryDiskSpaceProvider(DiskSpaceInfo diskSpace) : IRootDirectoryDiskSpaceProvider
+    {
+        public Task<DiskSpaceInfo> GetDiskSpaceAsync(CancellationToken cancellationToken) => Task.FromResult(diskSpace);
     }
 
     private sealed class SpyProcessMonitor : IProcessMonitor

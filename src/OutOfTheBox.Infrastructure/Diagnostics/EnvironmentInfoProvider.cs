@@ -4,11 +4,9 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
-using OutOfTheBox.Application.Configuration;
 using OutOfTheBox.Application.Diagnostics;
 using OutOfTheBox.Application.Execution;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace OutOfTheBox.Infrastructure.Diagnostics;
 
@@ -23,11 +21,13 @@ namespace OutOfTheBox.Infrastructure.Diagnostics;
 /// <see cref="IInstalledToolVersionsProvider"/>'s own implementation already uses, not
 /// <c>IProcessRunner</c> (built for caller-facing, run-tracked, per-repository-locked execution,
 /// none of which applies here). The actual text parsing lives in the pure, directly-unit-testable
-/// <see cref="EnvironmentInfoParser"/> rather than here.
+/// <see cref="EnvironmentInfoParser"/> rather than here. Disk space itself is delegated to
+/// <see cref="IRootDirectoryDiskSpaceProvider"/> - see that type's own remarks for why it's a
+/// separate provider rather than a private method here.
 /// </remarks>
 public sealed class EnvironmentInfoProvider(
     IInstalledToolVersionsProvider installedToolVersionsProvider,
-    IOptions<ServiceOptions> options,
+    IRootDirectoryDiskSpaceProvider diskSpaceProvider,
     ILogger<EnvironmentInfoProvider> logger) : IEnvironmentInfoProvider
 {
     /// <inheritdoc />
@@ -38,6 +38,7 @@ public sealed class EnvironmentInfoProvider(
         var sdkOutput = await RunCommandAsync("dotnet", ["--list-sdks"], cancellationToken);
         var workloadOutput = await RunCommandAsync("dotnet", ["workload", "list"], cancellationToken);
         var nugetSourceOutput = await RunCommandAsync("dotnet", ["nuget", "list", "source"], cancellationToken);
+        var diskSpace = await diskSpaceProvider.GetDiskSpaceAsync(cancellationToken);
 
         return new EnvironmentInfo(
             toolVersions.DotnetVersion,
@@ -45,30 +46,7 @@ public sealed class EnvironmentInfoProvider(
             EnvironmentInfoParser.ParseSdkList(sdkOutput),
             EnvironmentInfoParser.ParseWorkloadList(workloadOutput),
             EnvironmentInfoParser.ParseNuGetSourceList(nugetSourceOutput),
-            GetRootDirectoryDiskSpace());
-    }
-
-    private DiskSpaceInfo GetRootDirectoryDiskSpace()
-    {
-        try
-        {
-            var root = options.Value.RootDirectory;
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-            {
-                return new DiskSpaceInfo(0, 0);
-            }
-
-            var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(root)) ?? root);
-            return new DiskSpaceInfo(drive.TotalSize, drive.AvailableFreeSpace);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            // A configuration/environment problem here shouldn't take down the rest of an otherwise
-            // useful response - same "degrade this one field, don't fail the whole call" discipline
-            // as EnvironmentInfoParser's own parsers.
-            logger.LogWarning(ex, "Failed to read disk space for the configured root directory.");
-            return new DiskSpaceInfo(0, 0);
-        }
+            diskSpace);
     }
 
     // Mirrors InstalledToolVersionsProvider.RunVersionCommandAsync's own shape (see that type's
