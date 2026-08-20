@@ -4,6 +4,25 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-20
+
+### Added
+
+- `MemoryDiagnosticsSamplerService`: a background sampler (default every 5 minutes, `MemoryDiagnosticsIntervalSeconds`) logging one structured line of process memory/GC figures - working set, private bytes, managed heap size, GC-committed bytes, per-generation sizes, GC collection counts, handle/thread counts, and `RunRegistry`'s own tracked-run count - built to diagnose real-world service memory growth against actual production data rather than guessing
+- Status page gained a Disk Space tile (available/total space for the drive holding the configured root directory), backed by a new `IRootDirectoryDiskSpaceProvider` split out of `IEnvironmentInfoProvider` so the page isn't paying for that provider's much heavier SDK/workload/NuGet-source process-spawning just to show one figure
+- `OutOfTheBox.Msi.wixproj` now fetches and extracts the Azure Artifacts Credential Provider itself (`FetchAzureArtifactsCredentialProvider` MSBuild target, running before WiX's own harvest/compile step, idempotent via a marker file) - previously a manual `curl`+`Expand-Archive` prerequisite documented in `INSTALL.md`
+
+### Changed
+
+- Status page: active runs are now a full-width sortable data-table (Kind/Repository/Run ID/Command/Elapsed/Actions) instead of a flex card list, matching History/Repositories' own convention; rows are clickable through to the run's detail page; a run's live graph and process table (the latter also converted to its own sortable data-table with a real card container, instead of a bare list) auto-expand the moment the run starts - or is already running when the page loads - and auto-collapse immediately once it goes terminal, with the manual toggle still available as an override; a finished run now stays visible for a minimum of 10 seconds before dropping off the list instead of vanishing the instant it completes; a run's live graph shows all four figures (CPU/RAM/Network/Disk) in one compact row instead of just CPU/RAM; the run id is now shown, matching run detail; the top resource tiles are split into two rows (service identity/versions, then live host/service/disk figures) instead of one crowded row
+- `RunDetail`/`RepositoryDetail`/`CommitDetailPage`'s "back" links now do a real `history.back()` instead of always linking to one hardcoded parent page - all three are reachable from more than one place (e.g. Status's newly-clickable run rows also land on `RunDetail`)
+
+### Fixed
+
+- Service memory growth to multiple gigabytes over the service's uptime, confirmed against a real installation and root-caused via a genuine `System.OutOfMemoryException` captured in the service's own log: `WmiProcessTree`'s per-tick `Win32_Process` query (run every `ResourceSamplerIntervalSeconds`, for the full duration of every in-flight run) went through `System.Management`/COM interop, which wasn't releasing native memory as promptly as a plain P/Invoke call even with everything disposed correctly - replaced with a direct `CreateToolhelp32Snapshot` P/Invoke (`ProcessTree`), dropping the `System.Management` package entirely; separately, `McpRunOutputRegistry` never evicted a completed run's output buffer at all - it now self-evicts 30 minutes after the run's terminal event, long enough for `read_run_output`'s own "repeatable read" contract to still hold for a caller polling shortly after seeing a terminal status
+- A resource-sampling tick could crash entirely - losing the host sample and every tracked run's sample for that tick, not just one process's - on a `Win32Exception` from `Process.GetProcessTimes()`; observed for real in production, sampling a short-lived process the service account couldn't query. Now caught and the one process skipped, the same way an already-exited process was already handled
+- A flaky bUnit test (`Clicking_kill_calls_IProcessMonitor_...`) that could fail with `UnknownEventHandlerIdException`: `WaitForAssertion` confirmed the kill button existed, but a re-render (chart JS interop) could land between that and the separate `.Click()` call, invalidating the found element. `Find`+`Click` are now issued together inside one `InvokeAsync`
+
 ## [1.0.0] - 2026-08-19
 
 First release.
