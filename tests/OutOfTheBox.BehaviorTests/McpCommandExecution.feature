@@ -55,7 +55,7 @@ Feature: MCP Command Execution
         Then both concurrent runs complete independently
 
     Scenario: A second dotnet_run for a busy repository is rejected
-        Given an in-flight dotnet_run against "HangingFixture" with a 3 second timeout
+        Given an in-flight dotnet_run against "HangingFixture" with a 30 second timeout
         When an authenticated caller starts a dotnet_run "test" against "HangingFixture"
         Then the MCP call is rejected
 
@@ -66,7 +66,7 @@ Feature: MCP Command Execution
         Then an MCP run id is returned
 
     Scenario: A git_run is rejected while a dotnet_run is in flight for the same repository
-        Given an in-flight dotnet_run against "HangingFixture" with a 3 second timeout
+        Given an in-flight dotnet_run against "HangingFixture" with a 30 second timeout
         When an authenticated caller starts a git_run "status" against "HangingFixture"
         Then the MCP call is rejected
 
