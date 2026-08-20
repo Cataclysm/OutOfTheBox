@@ -5,16 +5,23 @@
 @page "/repository-management/{Name}/commits/{Hash}"
 @attribute [Authorize]
 @using System.Globalization
+@using Microsoft.JSInterop
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
 @inject IRepositoryManager RepositoryManager
 @inject IRepositoryHistoryReader RepositoryHistoryReader
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - @(_detail?.Subject ?? $"Commit {Hash}")</PageTitle>
 
-<a class="back-link" href="@($"repository-management/{Name}")">← Back to @Name</a>
+<!-- Real browser back navigation, not a fixed link to the repository page - clicking a parent-commit
+     link below navigates this same route to a different Hash (see OnParametersSetAsync's own
+     remarks), so a plain operator "back" can mean several commits deep, not just "the repository
+     page" - history.back() unwinds exactly as many steps as were actually taken, the same as any
+     other back button would. -->
+<button type="button" class="back-link" @onclick="GoBack">← Back</button>
 
 @if (_loading)
 {
@@ -151,6 +158,8 @@ else
     private string? _loadedKey;
     private CommitFileDiffDialog? _diffDialog;
     private IDisposable? _statsSubscription;
+
+    private async Task GoBack() => await JS.InvokeVoidAsync("history.back");
 
     // OnParametersSetAsync, not OnInitializedAsync: clicking a parent-commit link navigates from
     // this route to itself with a different Hash, which Blazor resolves by reusing the existing

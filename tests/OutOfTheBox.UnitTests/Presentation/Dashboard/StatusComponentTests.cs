@@ -100,8 +100,14 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
     }
 
     [Fact]
-    public async Task A_completed_run_disappears_live_when_a_Terminal_event_is_published_without_reload()
+    public async Task A_completed_run_stays_visible_for_a_short_while_after_a_Terminal_event_rather_than_vanishing_immediately()
     {
+        // Per direct request: a run that finishes quickly (well under Status's own
+        // MinimumCompletedVisibleDuration) must still be visible for a moment after going terminal,
+        // not disappear on the very next render - otherwise a fast run could flicker past too quickly
+        // to register as having run at all. This intentionally does not wait out the full hold
+        // duration (10s of real wall-clock time in a unit test) - that it's still shown immediately
+        // after Terminal is the regression this guards.
         var runRepository = Services.GetRequiredService<IRunRepository>();
         var runId = Guid.NewGuid();
         var repositoryPath = @"C:\repositories\finishing-example";
@@ -126,7 +132,9 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
 
         _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repositoryPath));
 
-        cut.WaitForAssertion(() => Assert.Contains("Idle - no runs in flight.", cut.Markup), TimeSpan.FromSeconds(2));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        Assert.Contains(Path.GetFileName(repositoryPath), cut.Markup);
+        Assert.DoesNotContain("Idle - no runs in flight.", cut.Markup);
     }
 
     [Fact]
@@ -236,16 +244,19 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
 
         var cut = Render<Status>();
         cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
-        Assert.DoesNotContain("process-row", cut.Markup);
+        Assert.DoesNotContain("process-toggle", cut.Markup);
 
         var process = new ProcessResourceSample(1234, "dotnet", DateTime.UtcNow, 12.5, 4096);
         var runAggregate = new RunResourceAggregate(runId, 12.5, 4096, [process]);
         _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [runAggregate]));
 
+        // Already running when this page loaded, so already auto-expanded (per direct request) - the
+        // process table appears the instant its first data point arrives, no click needed.
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("process-row", cut.Markup);
-            Assert.Contains("dotnet (1234)", cut.Markup);
+            Assert.Contains("process-table", cut.Markup);
+            Assert.Contains(">dotnet<", cut.Markup);
+            Assert.Contains(">1234<", cut.Markup);
         }, TimeSpan.FromSeconds(2));
     }
 
@@ -270,9 +281,11 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         var startTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         var process = new ProcessResourceSample(4321, "testhost", startTime, 5, 2048);
         _resourceEventBus.Publish(new ResourceSnapshot(DateTimeOffset.UtcNow, new HostResourceSample(0, [], 0, 0, 0, 0, 0), [new RunResourceAggregate(runId, 5, 2048, [process])]));
-        cut.WaitForAssertion(() => Assert.Contains("process-row", cut.Markup), TimeSpan.FromSeconds(2));
 
-        cut.Find(".process-row button").Click();
+        // Already auto-expanded (already running at page load) - no toggle click needed first.
+        cut.WaitForAssertion(() => Assert.Contains("process-kill-button", cut.Markup), TimeSpan.FromSeconds(2));
+
+        cut.Find(".process-kill-button").Click();
 
         Assert.Equal((4321, startTime), _processMonitor.LastKillCall);
     }
@@ -304,13 +317,12 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
     }
 
     [Fact]
-    public async Task A_runs_live_chart_is_not_created_until_its_card_is_expanded_and_is_destroyed_on_collapse()
+    public async Task A_runs_live_chart_is_created_immediately_for_an_already_running_run_and_destroyed_on_manual_collapse()
     {
-        // Covers task 15.9: no interop calls and no per-run subscription while collapsed. Since
-        // LiveResourceGraph only calls IChartInterop.CreateLineChartAsync (and subscribes to
-        // IResourceEventBus) from OnAfterRenderAsync, and Status.razor only renders the component
-        // at all once the run's id is in _expandedRunIds, "never created" is equivalent proof to
-        // "never subscribed" here - there's no code path that would subscribe without also creating.
+        // Per direct request: a run already in flight when this page loads starts auto-expanded
+        // (OnInitializedAsync's own "treat already-running the same as just-started" handling), not
+        // lazily on click - manually collapsing it (the operator's own override, still available on
+        // top of the auto-expand default) still destroys the chart the same way it always has.
         var runRepository = Services.GetRequiredService<IRunRepository>();
         var runId = Guid.NewGuid();
         await runRepository.AddAsync(new Run
@@ -324,14 +336,11 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
 
-        var createdBeforeExpand = _chartInterop.CreatedCanvasIds.Count;
-        Assert.Equal(5, createdBeforeExpand); // host graph only - nothing for the collapsed run card
-
-        cut.Find("button.run-graph-toggle").Click();
-
-        cut.WaitForAssertion(() => Assert.Equal(createdBeforeExpand + 2, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+        // Host graph (5 canvases) plus the run's own CPU/RAM/Network/Disk (4), all present without
+        // any click - createdBeforeExpand from the earlier lazy-expansion test no longer applies.
+        cut.WaitForAssertion(() => Assert.Equal(9, _chartInterop.CreatedCanvasIds.Count), TimeSpan.FromSeconds(2));
+        Assert.Contains("Hide graph", cut.Markup);
 
         var historyBuffer = Services.GetRequiredService<ResourceHistoryBuffer>();
         var timestamp = DateTimeOffset.UtcNow;
@@ -346,15 +355,81 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         var destroyedBeforeCollapse = _chartInterop.DestroyedCanvasIds.Count;
         cut.Find("button.run-graph-toggle").Click();
 
-        cut.WaitForAssertion(() => Assert.Equal(destroyedBeforeCollapse + 2, _chartInterop.DestroyedCanvasIds.Count), TimeSpan.FromSeconds(2));
+        cut.WaitForAssertion(() => Assert.Equal(destroyedBeforeCollapse + 4, _chartInterop.DestroyedCanvasIds.Count), TimeSpan.FromSeconds(2));
     }
 
     [Fact]
-    public async Task An_expanded_transfers_live_graph_shows_the_host_activity_note()
+    public async Task A_new_runs_live_chart_and_process_table_auto_expand_on_a_Started_event()
+    {
+        // Distinct from the "already running at page load" test above - this run is added and
+        // started only *after* the page has already rendered, so only OnRunEvent's own Started
+        // handling (not OnInitializedAsync's one-time initial-load loop) is what could expand it.
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains("Idle - no runs in flight.", cut.Markup));
+
+        var runId = Guid.NewGuid();
+        var repositoryPath = @"C:\repositories\fresh-example";
+        await runRepository.AddAsync(new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = repositoryPath,
+            Arguments = ["build"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        }, CancellationToken.None);
+        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Started, repositoryPath));
+
+        cut.WaitForAssertion(() => Assert.Contains("Hide graph", cut.Markup), TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task A_runs_live_chart_and_process_table_auto_collapse_immediately_on_a_Terminal_event()
+    {
+        // Per direct request: collapse happens the moment the run goes terminal, not after the row's
+        // own separate MinimumCompletedVisibleDuration hold (which only keeps the row itself visible,
+        // not its now-frozen graph/process sections).
+        var runRepository = Services.GetRequiredService<IRunRepository>();
+        var runId = Guid.NewGuid();
+        var repositoryPath = @"C:\repositories\example";
+        var run = new Run
+        {
+            Id = runId,
+            Kind = RunKind.DotnetCommand,
+            RepositoryPath = repositoryPath,
+            Arguments = ["test"],
+            StartedAt = DateTimeOffset.UtcNow,
+            Outcome = RunOutcome.Running,
+        };
+        await runRepository.AddAsync(run, CancellationToken.None);
+
+        var cut = Render<Status>();
+        cut.WaitForAssertion(() => Assert.Contains("Hide graph", cut.Markup));
+
+        run.Outcome = RunOutcome.Completed;
+        run.CompletedAt = DateTimeOffset.UtcNow;
+        run.ExitCode = 0;
+        await runRepository.UpdateAsync(run, CancellationToken.None);
+        _runEventBus.Publish(new RunEvent(runId, RunKind.DotnetCommand, RunEventType.Terminal, repositoryPath));
+
+        // The row itself is still shown (MinimumCompletedVisibleDuration's own hold), but its graph
+        // toggle has flipped back to "Show graph" - the section itself collapsed.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(Path.GetFileName(repositoryPath), cut.Markup);
+            Assert.Contains("Show graph", cut.Markup);
+            Assert.DoesNotContain("Hide graph", cut.Markup);
+        }, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task A_transfers_live_graph_shows_the_host_activity_note_once_running()
     {
         // Task 15.7's transfer variant: a transfer's own series (host-tagged, per
         // HostResourceSamplerService.TickAsync) renders the same way a command run's does, but
-        // labeled as host-level activity rather than a per-process figure.
+        // labeled as host-level activity rather than a per-process figure. Already auto-expanded
+        // (already running at page load), so the note is visible with no toggle click needed.
         var runRepository = Services.GetRequiredService<IRunRepository>();
         var transferId = Guid.NewGuid();
         await runRepository.AddAsync(new Run
@@ -368,9 +443,6 @@ public sealed class StatusComponentTests : DashboardComponentTestContext, IDispo
         }, CancellationToken.None);
 
         var cut = Render<Status>();
-        cut.WaitForAssertion(() => Assert.Contains("example", cut.Markup));
-
-        cut.Find("button.run-graph-toggle").Click();
 
         cut.WaitForAssertion(() => Assert.Contains("Host activity during transfer", cut.Markup), TimeSpan.FromSeconds(2));
     }

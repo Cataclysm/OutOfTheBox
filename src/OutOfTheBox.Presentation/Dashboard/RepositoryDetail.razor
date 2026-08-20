@@ -5,6 +5,7 @@
 @page "/repository-management/{Name}"
 @attribute [Authorize]
 @using System.Globalization
+@using Microsoft.JSInterop
 @using OutOfTheBox.Application.Execution
 @using OutOfTheBox.Application.Repositories
 @using OutOfTheBox.Domain.Repositories
@@ -15,11 +16,15 @@
 @inject IRepositoryStatsEventBus RepositoryStatsEventBus
 @inject IRunEventBus RunEventBus
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - @Name</PageTitle>
 
-<a class="back-link" href="repository-management">← Back to Repositories</a>
+<!-- Real browser back navigation, not a fixed link to the repository list - reachable from more
+     than just Repositories now (e.g. CommitDetailPage's own back-link lands here), so there's no
+     single fixed parent to hardcode - see RunDetail's own back-link for the same reasoning. -->
+<button type="button" class="back-link" @onclick="GoBack">← Back</button>
 
 <h1>
     @Name
@@ -160,6 +165,8 @@ else
     private SortColumn _sortColumn = SortColumn.Started;
     private bool _sortAscending;
     private IDisposable? _statsSubscription;
+
+    private async Task GoBack() => await JS.InvokeVoidAsync("history.back");
     private IDisposable? _runSubscription;
     private string? _resolvedRepositoryPath;
     private string? _cloneSourceUrl;

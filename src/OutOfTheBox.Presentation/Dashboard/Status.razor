@@ -13,6 +13,7 @@
 @inject IResourceEventBus ResourceEventBus
 @inject IProcessMonitor ProcessMonitor
 @inject IInstalledToolVersionsProvider InstalledToolVersionsProvider
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Status</PageTitle>
@@ -56,47 +57,105 @@
 {
     <p>Loading...</p>
 }
-else if (_runs.Count == 0)
+else if (!DisplayedRuns().Any())
 {
     <p class="empty-state">Idle - no runs in flight.</p>
 }
 else
 {
-    <ul class="run-list">
-        @foreach (var run in _runs)
-        {
-            <li @key="run.Id" class="status-run @(_exitingRunIds.Contains(run.Id) ? ListAnimation.ExitingClass : null)">
-                <div class="run-row">
-                    <span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span>
-                    <span class="run-repository">@RunDisplay.RepositoryName(run)</span>
-                    <span class="run-id">@run.Id</span>
-                    <span class="run-detail">@RunDisplay.Detail(run)</span>
-                    <span class="run-elapsed">@Elapsed(run)</span>
-                    <button type="button" class="run-graph-toggle" @onclick="@(() => ToggleExpanded(run.Id))">@(_expandedRunIds.Contains(run.Id) ? "Hide graph" : "Show graph")</button>
-                </div>
-
-                @if (_processesByRun.TryGetValue(run.Id, out var processes) && processes.Count > 0)
-                {
-                    <ul class="process-list">
-                        @foreach (var process in processes)
+    <table class="data-table clickable-rows run-table">
+        <colgroup>
+            <col style="width:1%" />
+            <col style="width:1%" />
+            <col style="width:1%" />
+            <col />
+            <col style="width:1%" />
+            <col style="width:1%" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th class="col-shrink not-sortable">Kind</th>
+                <th class="col-shrink not-sortable">Repository</th>
+                <th class="col-shrink not-sortable">Run ID</th>
+                <th class="not-sortable">Command</th>
+                <th class="col-shrink not-sortable">Elapsed</th>
+                <th class="col-shrink not-sortable">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var run in DisplayedRuns())
+            {
+                <tr @key="run.Id" class="@(_exitingRunIds.Contains(run.Id) ? ListAnimation.ExitingClass : null)" @onclick="@(() => NavigationManager.NavigateTo($"history/{run.Id}"))">
+                    <td class="col-shrink"><span class="kind-badge kind-@run.Kind.ToString().ToLowerInvariant()">@run.Kind.ShortLabel()</span></td>
+                    <td class="col-shrink ellipsis" title="@RunDisplay.RepositoryName(run)">@RunDisplay.RepositoryName(run)</td>
+                    <td class="col-shrink">@run.Id</td>
+                    <td class="ellipsis" title="@RunDisplay.Detail(run)">@RunDisplay.Detail(run)</td>
+                    <td class="col-shrink">@Elapsed(run)</td>
+                    <td class="col-shrink actions">
+                        <button type="button" class="run-graph-toggle" @onclick="@(() => ToggleExpanded(run.Id))" @onclick:stopPropagation="true">@(_expandedRunIds.Contains(run.Id) ? "Hide graph" : "Show graph")</button>
+                        @if (_processesByRun.TryGetValue(run.Id, out var processesForToggle) && processesForToggle.Count > 0)
                         {
-                            <li @key="process.ProcessId" class="process-row">
-                                <span>@process.ProcessName (@process.ProcessId)</span>
-                                <span>@FormatPercent(process.CpuPercent)</span>
-                                <span>@FormatBytes(process.RamBytes)</span>
-                                <button type="button" @onclick="@(() => KillAsync(process))">Kill</button>
-                            </li>
+                            <button type="button" class="run-graph-toggle process-toggle" @onclick="@(() => ToggleProcessesExpanded(run.Id))" @onclick:stopPropagation="true">@(_expandedProcessRunIds.Contains(run.Id) ? "Hide processes" : "Show processes")</button>
                         }
-                    </ul>
-                }
+                    </td>
+                </tr>
 
+                @* Process table intentionally rendered after the graph, not before, when both are
+                   expanded - matches the order an operator expands them in (graph first, per its
+                   longer-standing toggle position) and per direct request. Each expansion is its own
+                   full-width row (colspan across every column above) rather than trying to fit either
+                   inside a single cell. *@
                 @if (_expandedRunIds.Contains(run.Id))
                 {
-                    <LiveResourceGraph SeriesKey="@run.Id.ToString()" Note="@(run.Kind == RunKind.FileTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
+                    <tr @key="@($"{run.Id}-graph")" class="run-expansion-row">
+                        <td class="run-expansion-cell" colspan="6">
+                            <LiveResourceGraph SeriesKey="@run.Id.ToString()" Note="@(run.Kind == RunKind.FileTransfer ? "Host activity during transfer - no isolated per-transfer figure is possible." : null)" />
+                        </td>
+                    </tr>
                 }
-            </li>
-        }
-    </ul>
+
+                @if (_expandedProcessRunIds.Contains(run.Id) && _processesByRun.TryGetValue(run.Id, out var processes) && processes.Count > 0)
+                {
+                    <tr @key="@($"{run.Id}-processes")" class="run-expansion-row">
+                        <td class="run-expansion-cell" colspan="6">
+                            <div class="process-table-container">
+                                <table class="data-table process-table">
+                                    <colgroup>
+                                        <col />
+                                        <col style="width:1%" />
+                                        <col style="width:1%" />
+                                        <col style="width:1%" />
+                                        <col style="width:1%" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th @onclick="@(() => SortProcessesBy(ProcessSortColumn.Name))">Process@(ProcessSortIndicator(ProcessSortColumn.Name))</th>
+                                            <th class="col-shrink" @onclick="@(() => SortProcessesBy(ProcessSortColumn.ProcessId))">PID@(ProcessSortIndicator(ProcessSortColumn.ProcessId))</th>
+                                            <th class="col-shrink" @onclick="@(() => SortProcessesBy(ProcessSortColumn.Cpu))">CPU %@(ProcessSortIndicator(ProcessSortColumn.Cpu))</th>
+                                            <th class="col-shrink" @onclick="@(() => SortProcessesBy(ProcessSortColumn.Ram))">RAM@(ProcessSortIndicator(ProcessSortColumn.Ram))</th>
+                                            <th class="col-shrink not-sortable">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var process in SortedProcesses(processes))
+                                        {
+                                            <tr @key="process.ProcessId">
+                                                <td class="ellipsis" title="@process.ProcessName">@process.ProcessName</td>
+                                                <td class="col-shrink">@process.ProcessId</td>
+                                                <td class="col-shrink">@FormatPercent(process.CpuPercent)</td>
+                                                <td class="col-shrink">@FormatBytes(process.RamBytes)</td>
+                                                <td class="col-shrink actions"><button type="button" class="process-kill-button" @onclick="@(() => KillAsync(process))">Kill</button></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
 }
 
 @code {
@@ -108,15 +167,48 @@ else
     private HostResourceSample _host = new(0, [], 0, 0, 0, 0, 0);
     private Dictionary<Guid, IReadOnlyList<ProcessResourceSample>> _processesByRun = [];
     private readonly HashSet<Guid> _expandedRunIds = [];
+    private readonly HashSet<Guid> _expandedProcessRunIds = [];
+
+    /// <summary>
+    /// A run that just went terminal, held here (and so still shown in <see cref="DisplayedRuns"/>)
+    /// for <see cref="MinimumCompletedVisibleDuration"/> after its own <see cref="RunEventType.Terminal"/>
+    /// event - a run that finishes in well under that window (a `git status`, a fast `dotnet build`
+    /// incremental no-op) would otherwise appear and disappear from this list almost too fast to
+    /// register as having run at all.
+    /// </summary>
+    private readonly Dictionary<Guid, Run> _recentlyCompletedRuns = [];
 
     /// <summary>Run ids that just went terminal and are playing their exit animation before dropping off this list - see <see cref="ListAnimation"/>.</summary>
     private readonly HashSet<Guid> _exitingRunIds = [];
     private InstalledToolVersions _toolVersions = new(null, null);
+    private ProcessSortColumn _processSortColumn = ProcessSortColumn.Name;
+    private bool _processSortAscending = true;
+
+    private static readonly TimeSpan MinimumCompletedVisibleDuration = TimeSpan.FromSeconds(10);
+
+    private enum ProcessSortColumn
+    {
+        Name,
+        ProcessId,
+        Cpu,
+        Ram,
+    }
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
     {
         await RefreshAsync();
+
+        // A run already in flight when this page first loads is treated the same as one that just
+        // started for expansion purposes (see OnRunEvent's own Started handling below) - otherwise
+        // whether a running row starts expanded would depend on page-load timing relative to when the
+        // run actually started, rather than simply "is it running."
+        foreach (var run in _runs ?? [])
+        {
+            _expandedRunIds.Add(run.Id);
+            _expandedProcessRunIds.Add(run.Id);
+        }
+
         _toolVersions = await InstalledToolVersionsProvider.GetVersionsAsync(CancellationToken.None);
         _runSubscription = RunEventBus.Subscribe(OnRunEvent);
         _resourceSubscription = ResourceEventBus.Subscribe(OnResourceSnapshot);
@@ -136,23 +228,85 @@ else
             return;
         }
 
+        // Auto-expand on start, auto-collapse on terminal, per direct request - the operator's own
+        // manual toggle (ToggleExpanded/ToggleProcessesExpanded) still works exactly as before on top
+        // of this default, since both are just plain HashSet membership; only the *initial* state
+        // after each transition is driven here, not a permanent lock on it. Deliberately not gated on
+        // "does this run actually have a graph/processes yet" - expanding pre-emptively means the
+        // section is already visible the instant its first data point arrives, rather than the
+        // operator needing to notice and click a toggle that only then appears.
+        if (runEvent.Type == RunEventType.Started)
+        {
+            _expandedRunIds.Add(runEvent.RunId);
+            _expandedProcessRunIds.Add(runEvent.RunId);
+        }
+        else if (runEvent.Type == RunEventType.Terminal)
+        {
+            // Collapsed immediately, not after MinimumCompletedVisibleDuration's own hold below - a
+            // finished run's graph/process data is no longer changing, so there's nothing "live" left
+            // to keep showing expanded for the row's own separate still-visible-for-a-moment purpose.
+            _expandedRunIds.Remove(runEvent.RunId);
+            _expandedProcessRunIds.Remove(runEvent.RunId);
+        }
+
         _ = InvokeAsync(async () =>
         {
-            // A run reaching a terminal state drops off this list on the very next refresh - played
-            // as an exit animation on its own row first, rather than the row just vanishing, the same
-            // "animate the specific thing that changed" treatment RepositoryManagement/Credentials
-            // give their own delete/remove actions.
             if (runEvent.Type == RunEventType.Terminal)
             {
+                // Held here for MinimumCompletedVisibleDuration before this list ever drops it, then
+                // played as an exit animation on its own row rather than just vanishing, the same
+                // "animate the specific thing that changed" treatment RepositoryManagement/Credentials
+                // give their own delete/remove actions - see _recentlyCompletedRuns' own remarks.
+                var completedRun = await RunRepository.FindByIdAsync(runEvent.RunId, CancellationToken.None);
+                if (completedRun is not null)
+                {
+                    _recentlyCompletedRuns[runEvent.RunId] = completedRun;
+                }
+
+                await RefreshAsync();
+                StateHasChanged();
+
+                await Task.Delay(MinimumCompletedVisibleDuration);
+
                 _exitingRunIds.Add(runEvent.RunId);
                 StateHasChanged();
                 await Task.Delay(ListAnimation.ExitDuration);
                 _exitingRunIds.Remove(runEvent.RunId);
+                _recentlyCompletedRuns.Remove(runEvent.RunId);
+                StateHasChanged();
+                return;
             }
 
             await RefreshAsync();
             StateHasChanged();
         });
+    }
+
+    /// <summary>
+    /// Every currently-running run, plus any recently-terminal one still within its
+    /// <see cref="MinimumCompletedVisibleDuration"/> hold (deduplicated - a run refreshed into
+    /// <c>_runs</c> as no-longer-running and still held here at the same time is shown once, not
+    /// twice).
+    /// </summary>
+    private IEnumerable<Run> DisplayedRuns()
+    {
+        if (_runs is null)
+        {
+            yield break;
+        }
+
+        foreach (var run in _runs)
+        {
+            yield return run;
+        }
+
+        foreach (var run in _recentlyCompletedRuns.Values)
+        {
+            if (_runs.All(r => r.Id != run.Id))
+            {
+                yield return run;
+            }
+        }
     }
 
     private void OnResourceSnapshot(ResourceSnapshot snapshot)
@@ -187,9 +341,53 @@ else
         }
     }
 
+    // Mirrors ToggleExpanded above - the process table is its own independently expandable section,
+    // per direct request, not tied to the graph's own toggle state.
+    private void ToggleProcessesExpanded(Guid runId)
+    {
+        if (!_expandedProcessRunIds.Remove(runId))
+        {
+            _expandedProcessRunIds.Add(runId);
+        }
+    }
+
+    private IEnumerable<ProcessResourceSample> SortedProcesses(IReadOnlyList<ProcessResourceSample> processes)
+    {
+        IEnumerable<ProcessResourceSample> ordered = _processSortColumn switch
+        {
+            ProcessSortColumn.ProcessId => processes.OrderBy(p => p.ProcessId),
+            ProcessSortColumn.Cpu => processes.OrderBy(p => p.CpuPercent),
+            ProcessSortColumn.Ram => processes.OrderBy(p => p.RamBytes),
+            _ => processes.OrderBy(p => p.ProcessName, StringComparer.OrdinalIgnoreCase),
+        };
+
+        return _processSortAscending ? ordered : ordered.Reverse();
+    }
+
+    // One shared sort state for every expanded run's process table, not one per run - mirrors every
+    // other sortable .data-table in this project (History, Repositories, Credentials), none of which
+    // carry independent per-instance sort state either.
+    private void SortProcessesBy(ProcessSortColumn column)
+    {
+        if (_processSortColumn == column)
+        {
+            _processSortAscending = !_processSortAscending;
+        }
+        else
+        {
+            _processSortColumn = column;
+            _processSortAscending = true;
+        }
+    }
+
+    private string ProcessSortIndicator(ProcessSortColumn column) => _processSortColumn == column ? (_processSortAscending ? " ▲" : " ▼") : string.Empty;
+
+    // A held-but-completed run (see _recentlyCompletedRuns) has its own CompletedAt - freezing the
+    // display at that moment once set, rather than letting it keep counting up past when the run
+    // actually finished.
     private static string Elapsed(Run run)
     {
-        var elapsed = DateTimeOffset.UtcNow - run.StartedAt;
+        var elapsed = (run.CompletedAt ?? DateTimeOffset.UtcNow) - run.StartedAt;
         return elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"mm\:ss");
     }
 

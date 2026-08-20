@@ -5,14 +5,20 @@
 @page "/history/{RunId:guid}"
 @attribute [Authorize]
 @using System.Globalization
+@using Microsoft.JSInterop
 @using OutOfTheBox.Presentation.Dashboard.Charts
 @inject IRunRepository RunRepository
 @inject IRunEventBus RunEventBus
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>@VersionInfo.DisplayName - Run detail</PageTitle>
 
-<a class="back-link" href="history">← Back to History</a>
+<!-- Real browser back navigation, not a fixed link to /history - this page is now reachable from
+     Status, History, and a repository's own History tab alike, so there's no single "the" parent to
+     hardcode (unlike CommitDetailPage/RepositoryDetail's own back-link, each of which only ever has
+     one). history.back() returns to whichever of those the operator actually came from. -->
+<button type="button" class="back-link" @onclick="GoBack">← Back</button>
 
 @if (_run is null)
 {
@@ -22,6 +28,8 @@ else
 {
     <h1>@_run.Kind.Heading()</h1>
     <dl>
+        <dt>Run ID</dt>
+        <dd>@_run.Id</dd>
         <dt>Repository</dt>
         <dd>@_run.RepositoryPath</dd>
         <dt>Outcome</dt>
@@ -86,6 +94,8 @@ else
 
     private Run? _run;
     private IDisposable? _runSubscription;
+
+    private async Task GoBack() => await JS.InvokeVoidAsync("history.back");
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()

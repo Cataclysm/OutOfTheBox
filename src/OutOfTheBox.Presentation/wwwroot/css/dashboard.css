@@ -730,18 +730,12 @@ dialog::backdrop {
    (the fixed pause happens for every operator; only the visible motion is conditional here). */
 @media (prefers-reduced-motion: no-preference) {
     .data-table tbody tr,
-    .run-list > li,
-    .process-list > li,
     .file-tree-row,
     .empty-state {
         animation: list-item-in 0.22s ease-out both;
     }
 
-    /* Higher specificity than ".data-table tbody tr" etc. above needs !important to actually win -
-       a combinator selector like ".run-list > li" outranks a lone class selector on specificity
-       alone. Deliberately still scoped inside this same media query rather than living outside it -
-       a reduced-motion operator gets no animation here either, just the plain pointer-events: none
-       while ListAnimation.ExitDuration's fixed pause elapses. */
+    /* Higher specificity than ".data-table tbody tr" etc. above needs !important to actually win. */
     .list-item-exiting {
         animation: list-item-out 0.2s ease-in both !important;
     }
@@ -775,38 +769,21 @@ dialog::backdrop {
     }
 }
 
-.run-list {
-    list-style: none;
+/* The expansion rows (a run's own graph/process table, each its own full-width row spanning every
+   column - see Status.razor) aren't a real navigable row the way the run's own row above them is -
+   .clickable-rows' generic hover/cursor treatment would otherwise suggest they're clickable too. */
+.clickable-rows tbody tr.run-expansion-row {
+    cursor: default;
+}
+
+.clickable-rows tbody tr.run-expansion-row:hover {
+    background: transparent;
+}
+
+/* No cell padding here - LiveResourceGraph/.process-table-container already carry their own margin,
+   and the .data-table default padding would just double up with it. */
+.run-expansion-cell {
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.run-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.65rem 0.9rem;
-    box-shadow: var(--shadow-card);
-    transition: border-color 0.15s ease;
-}
-
-.run-row:hover {
-    border-color: var(--border-strong);
-}
-
-.status-run {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.status-run .run-row {
-    margin: 0;
 }
 
 .resource-tiles {
@@ -873,24 +850,27 @@ dialog::backdrop {
     font-variant-numeric: tabular-nums;
 }
 
-.process-list {
-    list-style: none;
-    margin: 0;
-    padding-left: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+/* Card container matching .resource-graph's own look - the process table previously had no visual
+   boundary of its own (just an indented plain list), which made it look adrift under a run's row
+   rather than belonging to it. */
+.process-table-container {
+    margin: 0.5rem 0 1.25rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
 }
 
-.process-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
+/* The process table's own .data-table already supplies its background/border - nested one level
+   deeper inside .process-table-container above would otherwise double both up. */
+.process-table-container .data-table {
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
-.process-row button {
+.process-kill-button {
     background: transparent;
     border: 1px solid rgba(255, 92, 92, 0.4);
     color: var(--danger);
@@ -899,7 +879,7 @@ dialog::backdrop {
     font-size: 0.75rem;
 }
 
-.process-row button:hover {
+.process-kill-button:hover {
     background: rgba(255, 92, 92, 0.12);
     border-color: var(--danger);
 }
@@ -919,6 +899,19 @@ dialog::backdrop {
     border-radius: var(--radius);
     padding: 0.5rem 0.75rem;
     box-shadow: var(--shadow-card);
+}
+
+/* Status page's per-run graph (LiveResourceGraph, non-host branch) - same four figures as the
+   run-detail page's own two-row layout, but all in one row and smaller, per direct request: this
+   is a glanceable summary under a run card, not the full-size destination that page already is. */
+.resource-graphs-run .resource-graph {
+    flex: 1 1 200px;
+    min-width: 160px;
+    padding: 0.4rem 0.6rem;
+}
+
+.resource-graphs-run .resource-graph-canvas-wrap {
+    height: 100px;
 }
 
 .resource-graph-label {
@@ -1421,11 +1414,20 @@ dialog::backdrop {
     color: #ffb3b3;
 }
 
+/* Also used as a <button> (RunDetail's own back-link, which does a real history.back() rather than
+   linking to one fixed parent) - the reset properties below undo default button chrome so it reads
+   identically to the plain <a> uses elsewhere (CommitDetailPage, RepositoryDetail), which never had
+   any chrome to begin with. */
 .back-link {
     display: block;
     margin-bottom: 1rem;
     font-size: 0.85rem;
     color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    cursor: pointer;
 }
 
 .back-link:hover {
