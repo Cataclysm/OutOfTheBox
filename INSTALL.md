@@ -177,32 +177,20 @@ below handles the SDK/`git` prerequisites) alongside a `wwwroot/` folder of stat
 (including the vendored Chart.js) — the MSI's file harvesting picks up everything under this output
 directory automatically, so there's no separate copy step to remember.
 
-### 1a. Fetch the Azure Artifacts Credential Provider
+### 1a. Azure Artifacts Credential Provider
 
-A second, equally mandatory build input (the MSI project's file harvesting fails the build if it's
-missing — same reasoning as the publish output above, not optional):
-
-```
-curl -L -o artifacts/publish/azure-artifacts-credential-provider.zip https://github.com/microsoft/artifacts-credprovider/releases/download/v2.0.4/Microsoft.win-x64.NuGet.CredentialProvider.zip
-```
-
-Extract it as-is into `artifacts/publish/AzureArtifactsCredentialProvider/` (its own internal
-`plugins/netcore/CredentialProvider.Microsoft/` layout preserved, not flattened — the running
-service's `NuGetCredentialProviderLocation.PluginDirectory` (`OutOfTheBox.Application`) hard-codes
-this exact relative path, so re-vendoring a future release only needs the same internal layout to
-still hold true, not a code change):
-
-```powershell
-Expand-Archive artifacts\publish\azure-artifacts-credential-provider.zip artifacts\publish\AzureArtifactsCredentialProvider -Force
-```
-
-This is what backs the `authorize_nuget_feed` MCP tool's Azure DevOps Artifacts mechanism (see
-[`openspec/changes/expose-nuget-credentials-mcp/`](openspec/changes/expose-nuget-credentials-mcp/));
+No manual step — `dotnet build installer/OutOfTheBox.Msi` fetches and extracts this itself (a
+`FetchAzureArtifactsCredentialProvider` MSBuild target in `OutOfTheBox.Msi.wixproj`, using the core
+`DownloadFile`/`Unzip` MSBuild tasks) into `artifacts/publish/AzureArtifactsCredentialProvider/`,
+skipping the fetch if that folder's already populated from a previous build. This is what backs the
+`authorize_nuget_feed` MCP tool's Azure DevOps Artifacts mechanism (see
+[`openspec/changes/archive/2026-08-12-expose-nuget-credentials-mcp/`](openspec/changes/archive/2026-08-12-expose-nuget-credentials-mcp/));
 `dotnet nuget`/`dotnet_run` restores against a GitHub Packages or other generic PAT-based feed don't
-need it. Check [microsoft/artifacts-credprovider's releases](https://github.com/microsoft/artifacts-credprovider/releases)
-for the current version before bumping the URL above — this project pins one specific release
-deliberately, the same way `Bundle.wxs`'s Git for Windows/`.NET` SDK downloads are pinned by an
-explicit version and hash rather than tracking "latest."
+need it. The wixproj pins one specific `microsoft/artifacts-credprovider` release
+(`CredentialProviderVersion`) deliberately rather than tracking "latest," the same way `Bundle.wxs`'s
+Git for Windows/`.NET` SDK downloads are pinned by an explicit version and hash — check
+[its releases page](https://github.com/microsoft/artifacts-credprovider/releases) before bumping it,
+and delete the vendored folder (or bump the version) to force a re-fetch on the next build.
 
 ### 2. Package
 

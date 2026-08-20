@@ -14,13 +14,23 @@
          app" and "package the app" as separate, independently re-runnable steps, matching how the
          Burn bootstrapper below also just consumes this MSI's output rather than building it. -->
     <PublishOutputPath Condition="'$(PublishOutputPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\OutOfTheBox.Host\</PublishOutputPath>
-    <!-- Same "populated by a separate, independently re-runnable step before building the MSI"
-         convention as PublishOutputPath above - see INSTALL.md's "Azure Artifacts Credential
-         Provider" step. Expected to contain the vendored microsoft/artifacts-credprovider release
-         archive extracted as-is (its own plugins/netcore/CredentialProvider.Microsoft/ layout
-         preserved, not flattened - see NuGetCredentialProviderLocation.PluginDirectory, which this
-         must stay in sync with). -->
+    <!-- Unlike PublishOutputPath above, this one IS fetched automatically by the
+         FetchAzureArtifactsCredentialProvider target below - it's a pinned third-party vendored
+         download with no source in this repo, not this project's own app output, so there's no
+         "build vs package" separation to preserve here. Expected to contain the vendored
+         microsoft/artifacts-credprovider release archive extracted as-is (its own
+         plugins/netcore/CredentialProvider.Microsoft/ layout preserved, not flattened - see
+         NuGetCredentialProviderLocation.PluginDirectory, which this must stay in sync with). -->
     <CredentialProviderPath Condition="'$(CredentialProviderPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\publish\AzureArtifactsCredentialProvider\</CredentialProviderPath>
+    <!-- Pinned release - see INSTALL.md's own rationale for pinning this by exact version rather
+         than tracking "latest" (mirrors Bundle.wxs's Git for Windows/.NET SDK download pins). Bump
+         both together after checking microsoft/artifacts-credprovider's releases. -->
+    <CredentialProviderVersion>2.0.4</CredentialProviderVersion>
+    <CredentialProviderZipUrl>https://github.com/microsoft/artifacts-credprovider/releases/download/v$(CredentialProviderVersion)/Microsoft.win-x64.NuGet.CredentialProvider.zip</CredentialProviderZipUrl>
+    <CredentialProviderDownloadDir>$(MSBuildThisFileDirectory)obj\credential-provider-download\</CredentialProviderDownloadDir>
+    <!-- NuGetCredentialProviderLocation.PluginFilePath's expected layout (OutOfTheBox.Application) -
+         used below to check whether CredentialProviderPath is already populated. -->
+    <CredentialProviderMarkerFile>$(CredentialProviderPath)plugins\netcore\CredentialProvider.Microsoft\CredentialProvider.Microsoft.dll</CredentialProviderMarkerFile>
     <!-- OutOfTheBox.Msi.CustomActions also inherits the repo-root Directory.Build.props'
          UseArtifactsOutput, so its build output lands under artifacts/bin/, not a local bin/
          folder - $(Configuration) is lowercased there, matching the .NET SDK's artifacts-layout
@@ -42,5 +52,24 @@
     <PackageReference Include="WixToolset.Firewall.wixext" Version="7.0.0" />
     <PackageReference Include="WixToolset.UI.wixext" Version="7.0.0" />
   </ItemGroup>
+
+  <!-- Vendors the Azure Artifacts Credential Provider (see design.md's "Installer bundling of the
+       Azure Artifacts Credential Provider", expose-nuget-credentials-mcp) automatically, so a clean
+       checkout only needs the Host publish (INSTALL.md step 1) as a manual prerequisite before this
+       MSI builds - previously both were manual, but unlike the Host's own publish output this is a
+       static third-party download with no source in this repo, so there's no "build vs package"
+       separation worth preserving by keeping it manual too. Idempotent via the Condition below -
+       skips the download/extract once CredentialProviderMarkerFile already exists, so re-running the
+       build doesn't re-fetch every time (delete the vendored folder, or bump
+       CredentialProviderVersion, to force a re-fetch). DownloadFile/Unzip are core MSBuild tasks
+       (Microsoft.Build.Tasks.Core), not WiX- or SDK-specific, so this works regardless of
+       WixToolset.Sdk. -->
+  <Target Name="FetchAzureArtifactsCredentialProvider" BeforeTargets="CoreCompile"
+          Condition="!Exists('$(CredentialProviderMarkerFile)')">
+    <DownloadFile SourceUrl="$(CredentialProviderZipUrl)" DestinationFolder="$(CredentialProviderDownloadDir)">
+      <Output TaskParameter="DownloadedFile" ItemName="_CredentialProviderZip" />
+    </DownloadFile>
+    <Unzip SourceFiles="@(_CredentialProviderZip)" DestinationFolder="$(CredentialProviderPath)" OverwriteReadOnlyFiles="true" />
+  </Target>
 
 </Project>
